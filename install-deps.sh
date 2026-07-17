@@ -4,6 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 libraries_dir="${script_dir}/Libraries"
+local_libraries_dir="${script_dir}/.libraries"
 staging_dir=""
 
 cleanup() {
@@ -60,10 +61,19 @@ git clone --depth 1 --branch master https://github.com/Stanzilla/LibCustomGlow.g
 git clone --depth 1 --branch master https://github.com/AdiAddons/LibDualSpec-1.0.git "${staged_libraries}/LibDualSpec-1.0"
 git clone --depth 1 --branch main https://github.com/plusmouse/LibEditModeOverride.git "${staged_libraries}/LibEditModeOverride"
 
+# Keep a local PTR FrameXML snapshot for API and implementation verification.
+staged_wow_ui_source="${staging_dir}/wow-ui-source"
+git clone --depth 1 --filter=blob:none --branch ptr https://github.com/Gethe/wow-ui-source.git "${staged_wow_ui_source}"
+find "${staged_wow_ui_source}" -mindepth 1 -maxdepth 1 ! -name Interface -exec rm -rf {} +
+
 # Vendored dependencies should not retain nested repository metadata.
 find "${staged_libraries}" -type d -name .git -prune -exec rm -rf {} +
 
 rm -rf "${libraries_dir}"
 mv "${staged_libraries}" "${libraries_dir}"
+
+mkdir -p "${local_libraries_dir}"
+rm -rf "${local_libraries_dir}/wow-ui-source"
+mv "${staged_wow_ui_source}" "${local_libraries_dir}/wow-ui-source"
 
 echo "BetterCooldownManager dependencies updated successfully."

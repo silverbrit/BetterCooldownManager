@@ -34,6 +34,10 @@ ignore:
     - .git/
     - .github/
     - .vscode/
+    - .codex/
+    - .context/
+    - .libraries/
+    - AGENTS.md
     - .pkgmeta
     - install-deps.sh
     - release.sh

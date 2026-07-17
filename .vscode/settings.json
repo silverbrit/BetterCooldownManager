@@ -12,7 +12,8 @@
     "utf8": "disable"
   },
   "Lua.workspace.library": [
-    "~/.vscode-server/extensions/ketho.wow-api-0.22.3/Annotations/Core"
+    "~/.vscode-server/extensions/ketho.wow-api-0.22.3/Annotations/Core",
+    "${workspaceFolder}/.libraries/wow-ui-source/Interface"
   ],
   "Lua.diagnostics.globals": [
     "CLASS_SORT_ORDER",
