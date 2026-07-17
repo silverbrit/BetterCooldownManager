@@ -1,0 +1,4 @@
+interface:
+  display_name: "WoW Addon Architect"
+  short_description: "Verified WoW addon API and taint guidance"
+  default_prompt: "Use $wow-addon-architect to implement or review a Retail WoW addon change against verified APIs and local Blizzard source."
