@@ -1,6 +1,8 @@
 # Custom Viewers
 
-`CustomTrackerBar.lua` owns reusable named tracker bars and the shared spell/item source-adapter contract. Bar and entry IDs are stable profile data; display order lives in explicit arrays. Runtime icons are pooled and refreshed through one coalesced event frame.
+`CustomTrackerBar.lua` owns reusable named tracker bars and the shared source-adapter contract for spells, items, equipment slots, and fixed-duration cast timers. Bar and entry IDs are stable profile data; display order lives in explicit arrays. Runtime icons are pooled and refreshed through one coalesced event frame.
+
+Equipment sources read the currently equipped item and its slot cooldown. Timer sources match readable player `UNIT_SPELLCAST_SUCCEEDED` spell IDs, keep expiration state only for the current session, and share one scheduled wakeup for the next expiration.
 
 `TrinketBar.lua` remains a separate automatic viewer for equipped usable trinkets.
 

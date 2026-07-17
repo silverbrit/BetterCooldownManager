@@ -5,6 +5,7 @@ local Runtime = {
     Icons = {},
     IconPool = {},
     PendingRefresh = false,
+    TimerStates = setmetatable({}, { __mode = "k" }),
 }
 BCDM.CustomTrackerRuntime = Runtime
 
@@ -100,6 +101,57 @@ SourceAdapters.item = {
         return state
     end,
     SetTooltip = function(source, tooltip) tooltip:SetItemByID(source.ID) end,
+}
+
+SourceAdapters.equipment = {
+    GetMetadata = function(source)
+        local itemID = GetInventoryItemID("player", source.ID)
+        if not itemID then return end
+        local name, _, _, _, _, _, _, _, _, icon = C_Item.GetItemInfo(itemID)
+        if not name then return end
+        return name, icon
+    end,
+    IsAvailable = function(source) return GetInventoryItemID("player", source.ID) ~= nil end,
+    GetState = function(source)
+        local startTime, duration = GetInventoryItemCooldown("player", source.ID)
+        startTime, duration = ReadNumber(startTime), ReadNumber(duration)
+        local state = { active = nil, ready = nil }
+        if startTime and duration then
+            state.active = startTime > 0 and duration > 0
+            state.ready = not state.active
+            if state.active and C_DurationUtil and C_DurationUtil.CreateDuration then
+                state.durationObject = C_DurationUtil.CreateDuration()
+                state.durationObject:SetTimeFromStart(startTime, duration)
+            end
+        end
+        return state
+    end,
+    SetTooltip = function(source, tooltip) tooltip:SetInventoryItem("player", source.ID) end,
+}
+
+SourceAdapters.timer = {
+    GetMetadata = function(source)
+        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(source.ID)
+        if not info then return end
+        return info.name, info.iconID
+    end,
+    IsAvailable = function(source) return C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(source.ID) ~= nil end,
+    GetState = function(source, entry)
+        local expiration = Runtime.TimerStates[entry]
+        local now = GetTime()
+        if not expiration or expiration <= now then
+            Runtime.TimerStates[entry] = nil
+            return { active = false, ready = true }
+        end
+        local duration = tonumber(source.Duration) or 0
+        local state = { active = true, ready = false }
+        if duration > 0 and C_DurationUtil and C_DurationUtil.CreateDuration then
+            state.durationObject = C_DurationUtil.CreateDuration()
+            state.durationObject:SetTimeFromStart(expiration - duration, duration)
+        end
+        return state
+    end,
+    SetTooltip = function(source, tooltip) tooltip:SetSpellByID(source.ID) end,
 }
 
 function BCDM:RegisterCustomTrackerSourceAdapter(sourceType, adapter)
@@ -284,7 +336,7 @@ local function RefreshBar(barID, bar)
             local name = adapter.GetMetadata(entry.Source)
             if name then
                 local existing = Runtime.Icons[barID] and Runtime.Icons[barID][entryID]
-                local state = adapter.GetState(entry.Source) or {}
+                local state = adapter.GetState(entry.Source, entry) or {}
                 if existing and existing.LastState then
                     if state.active == nil then state.active = existing.LastState.active end
                     if state.ready == nil then state.ready = existing.LastState.ready end
@@ -320,6 +372,42 @@ function BCDM:RefreshCustomTrackers()
             ReleaseUnusedIcons(barID, {})
         end
     end
+    self:ScheduleCustomTrackerTimerRefresh()
+end
+
+function BCDM:ScheduleCustomTrackerTimerRefresh()
+    local nextExpiration
+    local now = GetTime()
+    for entry, expiration in pairs(Runtime.TimerStates) do
+        if expiration <= now then Runtime.TimerStates[entry] = nil
+        elseif not nextExpiration or expiration < nextExpiration then nextExpiration = expiration end
+    end
+    if Runtime.TimerWakeup then Runtime.TimerWakeup:Cancel() Runtime.TimerWakeup = nil end
+    if nextExpiration and C_Timer.NewTimer then
+        Runtime.TimerWakeup = C_Timer.NewTimer(math.max(0.01, nextExpiration - now), function()
+            Runtime.TimerWakeup = nil
+            BCDM:RefreshCustomTrackers()
+        end)
+    end
+end
+
+function BCDM:TriggerCustomTrackerTimers(spellID)
+    spellID = ReadNumber(spellID)
+    if not spellID then return end
+    local now = GetTime()
+    local store = self:GetCustomTrackerStore()
+    for _, barID in ipairs(store.BarOrder or {}) do
+        local bar = store.Bars[barID]
+        for _, entryID in ipairs(bar and bar.EntryOrder or {}) do
+            local entry = bar.Entries and bar.Entries[entryID]
+            local source = entry and entry.Source
+            local duration = source and source.Type == "timer" and tonumber(source.Duration)
+            if entry and entry.Enabled ~= false and source.ID == spellID and duration and duration > 0 then
+                Runtime.TimerStates[entry] = now + duration
+            end
+        end
+    end
+    self:RefreshCustomTrackers()
 end
 
 function BCDM:QueueCustomTrackerRefresh()
@@ -337,8 +425,13 @@ function BCDM:SetupCustomTrackers()
         for _, event in ipairs({
             "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED", "SPELL_UPDATE_COOLDOWN",
             "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "BAG_UPDATE_DELAYED", "ITEM_COUNT_CHANGED",
+            "PLAYER_EQUIPMENT_CHANGED",
         }) do frame:RegisterEvent(event) end
-        frame:SetScript("OnEvent", function() BCDM:QueueCustomTrackerRefresh() end)
+        frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+        frame:SetScript("OnEvent", function(_, event, _, _, spellID)
+            if event == "UNIT_SPELLCAST_SUCCEEDED" then BCDM:TriggerCustomTrackerTimers(spellID)
+            else BCDM:QueueCustomTrackerRefresh() end
+        end)
         Runtime.EventFrame = frame
     end
     self:RefreshCustomTrackers()

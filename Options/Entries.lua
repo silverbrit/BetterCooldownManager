@@ -208,6 +208,15 @@ local GLOW_MODES = {
     { text = "Glow Active", value = "ACTIVE" },
 }
 
+local EQUIPMENT_SLOTS = {
+    { text = "Head", value = 1 }, { text = "Neck", value = 2 }, { text = "Shoulder", value = 3 },
+    { text = "Shirt", value = 4 }, { text = "Chest", value = 5 }, { text = "Waist", value = 6 },
+    { text = "Legs", value = 7 }, { text = "Feet", value = 8 }, { text = "Wrist", value = 9 },
+    { text = "Hands", value = 10 }, { text = "Finger 1", value = 11 }, { text = "Finger 2", value = 12 },
+    { text = "Trinket 1", value = 13 }, { text = "Trinket 2", value = 14 }, { text = "Back", value = 15 },
+    { text = "Main Hand", value = 16 }, { text = "Off Hand", value = 17 }, { text = "Tabard", value = 19 },
+}
+
 local function SetupFilterMenu(button, entry, panel)
     if type(button.SetupMenu) ~= "function" then return end
     button:SetupMenu(function(_, root)
@@ -266,6 +275,54 @@ local function CreateEntries(panel, controls)
         end
     end)
     itemInput:SetScript("OnEnterPressed", function(self) addItem:Click() self:ClearFocus() end)
+
+    local typedRow = Canvas.CreateBaseRow(section.Content, 58)
+    U.Add(controls, section, typedRow)
+    local selectedSlot = 13
+    local slotLabel = Canvas.CreateLabel(typedRow, "Equipment Slot", "GameFontHighlightSmall")
+    slotLabel:SetPoint("TOPLEFT", 0, 0)
+    local slotDropdown = Canvas.CreateDropdown(typedRow)
+    slotDropdown:SetPoint("BOTTOMLEFT", 0, 0)
+    slotDropdown:SetSize(170, 28)
+    Canvas.AttachDropdownMenu(slotDropdown, function() return EQUIPMENT_SLOTS end, function() return selectedSlot end,
+        function(value) selectedSlot = value end, "Equipment Slot")
+    local addEquipment = Canvas.CreateActionButton(typedRow, "Add Equipment")
+    addEquipment:SetPoint("LEFT", slotDropdown, "RIGHT", 8, 0)
+    addEquipment:SetWidth(125)
+    addEquipment:SetScript("OnClick", function()
+        if selectedBarID and selectedSlot then
+            BCDM:AddCustomTrackerEntry(selectedBarID, "equipment", selectedSlot, { ClassSpecFilters = BCDM:BuildClassSpecFilters() })
+            Changed(panel)
+        end
+    end)
+    local timerSpell = Canvas.CreateInput(typedRow)
+    timerSpell:SetPoint("LEFT", addEquipment, "RIGHT", 18, 0)
+    timerSpell:SetWidth(165)
+    local timerSpellLabel = Canvas.CreateLabel(typedRow, "Trigger Spell", "GameFontHighlightSmall")
+    timerSpellLabel:SetPoint("BOTTOMLEFT", timerSpell, "TOPLEFT", 0, 4)
+    local timerDuration = Canvas.CreateInput(typedRow)
+    timerDuration:SetPoint("LEFT", timerSpell, "RIGHT", 8, 0)
+    timerDuration:SetWidth(80)
+    local timerDurationLabel = Canvas.CreateLabel(typedRow, "Seconds", "GameFontHighlightSmall")
+    timerDurationLabel:SetPoint("BOTTOMLEFT", timerDuration, "TOPLEFT", 0, 4)
+    local addTimer = Canvas.CreateActionButton(typedRow, "Add Timer")
+    addTimer:SetPoint("LEFT", timerDuration, "RIGHT", 8, 0)
+    addTimer:SetWidth(100)
+    addTimer:SetScript("OnClick", function()
+        local spellID = ResolveSpellID(timerSpell:GetText())
+        local duration = tonumber(timerDuration:GetText())
+        if selectedBarID and spellID and duration and duration > 0 then
+            local class = select(2, UnitClass("player"))
+            BCDM:AddCustomTrackerEntry(selectedBarID, "timer", spellID, {
+                Duration = duration, ClassSpecFilters = BCDM:BuildClassSpecFilters(class), FilterClass = class,
+            })
+            timerSpell:SetText("")
+            timerDuration:SetText("")
+            Changed(panel)
+        end
+    end)
+    timerSpell:SetScript("OnEnterPressed", function(self) addTimer:Click() self:ClearFocus() end)
+    timerDuration:SetScript("OnEnterPressed", function(self) addTimer:Click() self:ClearFocus() end)
 
     local rows = {}
     local function EnsureRow(index)

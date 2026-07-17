@@ -77,6 +77,8 @@ store.Bars[duplicate].Layout[2] = "BCDM_CustomTrackerBar_" .. store.BarOrder[1]
 Check(BCDM:WouldCustomTrackerAnchorCycle(store.BarOrder[1], newBar), "indirect anchor cycle is rejected")
 local timerEntry = BCDM:AddCustomTrackerEntry(newBar, "timer", 123, { Duration = 8 })
 Check(store.Bars[newBar].Entries[timerEntry].Source.Duration == 8, "typed entry stores timer duration")
+local equipmentEntry = BCDM:AddCustomTrackerEntry(newBar, "equipment", 13)
+Check(store.Bars[newBar].Entries[equipmentEntry].Source.ID == 13, "typed entry stores equipment slot")
 Check(BCDM:DeleteCustomTrackerEntry(newBar, timerEntry), "entry can be deleted")
 Check(BCDM:DeleteCustomTrackerBar(newBar), "bar can be deleted")
 
