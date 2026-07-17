@@ -17,6 +17,7 @@
 - Power Bar, Secondary Power Bar & Cast Bar with anchoring, automatic width matching, fill direction, and display controls.
 - Named Custom Tracker Bars: create, rename, duplicate, reorder, and anchor reusable mixed-source bars.
 - Track spells, items, equipment slots, and fixed-duration cast timers together.
+- Custom spells use Retail 12.1 AuraContainers for active player and target auras, with normal cooldowns underneath as the automatic fallback.
 - Per-entry ready/active visibility, inactive appearance, glow state, tooltip, class, and specialization behavior.
 - Shared visibility rules with per-bar overrides for combat, instance type, mounted/skyriding, dead, vehicle, resting, and macro-condition states.
 - Resource text modes, per-bar smoothing overrides, and optional power-bar sparks.

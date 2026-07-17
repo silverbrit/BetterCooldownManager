@@ -24,6 +24,7 @@ Use `.libraries/wow-ui-source/Interface/AddOns` for Blizzard implementation rese
 - Verify API names and signatures. Do not invent enum values, widget methods, or Blizzard frame fields.
 - Treat cooldown, aura, tooltip, and Blizzard-frame values as potentially secret or inaccessible.
 - Do not add `UnitAura`-driven custom tracker logic or mutate Blizzard Cooldown Viewer row ownership.
+- Use `CustomAuraContainerTemplate` for custom spell aura presentation. Create containers outside combat, configure AuraButtons in their initialization callback, and never branch on their secret-controlled shown state.
 - Keep BCM-owned behavior on BCM-owned frames. Store metadata about Blizzard frames in addon-owned side tables.
 - Prefer event-driven refreshes and shared schedulers over per-entry `OnUpdate` handlers or permanent polling.
 - Use guarded reads and degrade cleanly when a value cannot safely be inspected.

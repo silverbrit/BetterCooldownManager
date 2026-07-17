@@ -16,6 +16,8 @@ Coalesce bursts of events into one refresh. Use one shared timer scheduler for f
 
 Keep source-specific reads behind adapters. Spell and item sources resolve native cooldown state, equipment sources use inventory-slot cooldowns, and timer sources store session-only completion times from successful player casts.
 
+Spell aura presentation is separate from cooldown-state policy. AuraContainers own active aura visibility and duration widgets; BCM keeps the normal cooldown beneath them and never converts secret aura visibility into Lua state.
+
 ## Visibility and anchoring
 
 Resolve shared versus local visibility first, apply macro or mode/instance policy, then veto states, then enabled/source availability. Validate inter-bar anchors as a graph, reject cycles, and fall back to `UIParent` for missing or unsafe targets.
@@ -23,6 +25,8 @@ Resolve shared versus local visibility first, apply macro or mode/instance polic
 ## Secret-safe rendering
 
 Guard API reads that may return secret values. When a state cannot safely be interpreted, retain the last valid visual or fail closed instead of probing further. Never use aura enumeration as a fallback for custom cooldown state.
+
+Pre-create AuraContainers outside combat. Configure returned AuraButtons during the container initialization callback, keep their parent entry frames stable, and update candidate filters only outside combat.
 
 ## BCM-owned bars
 

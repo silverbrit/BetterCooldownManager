@@ -24,6 +24,7 @@
 - Added lossless profile migration for legacy spell, item, and item-spell trackers, including specialization filters and anchor remapping.
 - Added equipment-slot cooldown and fixed-duration spellcast timer sources.
 - Added per-entry ready/active display rules, inactive appearance, glow state, tooltips, and class/specialization filters.
+- Added Retail 12.1 AuraContainer presentation for active player and target spell auras, including optional extra aura IDs and automatic cooldown fallback.
 - Removed the dormant BuffBar implementation and settings.
 
 ### Cast and Resource Bars
@@ -38,3 +39,5 @@
 - Added `install-deps.sh` for refreshing vendored libraries.
 - Updated packaging configuration to include only the required libraries.
 - Added Retail 12.1 Blizzard UI source installation, pure-Lua model tests, and repository-local Codex architecture guidance.
+- Removed the legacy Disable Aura Overlay hooks and manual aura/cooldown reconstruction.
+- Replaced continuous Buff Icon centering polling with coalesced Blizzard layout and shown-state hooks.
