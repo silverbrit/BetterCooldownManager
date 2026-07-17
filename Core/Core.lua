@@ -1,21 +1,9 @@
 local _, BCDM = ...
 local BetterCooldownManager = LibStub("AceAddon-3.0"):NewAddon("BetterCooldownManager")
 
-local function RemoveBuffBarData(db)
-    local profiles = db and db.sv and db.sv.profiles
-    if type(profiles) ~= "table" then return end
-    for _, profile in pairs(profiles) do
-        local cooldownManager = type(profile) == "table" and profile.CooldownManager
-        if type(cooldownManager) == "table" then
-            cooldownManager.BuffBar = nil
-        end
-    end
-end
-
 function BetterCooldownManager:OnInitialize()
     BCDM.db = LibStub("AceDB-3.0"):New("BCDMDB", BCDM:GetDefaultDB(), true)
     BCDM:MigrateCustomTrackerProfiles(BCDM.db)
-    RemoveBuffBarData(BCDM.db)
     BCDM.LDS:EnhanceDatabase(BCDM.db, "BetterCooldownManager")
     for k, v in pairs(BCDM:GetDefaultDB()) do
         if BCDM.db.profile[k] == nil then
