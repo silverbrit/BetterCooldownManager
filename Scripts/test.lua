@@ -54,6 +54,7 @@ local newBar = BCDM:AddCustomTrackerBar("Timers")
 Check(BCDM:RenameCustomTrackerBar(newBar, "Utility"), "bar can be renamed")
 local duplicate = BCDM:DuplicateCustomTrackerBar(store.BarOrder[1])
 Check(duplicate and #store.Bars[duplicate].EntryOrder == #custom.EntryOrder, "duplicate receives copied entries")
+Check(store.Bars[duplicate].EntryOrder[1] ~= custom.EntryOrder[1], "entry IDs remain globally unique")
 Check(BCDM:MoveCustomTrackerBar(duplicate, -1), "bar can be reordered")
 store.Bars[newBar].Layout[2] = "BCDM_CustomTrackerBar_" .. duplicate
 store.Bars[duplicate].Layout[2] = "BCDM_CustomTrackerBar_" .. store.BarOrder[1]

@@ -70,6 +70,19 @@ local function AllocateID(store, field, records)
     return id
 end
 
+local function AllocateEntryID(store)
+    local id = math.max(tonumber(store.NextEntryID) or 1, 1)
+    local function InUse(candidate)
+        for _, bar in pairs(store.Bars) do
+            if bar.Entries and bar.Entries[candidate] then return true end
+        end
+        return false
+    end
+    while InUse(id) do id = id + 1 end
+    store.NextEntryID = id + 1
+    return id
+end
+
 local function CopyAppearance(legacy)
     local bar = {}
     for key, value in pairs(legacy) do
@@ -139,7 +152,7 @@ local function CollectFlatEntries(legacy, field, fallbackType)
 end
 
 local function AddMigratedEntry(store, bar, legacyEntry)
-    local entryID = AllocateID(store, "NextEntryID", bar.Entries)
+    local entryID = AllocateEntryID(store)
     local data = legacyEntry.data or {}
     bar.Entries[entryID] = {
         ID = entryID,
@@ -276,7 +289,7 @@ function BCDM:DuplicateCustomTrackerBar(barID)
     for _, entryID in ipairs(source.EntryOrder or {}) do
         local entry = source.Entries and source.Entries[entryID]
         if entry then
-            local newEntryID = AllocateID(store, "NextEntryID", duplicate.Entries)
+            local newEntryID = AllocateEntryID(store)
             duplicate.Entries[newEntryID] = Copy(entry)
             duplicate.Entries[newEntryID].ID = newEntryID
             duplicate.EntryOrder[#duplicate.EntryOrder + 1] = newEntryID
@@ -317,7 +330,7 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
     local store = self:GetCustomTrackerStore()
     local bar = store.Bars[barID]
     if not bar or type(sourceType) ~= "string" then return end
-    local entryID = AllocateID(store, "NextEntryID", bar.Entries)
+    local entryID = AllocateEntryID(store)
     bar.Entries[entryID] = {
         ID = entryID,
         Enabled = true,

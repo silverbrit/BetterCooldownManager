@@ -258,6 +258,7 @@ function M.Slider(controls, section, title, getValue, setValue, config)
     if not config.formatter then
         local decimals = config.step and config.step < 1 and 1 or 0
         config.formatter = function(value)
+            if type(value) ~= "number" then return "--" end
             return string.format("%." .. decimals .. "f", value)
         end
     end

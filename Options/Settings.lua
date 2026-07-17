@@ -292,11 +292,9 @@ end
 local function CreateViewerPanel(viewerType)
     local panel, controls = U.NewPanel()
     local function ViewerChanged() BCDM:UpdateCooldownViewer(viewerType) end
-    local isCustom = viewerType == "Custom" or viewerType == "AdditionalCustom" or viewerType == "Item"
-        or viewerType == "Trinket" or viewerType == "ItemSpell"
+    local isCustom = viewerType == "Trinket"
     local hasAnchorParent = viewerType ~= "Essential"
-    local supportsWrap = viewerType == "Custom" or viewerType == "AdditionalCustom"
-        or viewerType == "Item" or viewerType == "ItemSpell"
+    local supportsWrap = false
 
     if viewerType == "Essential" or viewerType == "Utility" then
         local behavior = U.Section(controls, "Viewer Behavior", true)
@@ -356,12 +354,6 @@ local function CreateViewerPanel(viewerType)
             else db.IconWidth = db.IconWidth or fallback db.IconHeight = db.IconHeight or fallback end
             ViewerChanged()
         end)
-    if viewerType == "Item" or viewerType == "ItemSpell" then
-        PathCheckbox(controls, icons, "Hide Items with Zero Charges/Uses", ProfileRoot,
-            { "CooldownManager", viewerType, "HideZeroCharges" }, ViewerChanged)
-        PathCheckbox(controls, icons, "Show Item Quality", ProfileRoot,
-            { "CooldownManager", viewerType, "ShowItemQualityBorder" }, ViewerChanged)
-    end
     PathSlider(controls, icons, "Icon Size", ProfileRoot,
         { "CooldownManager", viewerType, "IconSize" }, ViewerChanged,
         { min = 16, max = 128, step = 0.1, disabled = function()
@@ -406,6 +398,12 @@ local function CreateViewerPanel(viewerType)
         if overlayKey and BCDM[overlayKey] then BCDM[overlayKey]:Hide() end
     end)
 
+    return panel
+end
+
+local function CreateCustomTrackersPanel()
+    local panel, controls = U.NewPanel()
+    BCDM:AddCustomTrackerSettings(panel, controls)
     return panel
 end
 
@@ -626,7 +624,7 @@ function BCDM:RegisterSettings()
     if initialized or type(Settings) ~= "table" then return end
     initialized = true
 
-    BCDMG:AddAnchors("ElvUI", { "Utility", "Custom", "AdditionalCustom", "Item", "ItemSpell", "Trinket" }, {
+    BCDMG:AddAnchors("ElvUI", { "Utility", "CustomTrackers", "Trinket" }, {
         ElvUF_Player = "|cff1784d1ElvUI|r: Player Frame",
         ElvUF_Target = "|cff1784d1ElvUI|r: Target Frame",
     })
@@ -635,11 +633,11 @@ function BCDM:RegisterSettings()
     RegisterPanel(rootCategory, "Cooldown Viewers", CreateCooldownViewersPanel())
     for _, viewer in ipairs({
         { "Essential", "Essential Cooldowns" }, { "Utility", "Utility Cooldowns" }, { "Buffs", "Buff Icons" },
-        { "Custom", "Custom Cooldowns" }, { "AdditionalCustom", "Additional Custom" },
-        { "Item", "Items" }, { "Trinket", "Trinkets" }, { "ItemSpell", "Items & Spells" },
+        { "Trinket", "Trinkets" },
     }) do
         RegisterPanel(rootCategory, viewer[2], CreateViewerPanel(viewer[1]))
     end
+    RegisterPanel(rootCategory, "Custom Trackers", CreateCustomTrackersPanel())
     RegisterPanel(rootCategory, "Power Bar", CreateBarPanel("PowerBar"))
     RegisterPanel(rootCategory, "Secondary Power Bar", CreateBarPanel("SecondaryPowerBar"))
     RegisterPanel(rootCategory, "Cast Bar", CreateBarPanel("CastBar"))

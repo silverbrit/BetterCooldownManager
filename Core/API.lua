@@ -39,6 +39,7 @@ function BCDMG:AddAnchors(addOnName, addToTypes, anchorTable)
     if not C_AddOns.IsAddOnLoaded(addOnName) then return end
     if type(addToTypes) ~= "table" or type(anchorTable) ~= "table" then return end
     for _, typeName in ipairs(addToTypes) do
+        if typeName == "Custom" or typeName == "AdditionalCustom" then typeName = "CustomTrackers" end
         if BCDM.AnchorParents[typeName] then
             local displayNames = BCDM.AnchorParents[typeName][1]
             local keyList = BCDM.AnchorParents[typeName][2]
