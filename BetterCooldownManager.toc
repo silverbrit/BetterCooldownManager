@@ -24,3 +24,6 @@ CustomViewers/Init.xml
 
 # Load Core
 Core/Init.xml
+
+# Load Options
+Options/Init.xml

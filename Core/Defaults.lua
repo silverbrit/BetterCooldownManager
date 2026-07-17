@@ -3,8 +3,16 @@ local _, BCDM = ...
 local Defaults = {
     global = {
         UseGlobalProfile = false,
-        GlobalProfileName = "Default",
+        GlobalProfile = "Default",
         DisplayLoginMessage = true,
+        SettingsWindow = {
+            Point = "CENTER",
+            RelativePoint = "CENTER",
+            X = 0,
+            Y = 0,
+            Width = 1180,
+            Height = 760,
+        },
         EditModeManager = {
             SwapOnInstanceDifficulty = false,
             RaidLayouts = {

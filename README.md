@@ -21,7 +21,8 @@
 - API for AddOns to add their own anchors to Utility, Buffs, Custom, Item & Trinket Bars.
 
 ## Libraries
-- [Ace3](https://www.curseforge.com/wow/addons/ace3): Database & Configuration Windows are all handled by Ace3 & Ace3 GUI.
+- [Ace3](https://www.curseforge.com/wow/addons/ace3): Provides the addon lifecycle, profiles, localization, and serialization.
+- **LibSettingsCanvas-1.0:** Provides the shared settings canvas, collapsible sections, controls, and profile layouts used by BetterCooldownManager's draggable options window and Blizzard AddOns Settings.
 - [LibDeflate](https://github.com/SafeteeWoW/LibDeflate.git): Handles importing/exporting of profiles.
 - [LibDualSpec](https://github.com/AdiAddons/LibDualSpec-1.0.git): Handles specialization profiles.
 - [LibSharedMedia](https://www.curseforge.com/wow/addons/libsharedmedia-3-0): Handles all additional media for the AddOn.

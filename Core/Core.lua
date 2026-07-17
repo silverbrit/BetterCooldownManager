@@ -10,7 +10,11 @@ function BetterCooldownManager:OnInitialize()
         end
     end
     if BCDM.db.global.UseGlobalProfile then BCDM.db:SetProfile(BCDM.db.global.GlobalProfile or "Default") end
-    BCDM.db.RegisterCallback(BCDM, "OnProfileChanged", function() BCDM:UpdateBCDM() end)
+    BCDM.db.RegisterCallback(BCDM, "OnProfileChanged", function()
+        BCDM:UpdateBCDM()
+        if BCDM.RefreshSettings then BCDM:RefreshSettings() end
+    end)
+    BCDM:RegisterSettings()
 end
 
 function BetterCooldownManager:OnEnable()

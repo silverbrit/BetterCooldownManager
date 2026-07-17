@@ -21,7 +21,6 @@ BCDM.DBViewerToCooldownManagerViewer = {
 BCDM.LSM = LibStub("LibSharedMedia-3.0")
 BCDM.LDS = LibStub("LibDualSpec-1.0")
 BCDM.LEMO = LibStub("LibEditModeOverride-1.0")
-BCDM.AG = LibStub("AceGUI-3.0")
 
 BCDM.INFOBUTTON = "|TInterface\\AddOns\\BetterCooldownManager\\Media\\InfoButton.png:16:16|t "
 BCDM.ADDON_NAME = C_AddOns.GetAddOnMetadata("BetterCooldownManager", "Title")
