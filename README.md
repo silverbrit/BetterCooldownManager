@@ -34,4 +34,4 @@ All of these libraries contribute to the success of BetterCooldownManager & are 
 This is a passion project & this has to be maintained as much as possible in order for the longevity of the AddOn. It is solo-developed, but some very kind people from the community have already started contributing.
 
 ## Future Plans
-In the future, skinning the Buff Bars will be available. The code & GUI are all present already but final improvements are still to be made. Along with this, Custom Glows will be added when I find time to implement them appropriately.
+Custom Glows and additional cooldown-tracking controls will continue to be refined as the Retail Cooldown Manager evolves.

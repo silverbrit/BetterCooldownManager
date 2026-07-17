@@ -168,35 +168,6 @@ local Defaults = {
                     Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3}
                 },
             },
-            BuffBar = {
-                Width = 300,
-                Height = 24,
-                Spacing = 1,
-                GrowthDirection = "UP",
-                MatchWidthOfAnchor = true,
-                ColourByClass = true,
-                BackgroundColour = {34/255, 34/255, 34/255, 1},
-                ForegroundColour = {34/255, 34/255, 34/255, 1},
-                Layout = {"BOTTOM", "NONE", "TOP", 0, 1.1},
-                Icon = {
-                    Enabled = true,
-                    Layout = "LEFT",
-                },
-                Text = {
-                    SpellName = {
-                        Enabled = true,
-                        FontSize = 12,
-                        Colour = {1, 1, 1},
-                        Layout = {"LEFT", "LEFT", 3, 0}
-                    },
-                    Duration = {
-                        Enabled = true,
-                        FontSize = 12,
-                        Colour = {1, 1, 1},
-                        Layout = {"RIGHT", "RIGHT", -3, 0}
-                    },
-                }
-            },
             Custom = {
                 IconSize = 38,
                 IconWidth = 38,
