@@ -187,6 +187,9 @@ local function LayoutTrinketBar()
     if not BCDM.TrinketBarContainer then
         BCDM.TrinketBarContainer = CreateFrame("Frame", "BCDM_TrinketBar", UIParent, "BackdropTemplate")
         BCDM.TrinketBarContainer:SetSize(1, 1)
+        BCDM:RegisterOwnedFrameVisibility(BCDM.TrinketBarContainer, function()
+            return BCDM.db.profile.CooldownManager.Trinket
+        end)
     end
 
     BCDM.TrinketBarContainer:ClearAllPoints()
@@ -274,7 +277,8 @@ local function LayoutTrinketBar()
     end
 
     if CustomDB.Enabled and #customTrinketIcons > 0 then
-        BCDM.TrinketBarContainer:Show()
+        if BCDM:ShouldShowOwnedFrame(CustomDB) then BCDM.TrinketBarContainer:Show()
+        else BCDM.TrinketBarContainer:Hide() end
     else
         BCDM.TrinketBarContainer:Hide()
     end

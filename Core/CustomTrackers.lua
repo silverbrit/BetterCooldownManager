@@ -91,6 +91,8 @@ local function CopyAppearance(legacy)
         end
     end
     bar.Enabled = legacy.Enabled ~= false
+    bar.UseSharedVisibility = legacy.UseSharedVisibility ~= false
+    bar.Visibility = Copy(legacy.Visibility or (BCDM.NewVisibilityPolicy and BCDM:NewVisibilityPolicy()))
     bar.EntryOrder = {}
     bar.Entries = {}
     return bar
@@ -242,6 +244,8 @@ function BCDM:AddCustomTrackerBar(name)
         ID = id,
         Name = (type(name) == "string" and name ~= "") and name or ("Tracker Bar " .. id),
         Enabled = true,
+        UseSharedVisibility = true,
+        Visibility = self.NewVisibilityPolicy and self:NewVisibilityPolicy() or nil,
         IconSize = 38,
         IconWidth = 38,
         IconHeight = 38,

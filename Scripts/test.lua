@@ -9,7 +9,19 @@ local function Check(condition, message)
 end
 
 local BCDM = {}
+assert(loadfile(root .. "/Core/Visibility.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
+
+local visibility = BCDM:NewVisibilityPolicy()
+Check(BCDM:EvaluateVisibilityState(visibility, { Combat = false, Instance = "OpenWorld" }), "default visibility allows open world")
+visibility.Mode = "IN_COMBAT"
+Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = false, Instance = "OpenWorld" }), "combat mode hides out of combat")
+Check(BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld" }), "combat mode shows in combat")
+visibility.Instances.Raid = false
+Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "Raid" }), "instance filter vetoes visibility")
+visibility.HideMounted = true
+Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld", Mounted = true }, true), "state toggles veto macro visibility")
+Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld" }, "hide"), "macro condition can hide")
 
 local profile = {
     CooldownManager = {

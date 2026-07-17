@@ -255,6 +255,10 @@ local function GetContainer(barID)
     if container then return container end
     container = CreateFrame("Frame", "BCDM_CustomTrackerBar_" .. barID, UIParent)
     container:SetSize(1, 1)
+    BCDM:RegisterOwnedFrameVisibility(container, function()
+        local store = BCDM:GetCustomTrackerStore()
+        return store.Bars[barID]
+    end)
     Runtime.Containers[barID] = container
     return container
 end
@@ -281,7 +285,7 @@ local function RefreshBar(barID, bar)
     end
     ReleaseUnusedIcons(barID, used)
     LayoutIcons(container, bar, visible)
-    container:SetShown(bar.Enabled ~= false and #visible > 0)
+    container:SetShown(bar.Enabled ~= false and #visible > 0 and BCDM:ShouldShowOwnedFrame(bar))
 end
 
 function BCDM:RefreshCustomTrackers()

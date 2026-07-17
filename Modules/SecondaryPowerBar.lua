@@ -805,6 +805,7 @@ function BCDM:CreateSecondaryPowerBar()
     end
 
     BCDM.SecondaryPowerBar = secondaryPowerBar
+    BCDM:RegisterOwnedFrameVisibility(secondaryPowerBar, function() return BCDM.db.profile.SecondaryPowerBar end)
 
     if secondaryPowerBarDB.Enabled then
         RegisterSecondaryPowerBarEvents(secondaryPowerBar)

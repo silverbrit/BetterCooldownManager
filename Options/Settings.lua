@@ -72,6 +72,65 @@ local function DisabledWhen(path, expected)
     end
 end
 
+local VISIBILITY_MODES = {
+    { text = "Always", value = "ALWAYS" },
+    { text = "In Combat", value = "IN_COMBAT" },
+    { text = "Out of Combat", value = "OUT_OF_COMBAT" },
+}
+
+function BCDM:AddVisibilityPolicySettings(panel, controls, title, rootProvider, policyPath, useSharedPath, changed)
+    local section = U.Section(controls, title, true)
+    local function Refresh(value)
+        if changed then changed(value) end
+        if panel and panel.Refresh then panel:Refresh() end
+    end
+    local hidden
+    if useSharedPath then
+        local getShared, setShared = U.Access(rootProvider, useSharedPath, Refresh)
+        U.Checkbox(controls, section, "Use Shared Visibility", getShared, setShared)
+        hidden = function() return getShared() ~= false end
+    end
+    local function Options() return hidden and { hidden = hidden } or nil end
+    local function ChildPath(...)
+        local path = {}
+        for index, key in ipairs(policyPath) do path[index] = key end
+        for index = 1, select("#", ...) do path[#path + 1] = select(index, ...) end
+        return path
+    end
+    local get, set = U.Access(rootProvider, ChildPath("Mode"), Refresh)
+    U.Dropdown(controls, section, "Visibility Mode", get, set, function() return VISIBILITY_MODES end, Options())
+    for _, instance in ipairs({ "OpenWorld", "Dungeon", "Raid", "Arena", "Battleground" }) do
+        get, set = U.Access(rootProvider, ChildPath("Instances", instance), Refresh)
+        U.Checkbox(controls, section, "Show in " .. (instance == "OpenWorld" and "Open World" or instance), get, set, Options())
+    end
+    for _, toggle in ipairs({
+        { "HideMounted", "Hide While Mounted or Skyriding" }, { "HideDead", "Hide While Dead" },
+        { "HideVehicle", "Hide in Vehicles" }, { "HideResting", "Hide While Resting" },
+    }) do
+        get, set = U.Access(rootProvider, ChildPath(toggle[1]), Refresh)
+        U.Checkbox(controls, section, toggle[2], get, set, Options())
+    end
+
+    local Canvas = U.Canvas
+    local row = Canvas.CreateBaseRow(section.Content, 54)
+    U.Add(controls, section, row)
+    local label = Canvas.CreateLabel(row, "Macro Condition", "GameFontHighlight")
+    label:SetPoint("TOPLEFT", 0, 0)
+    local input = Canvas.CreateInput(row)
+    input:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -5)
+    input:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    local macroPath = ChildPath("MacroCondition")
+    input:SetScript("OnEnterPressed", function(self)
+        if rootProvider() then U.Set(rootProvider, macroPath, self:GetText()) Refresh() end
+        self:ClearFocus()
+    end)
+    function row:Refresh()
+        local isHidden = hidden and hidden()
+        self:SetShown(not isHidden)
+        if not isHidden and not input:HasFocus() then input:SetText(U.Get(rootProvider, macroPath) or "") end
+    end
+end
+
 local function RegisterPanel(parentCategory, name, panel, isRoot)
     local displayName = L(name)
     local category
@@ -95,6 +154,9 @@ local function CreateGeneralPanel()
     local general = U.Section(controls, "General", true)
     PathCheckbox(controls, general, "Display Login Message", GlobalRoot,
         { "DisplayLoginMessage" })
+
+    BCDM:AddVisibilityPolicySettings(panel, controls, "Shared Visibility", ProfileRoot,
+        { "Visibility" }, nil, function() BCDM:RefreshOwnedFrameVisibility() end)
 
     local appearance = U.Section(controls, "Global Appearance", true)
     U.Text(controls, appearance,
@@ -312,6 +374,9 @@ local function CreateViewerPanel(viewerType)
         local behavior = U.Section(controls, "Trinket Viewer", true)
         PathCheckbox(controls, behavior, "Enable Trinket Viewer", ProfileRoot,
             { "CooldownManager", "Trinket", "Enabled" }, ViewerChanged)
+        BCDM:AddVisibilityPolicySettings(panel, controls, "Visibility", ProfileRoot,
+            { "CooldownManager", "Trinket", "Visibility" },
+            { "CooldownManager", "Trinket", "UseSharedVisibility" }, ViewerChanged)
     end
 
     local layout = U.Section(controls, "Layout & Positioning", true)
@@ -509,6 +574,9 @@ local function CreateBarPanel(barType)
         end })
     PathColor(controls, behavior, "Background Colour", ProfileRoot,
         { barType, "BackgroundColour" }, update, true, { disabled = EnabledDisabled })
+
+    BCDM:AddVisibilityPolicySettings(panel, controls, "Visibility", ProfileRoot,
+        { barType, "Visibility" }, { barType, "UseSharedVisibility" }, update)
 
     if barType == "PowerBar" then
         AddPrimaryPowerColours(panel, controls)

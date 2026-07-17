@@ -291,5 +291,7 @@ end
 function BCDM:AddCustomTrackerSettings(panel, controls)
     CreateManagement(panel, controls)
     AddLayoutControls(panel, controls)
+    self:AddVisibilityPolicySettings(panel, controls, "Selected Bar Visibility", SelectedBar,
+        { "Visibility" }, { "UseSharedVisibility" }, function() self:RefreshCustomTrackers() end)
     CreateEntries(panel, controls)
 end

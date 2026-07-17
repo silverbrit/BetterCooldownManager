@@ -1,5 +1,17 @@
 local _, BCDM = ...
 
+local function VisibilityDefaults()
+    return {
+        Mode = "ALWAYS",
+        Instances = { OpenWorld = true, Dungeon = true, Raid = true, Arena = true, Battleground = true },
+        HideMounted = false,
+        HideDead = false,
+        HideVehicle = false,
+        HideResting = false,
+        MacroCondition = "",
+    }
+end
+
 local Defaults = {
     global = {
         UseGlobalProfile = false,
@@ -24,6 +36,7 @@ local Defaults = {
         },
     },
     profile = {
+        Visibility = VisibilityDefaults(),
         General = {
             Fonts = {
                 Font = "Friz Quadrata TT",
@@ -170,6 +183,8 @@ local Defaults = {
             },
             Trinket = {
                 Enabled = true,
+                UseSharedVisibility = true,
+                Visibility = VisibilityDefaults(),
                 IconSize = 38,
                 IconWidth = 38,
                 IconHeight = 38,
@@ -190,6 +205,8 @@ local Defaults = {
         },
         PowerBar = {
             Enabled = true,
+            UseSharedVisibility = true,
+            Visibility = VisibilityDefaults(),
             Width = 200,
             Height = 13,
             HeightWithoutSecondary = 20,
@@ -210,6 +227,8 @@ local Defaults = {
         },
         SecondaryPowerBar = {
             Enabled = true,
+            UseSharedVisibility = true,
+            Visibility = VisibilityDefaults(),
             Width = 200,
             Height = 13,
             HeightWithoutPrimary = 13,
@@ -234,6 +253,8 @@ local Defaults = {
         },
         CastBar = {
             Enabled = true,
+            UseSharedVisibility = true,
+            Visibility = VisibilityDefaults(),
             Width = 200,
             Height = 24,
             MatchWidthOfAnchor = true,
