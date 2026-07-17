@@ -19,7 +19,8 @@ local SPEC_DEVOURER = 1480
 
 local function SetBarValue(bar, value)
     local GeneralDB = BCDM.db.profile.General
-    local smoothBars = GeneralDB.Animation and GeneralDB.Animation.SmoothBars
+    local smoothBars = BCDM:ShouldSmoothBar(BCDM.db.profile.SecondaryPowerBar,
+        GeneralDB.Animation and GeneralDB.Animation.SmoothBars)
     if smoothBars and Enum and Enum.StatusBarInterpolation then
         bar:SetValue(value, Enum.StatusBarInterpolation.ExponentialEaseOut)
     else
@@ -582,6 +583,10 @@ local function UpdatePowerValues()
     if not (powerType == "STAGGER" and secondaryPowerBarDB.ColourByState) then
         secondaryPowerBar.Status:SetStatusBarColor(GetPowerBarColor())
     end
+    if secondaryPowerBarDB.Text.Mode and secondaryPowerBarDB.Text.Mode ~= "AUTO" then
+        local _, maximum = secondaryPowerBar.Status:GetMinMaxValues()
+        secondaryPowerBar.Text:SetText(BCDM:FormatResourceText(powerCurrent, maximum, secondaryPowerBarDB.Text.Mode))
+    end
     secondaryPowerBar:Show()
 end
 
@@ -776,6 +781,12 @@ function BCDM:CreateSecondaryPowerBar()
     secondaryPowerBar.Status:SetPoint("TOPLEFT", secondaryPowerBar, "TOPLEFT", borderSize, -borderSize)
     secondaryPowerBar.Status:SetPoint("BOTTOMRIGHT", secondaryPowerBar, "BOTTOMRIGHT", -borderSize, borderSize)
     secondaryPowerBar.Status:SetStatusBarTexture(BCDM.Media.Foreground)
+    BCDM:ApplyStatusBarDirection(secondaryPowerBar.Status, secondaryPowerBarDB.FillDirection)
+    secondaryPowerBar.Spark = secondaryPowerBar.Status:CreateTexture(nil, "OVERLAY")
+    secondaryPowerBar.Spark:SetColorTexture(1, 1, 1, 0.9)
+    secondaryPowerBar.Spark:SetSize(2, secondaryPowerBarDB.Height)
+    BCDM:AnchorStatusBarSpark(secondaryPowerBar.Spark, secondaryPowerBar.Status, secondaryPowerBarDB.FillDirection)
+    secondaryPowerBar.Spark:SetShown(secondaryPowerBarDB.ShowSpark == true)
 
     secondaryPowerBar.TickFrame = CreateFrame("Frame", nil, secondaryPowerBar)
     secondaryPowerBar.TickFrame:SetAllPoints(secondaryPowerBar)
@@ -861,6 +872,10 @@ function BCDM:UpdateSecondaryPowerBar()
     secondaryPowerBar.Status:SetPoint("TOPLEFT", secondaryPowerBar, "TOPLEFT", borderSize, -borderSize)
     secondaryPowerBar.Status:SetPoint("BOTTOMRIGHT", secondaryPowerBar, "BOTTOMRIGHT", -borderSize, borderSize)
     secondaryPowerBar.Status:SetStatusBarTexture(BCDM.Media.Foreground)
+    BCDM:ApplyStatusBarDirection(secondaryPowerBar.Status, secondaryPowerBarDB.FillDirection)
+    BCDM:AnchorStatusBarSpark(secondaryPowerBar.Spark, secondaryPowerBar.Status, secondaryPowerBarDB.FillDirection)
+    secondaryPowerBar.Spark:SetHeight(secondaryPowerBar:GetHeight())
+    secondaryPowerBar.Spark:SetShown(secondaryPowerBarDB.ShowSpark == true)
     secondaryPowerBar.Status:SetStatusBarColor(GetPowerBarColor())
     secondaryPowerBar.Status:SetMinMaxValues(0, UnitPowerMax("player"))
     secondaryPowerBar.Status:SetValue(UnitPower("player"))

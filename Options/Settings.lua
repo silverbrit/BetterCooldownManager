@@ -540,7 +540,21 @@ local function CreateBarPanel(barType)
     if barType ~= "CastBar" then
         PathCheckbox(controls, behavior, "Colour By Power Type", ProfileRoot,
             { barType, "ColourByType" }, update, { disabled = EnabledDisabled })
+        PathDropdown(controls, behavior, "Smoothing", ProfileRoot,
+            { barType, "Smoothing" }, update, function()
+                return {
+                    { text = "Use Shared Setting", value = "INHERIT" },
+                    { text = "On", value = "ON" },
+                    { text = "Off", value = "OFF" },
+                }
+            end, { disabled = EnabledDisabled })
+        PathCheckbox(controls, behavior, "Show Spark", ProfileRoot,
+            { barType, "ShowSpark" }, update, { disabled = EnabledDisabled })
     end
+    PathDropdown(controls, behavior, "Fill Direction", ProfileRoot,
+        { barType, "FillDirection" }, update, function()
+            return { { text = "Right", value = "RIGHT" }, { text = "Left", value = "LEFT" } }
+        end, { disabled = EnabledDisabled })
     PathCheckbox(controls, behavior, "Colour By Class", ProfileRoot,
         { barType, "ColourByClass" }, update, { disabled = EnabledDisabled })
     PathCheckbox(controls, behavior, "Match Width Of Anchor", ProfileRoot,
@@ -574,6 +588,28 @@ local function CreateBarPanel(barType)
         end })
     PathColor(controls, behavior, "Background Colour", ProfileRoot,
         { barType, "BackgroundColour" }, update, true, { disabled = EnabledDisabled })
+    if barType == "CastBar" then
+        PathColor(controls, behavior, "Interruptible Colour", ProfileRoot,
+            { "CastBar", "InterruptibleColour" }, update, true, { disabled = EnabledDisabled })
+        PathColor(controls, behavior, "Non-Interruptible Colour", ProfileRoot,
+            { "CastBar", "NonInterruptibleColour" }, update, true, { disabled = EnabledDisabled })
+        PathColor(controls, behavior, "Empower Pip Colour", ProfileRoot,
+            { "CastBar", "EmpowerPips", "Colour" }, update, true, { disabled = EnabledDisabled })
+        PathSlider(controls, behavior, "Empower Pip Width", ProfileRoot,
+            { "CastBar", "EmpowerPips", "Width" }, update,
+            { min = 1, max = 8, step = 1, disabled = EnabledDisabled })
+        U.Buttons(controls, behavior, {
+            { text = "Normal Test", width = 130, click = function()
+                BCDM.CAST_BAR_TEST_STATE = "NORMAL" BCDM:CreateTestCastBar()
+            end },
+            { text = "Protected Test", width = 130, click = function()
+                BCDM.CAST_BAR_TEST_STATE = "NON_INTERRUPTIBLE" BCDM:CreateTestCastBar()
+            end },
+            { text = "Empowered Test", width = 130, click = function()
+                BCDM.CAST_BAR_TEST_STATE = "EMPOWERED" BCDM:CreateTestCastBar()
+            end },
+        })
+    end
 
     BCDM:AddVisibilityPolicySettings(panel, controls, "Visibility", ProfileRoot,
         { barType, "Visibility" }, { barType, "UseSharedVisibility" }, update)
@@ -631,6 +667,15 @@ local function CreateBarPanel(barType)
         local function TextDisabled()
             return EnabledDisabled() or BCDM.db.profile[barType].Text.Enabled ~= true
         end
+        PathDropdown(controls, text, "Text Mode", ProfileRoot,
+            { barType, "Text", "Mode" }, update, function()
+                return {
+                    { text = "Automatic", value = "AUTO" },
+                    { text = "Current", value = "CURRENT" },
+                    { text = "Current / Maximum", value = "CURRENT_MAX" },
+                    { text = "Percent", value = "PERCENT" },
+                }
+            end, { disabled = TextDisabled })
         PathDropdown(controls, text, "Anchor From", ProfileRoot,
             { barType, "Text", "Layout", 1 }, update, function() return ANCHOR_POINTS end, { disabled = TextDisabled })
         PathDropdown(controls, text, "Anchor To", ProfileRoot,

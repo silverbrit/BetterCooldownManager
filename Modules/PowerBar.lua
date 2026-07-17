@@ -79,14 +79,18 @@ local function UpdatePowerValues()
     local powerCurrent = UnitPower("player", powerType)
     local powerMax = UnitPowerMax("player", powerType)
     if PowerBar and PowerBar.Status and powerType then
-        if powerType == 0 then
+        local textMode = BCDM.db.profile.PowerBar.Text.Mode or "AUTO"
+        if textMode ~= "AUTO" then
+            PowerBar.Text:SetText(BCDM:FormatResourceText(powerCurrent, powerMax, textMode))
+        elseif powerType == 0 then
            PowerBar.Text:SetText(string.format("%.0f%%", UnitPowerPercent("player", 0, false, CurveConstants.ScaleTo100)))
         else
             PowerBar.Text:SetText(tostring(powerCurrent))
         end
         PowerBar.Status:SetStatusBarColor(FetchPowerBarColour(powerType))
         PowerBar.Status:SetMinMaxValues(0, powerMax)
-        local smoothBars = GeneralDB.Animation and GeneralDB.Animation.SmoothBars
+        local smoothBars = BCDM:ShouldSmoothBar(BCDM.db.profile.PowerBar,
+            GeneralDB.Animation and GeneralDB.Animation.SmoothBars)
         if smoothBars and Enum and Enum.StatusBarInterpolation then
             PowerBar.Status:SetValue(powerCurrent, Enum.StatusBarInterpolation.ExponentialEaseOut)
         else
@@ -146,6 +150,12 @@ function BCDM:CreatePowerBar()
     PowerBar.Status:SetStatusBarColor(FetchPowerBarColour())
     PowerBar.Status:SetMinMaxValues(0, UnitPowerMax("player"))
     PowerBar.Status:SetValue(UnitPower("player"))
+    BCDM:ApplyStatusBarDirection(PowerBar.Status, PowerBarDB.FillDirection)
+    PowerBar.Spark = PowerBar.Status:CreateTexture(nil, "OVERLAY")
+    PowerBar.Spark:SetColorTexture(1, 1, 1, 0.9)
+    PowerBar.Spark:SetSize(2, PowerBarDB.Height)
+    BCDM:AnchorStatusBarSpark(PowerBar.Spark, PowerBar.Status, PowerBarDB.FillDirection)
+    PowerBar.Spark:SetShown(PowerBarDB.ShowSpark == true)
 
     PowerBar.Text = PowerBar.Status:CreateFontString(nil, "OVERLAY")
     PowerBar.Text:SetFont(BCDM.Media.Font, PowerBarDB.Text.FontSize, GeneralDB.Fonts.FontFlag)
@@ -209,6 +219,10 @@ function BCDM:UpdatePowerBar()
             PowerBar:SetHeight(hasSecondary and PowerBarDB.Height or PowerBarDB.HeightWithoutSecondary)
             PowerBar:SetBackdropColor(PowerBarDB.BackgroundColour[1], PowerBarDB.BackgroundColour[2], PowerBarDB.BackgroundColour[3], PowerBarDB.BackgroundColour[4])
             PowerBar.Status:SetStatusBarTexture(BCDM.Media.Foreground)
+            BCDM:ApplyStatusBarDirection(PowerBar.Status, PowerBarDB.FillDirection)
+            BCDM:AnchorStatusBarSpark(PowerBar.Spark, PowerBar.Status, PowerBarDB.FillDirection)
+            PowerBar.Spark:SetHeight(PowerBar:GetHeight())
+            PowerBar.Spark:SetShown(PowerBarDB.ShowSpark == true)
             PowerBar.Text:SetFont(BCDM.Media.Font, PowerBarDB.Text.FontSize, BCDM.db.profile.General.Fonts.FontFlag)
             PowerBar.Text:SetTextColor(PowerBarDB.Text.Colour[1], PowerBarDB.Text.Colour[2], PowerBarDB.Text.Colour[3], 1)
             PowerBar.Text:SetPoint(PowerBarDB.Text.Layout[1], PowerBar, PowerBarDB.Text.Layout[2], PowerBarDB.Text.Layout[3], PowerBarDB.Text.Layout[4])

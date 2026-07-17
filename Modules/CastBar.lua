@@ -18,14 +18,24 @@ local function GetDisplayCastText(text, maxChars)
     return string.sub(text, 1, maxChars)
 end
 
-local function FetchCastBarColour()
+local function FetchCastBarColour(notInterruptible)
     local CastBarDB = BCDM.db.profile.CastBar
+    if not BCDM:IsSecretValue(notInterruptible) and type(notInterruptible) == "boolean" then
+        local colour = notInterruptible and CastBarDB.NonInterruptibleColour or CastBarDB.InterruptibleColour
+        return colour[1], colour[2], colour[3], colour[4]
+    end
     if CastBarDB.ColourByClass then
         local _, class = UnitClass("player")
         local colour = RAID_CLASS_COLORS[class]
         return colour.r, colour.g, colour.b, 1
     else
         return CastBarDB.ForegroundColour[1], CastBarDB.ForegroundColour[2], CastBarDB.ForegroundColour[3], CastBarDB.ForegroundColour[4]
+    end
+end
+
+local function UpdateCastBarColour(notInterruptible)
+    if BCDM.CastBar and BCDM.CastBar.Status then
+        BCDM.CastBar.Status:SetStatusBarColor(FetchCastBarColour(notInterruptible))
     end
 end
 
@@ -37,15 +47,20 @@ local function CreatePips(empoweredStages)
 
     local totalWidth = BCDM.CastBar.Status:GetWidth()
     local cumulativePercentage = 0
+    local pipSettings = BCDM.db.profile.CastBar.EmpowerPips
 
     for i, stageProportion in ipairs(empoweredStages) do
         if i < #empoweredStages then
             cumulativePercentage = cumulativePercentage + stageProportion
             local empoweredPip = BCDM.CastBar.Status:CreateTexture(nil, "OVERLAY")
-            empoweredPip:SetColorTexture(1, 1, 1, 1)
+            empoweredPip:SetColorTexture(pipSettings.Colour[1], pipSettings.Colour[2], pipSettings.Colour[3], pipSettings.Colour[4])
             local xPos = totalWidth * cumulativePercentage
-            empoweredPip:SetSize(1, BCDM.CastBar.Status:GetHeight() - 2)
-            empoweredPip:SetPoint("LEFT", BCDM.CastBar.Status, "LEFT", xPos, 0)
+            empoweredPip:SetSize(pipSettings.Width, BCDM.CastBar.Status:GetHeight() - 2)
+            if BCDM.db.profile.CastBar.FillDirection == "LEFT" then
+                empoweredPip:SetPoint("RIGHT", BCDM.CastBar.Status, "RIGHT", -xPos, 0)
+            else
+                empoweredPip:SetPoint("LEFT", BCDM.CastBar.Status, "LEFT", xPos, 0)
+            end
             table.insert(BCDM.CastBar.Pips, empoweredPip)
             empoweredPip:Show()
         end
@@ -55,20 +70,24 @@ end
 local function UpdateCastBarValues(self, event, unit)
     if not BCDM.CastBar then return end
 
+    if event == "UNIT_SPELLCAST_INTERRUPTIBLE" or event == "UNIT_SPELLCAST_NOT_INTERRUPTIBLE" then
+        UpdateCastBarColour(event == "UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
+        return
+    end
+
     local EMPOWERED_CAST_START = {
         UNIT_SPELLCAST_EMPOWER_START = true,
     }
 
     local CAST_START = {
         UNIT_SPELLCAST_START = true,
-        UNIT_SPELLCAST_INTERRUPTIBLE = true,
-        UNIT_SPELLCAST_NOT_INTERRUPTIBLE = true,
         UNIT_SPELLCAST_SENT = true,
     }
 
     local CAST_STOP = {
         UNIT_SPELLCAST_STOP = true,
         UNIT_SPELLCAST_CHANNEL_STOP = true,
+        UNIT_SPELLCAST_FAILED = true,
         UNIT_SPELLCAST_INTERRUPTED = true,
         UNIT_SPELLCAST_EMPOWER_STOP = true,
     }
@@ -81,6 +100,7 @@ local function UpdateCastBarValues(self, event, unit)
         local castDuration = UnitCastingDuration("player")
         if not castDuration then return end
         BCDM.CastBar.Status:SetTimerDuration(castDuration, 0)
+        UpdateCastBarColour(select(8, UnitCastingInfo("player")))
         BCDM.CastBar.SpellNameText:SetText(GetDisplayCastText(UnitCastingInfo("player"), BCDM.db.profile.CastBar.Text.SpellName.MaxCharacters))
         BCDM.CastBar.Icon:SetTexture(select(3, UnitCastingInfo("player")) or nil)
         BCDM.CastBar:SetScript("OnUpdate", function()
@@ -100,6 +120,7 @@ local function UpdateCastBarValues(self, event, unit)
             local empowerCastDuration = UnitEmpoweredChannelDuration("player")
             CreatePips(empoweredStages)
             BCDM.CastBar.Status:SetTimerDuration(empowerCastDuration, 0)
+            UpdateCastBarColour(select(7, UnitChannelInfo("player")))
             BCDM.CastBar.SpellNameText:SetText(GetDisplayCastText(UnitChannelInfo("player"), BCDM.db.profile.CastBar.Text.SpellName.MaxCharacters))
             BCDM.CastBar.Icon:SetTexture(select(3, UnitChannelInfo("player")) or nil)
             BCDM.CastBar:SetScript("OnUpdate", function()
@@ -117,6 +138,7 @@ local function UpdateCastBarValues(self, event, unit)
         local channelDuration = UnitChannelDuration("player")
         if not channelDuration then return end
         BCDM.CastBar.Status:SetTimerDuration(channelDuration, 0)
+        UpdateCastBarColour(select(7, UnitChannelInfo("player")))
         BCDM.CastBar.Status:SetMinMaxValues(0, channelDuration:GetTotalDuration())
         BCDM.CastBar.SpellNameText:SetText(GetDisplayCastText(UnitChannelInfo("player"), BCDM.db.profile.CastBar.Text.SpellName.MaxCharacters))
         BCDM.CastBar.Icon:SetTexture(select(3, UnitChannelInfo("player")) or nil)
@@ -180,6 +202,7 @@ function BCDM:CreateCastBar()
     CastBar.Status = CreateFrame("StatusBar", nil, CastBar)
     CastBar.Status:SetStatusBarTexture(BCDM.Media.Foreground)
     CastBar.Status:SetStatusBarColor(FetchCastBarColour())
+    BCDM:ApplyStatusBarDirection(CastBar.Status, CastBarDB.FillDirection)
     CastBar.Status:SetMinMaxValues(0, UnitPowerMax("player"))
     CastBar.Status:SetValue(UnitPower("player"))
 
@@ -232,6 +255,8 @@ function BCDM:CreateCastBar()
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "player")
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
+        CastBar:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTIBLE", "player")
+        CastBar:RegisterUnitEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE", "player")
 
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
@@ -270,6 +295,7 @@ function BCDM:UpdateCastBar()
 
     BCDM.CastBar.Status:SetStatusBarColor(FetchCastBarColour())
     BCDM.CastBar.Status:SetStatusBarTexture(BCDM.Media.Foreground)
+    BCDM:ApplyStatusBarDirection(BCDM.CastBar.Status, CastBarDB.FillDirection)
 
     if CastBarDB.MatchWidthOfAnchor then
         local anchorFrame = _G[CastBarDB.Layout[2]]
@@ -327,6 +353,8 @@ function BCDM:UpdateCastBar()
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_STOP", "player")
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
+        CastBar:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTIBLE", "player")
+        CastBar:RegisterUnitEvent("UNIT_SPELLCAST_NOT_INTERRUPTIBLE", "player")
 
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
@@ -352,11 +380,18 @@ function BCDM:CreateTestCastBar()
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize
     if not BCDM.CastBar then return end
     if BCDM.CAST_BAR_TEST_MODE then
+        local testState = BCDM.CAST_BAR_TEST_STATE or "NORMAL"
         BCDM.CastBar:SetFrameStrata(CastBarDB.FrameStrata or "LOW")
         BCDM.CastBar.SpellNameText:SetText(string.sub("Ethereal Portal", 1, BCDM.db.profile.CastBar.Text.SpellName.MaxCharacters))
         BCDM.CastBar.Icon:SetTexture("Interface\\Icons\\ability_mage_netherwindpresence")
         BCDM.CastBar.Status:SetMinMaxValues(0, 10)
         BCDM.CastBar.Status:SetValue(5)
+        UpdateCastBarColour(testState == "NON_INTERRUPTIBLE")
+        if testState == "EMPOWERED" then
+            CreatePips({ 0.25, 0.35, 0.4 })
+        else
+            CreatePips({})
+        end
         BCDM.CastBar.CastTimeText:SetText("5.0")
         BCDM.CastBar.Icon:ClearAllPoints()
         if CastBarDB.Icon.Enabled == false then

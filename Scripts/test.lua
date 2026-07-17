@@ -10,6 +10,7 @@ end
 
 local BCDM = {}
 assert(loadfile(root .. "/Core/Visibility.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Core/BarBehavior.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
 
 local visibility = BCDM:NewVisibilityPolicy()
@@ -26,6 +27,17 @@ Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ALWA
 Check(not BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "READY" }, { ready = false }), "ready-only entry collapses while active")
 Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ACTIVE" }, { active = true }), "active-only entry shows on cooldown")
 Check(BCDM:ShouldGlowCustomTrackerEntry({ Glow = "READY" }, { ready = true }), "ready glow uses resolved state")
+Check(BCDM:ShouldSmoothBar({ Smoothing = "INHERIT" }, true), "bar smoothing can inherit the shared setting")
+Check(not BCDM:ShouldSmoothBar({ Smoothing = "OFF" }, true), "bar smoothing override can disable interpolation")
+Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
+Check(BCDM:FormatResourceText(25, 100, "PERCENT") == "25%", "resource text supports percentages")
+local secretValue = {}
+BCDM.IsSecretValue = function(_, value) return value == secretValue end
+Check(BCDM:FormatResourceText(secretValue, 100, "PERCENT") == "", "resource text does not inspect secret values")
+BCDM.IsSecretValue = nil
+local directionCalls = {}
+BCDM:ApplyStatusBarDirection({ SetReverseFill = function(_, reverse) directionCalls.reverse = reverse end }, "LEFT")
+Check(directionCalls.reverse == true, "resource bars support reverse fill")
 
 local profile = {
     CooldownManager = {
