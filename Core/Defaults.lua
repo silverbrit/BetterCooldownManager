@@ -414,6 +414,13 @@ local Defaults = {
                 },
                 ItemsSpells = {},
             },
+            CustomTrackers = {
+                SchemaVersion = 1,
+                NextBarID = 1,
+                NextEntryID = 1,
+                BarOrder = {},
+                Bars = {},
+            },
         },
         PowerBar = {
             Enabled = true,

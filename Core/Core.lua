@@ -14,6 +14,7 @@ end
 
 function BetterCooldownManager:OnInitialize()
     BCDM.db = LibStub("AceDB-3.0"):New("BCDMDB", BCDM:GetDefaultDB(), true)
+    BCDM:MigrateCustomTrackerProfiles(BCDM.db)
     RemoveBuffBarData(BCDM.db)
     BCDM.LDS:EnhanceDatabase(BCDM.db, "BetterCooldownManager")
     for k, v in pairs(BCDM:GetDefaultDB()) do
