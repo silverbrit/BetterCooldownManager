@@ -248,9 +248,10 @@ end
 function BCDM:MigrateCustomTrackerProfile(profile)
     if type(profile) ~= "table" then return false end
     local store = GetTrackerStore(profile)
-    if store.SchemaVersion >= SCHEMA_VERSION and store.LegacyMigrated then return false end
+    local auraIDsChanged = NormalizeStoreAuraIDs(store)
+    if store.SchemaVersion >= SCHEMA_VERSION and store.LegacyMigrated then return auraIDsChanged end
     local changed = store.SchemaVersion < SCHEMA_VERSION or store.LegacyMigrated ~= true
-    if NormalizeStoreAuraIDs(store) then changed = true end
+    if auraIDsChanged then changed = true end
 
     local cooldownManager = profile.CooldownManager
     local pending, frameMap = {}, {}

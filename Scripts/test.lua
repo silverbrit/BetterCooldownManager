@@ -86,6 +86,9 @@ store.SchemaVersion = 1
 Check(BCDM:MigrateCustomTrackerProfile(profile), "schema-v2 aura IDs migrate")
 Check(table.concat(spell.Source.AuraIDs, ",") == "700,800", "schema-v2 migration normalizes aura IDs")
 Check(not BCDM:MigrateCustomTrackerProfile(profile), "schema-v2 migration is idempotent")
+spell.Source.AuraIDs = "900, 900, 901"
+Check(BCDM:MigrateCustomTrackerProfile(profile), "current-schema imports still normalize aura IDs")
+Check(table.concat(spell.Source.AuraIDs, ",") == "900,901", "current-schema aura IDs use the canonical shape")
 
 BCDM.db = { profile = profile }
 local newBar = BCDM:AddCustomTrackerBar("Timers")

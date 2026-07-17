@@ -419,8 +419,10 @@ local function CreateEntries(panel, controls)
             row.AuraLabel:SetShown(isSpell)
             row.AuraInput:SetShown(isSpell)
             if isSpell then
+                local auraIDs = BCDM:NormalizeCustomTrackerAuraIDs(entry.Source.AuraIDs)
+                entry.Source.AuraIDs = #auraIDs > 0 and auraIDs or nil
                 if not row.AuraInput:HasFocus() then
-                    row.AuraInput:SetText(table.concat(entry.Source.AuraIDs or {}, ", "))
+                    row.AuraInput:SetText(table.concat(auraIDs, ", "))
                 end
                 row.AuraInput:SetScript("OnEnterPressed", function(input)
                     local auraIDs = BCDM:NormalizeCustomTrackerAuraIDs(input:GetText())
@@ -429,7 +431,7 @@ local function CreateEntries(panel, controls)
                     Changed(panel)
                 end)
                 row.AuraInput:SetScript("OnEscapePressed", function(input)
-                    input:SetText(table.concat(entry.Source.AuraIDs or {}, ", "))
+                    input:SetText(table.concat(BCDM:NormalizeCustomTrackerAuraIDs(entry.Source.AuraIDs), ", "))
                     input:ClearFocus()
                 end)
             end
