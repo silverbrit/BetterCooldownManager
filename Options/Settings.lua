@@ -249,8 +249,6 @@ local function CreateCooldownViewersPanel()
         { "CooldownManager", "Enable" }, function() BCDM:PromptReload() end, {
             description = L("A UI reload is required when changing this setting."),
         })
-    PathCheckbox(controls, general, "Disable Aura Overlay", ProfileRoot,
-        { "CooldownManager", "General", "DisableAuraOverlay" }, function() BCDM:PromptReload() end)
     PathSlider(controls, general, "Icon Zoom", ProfileRoot,
         { "CooldownManager", "General", "IconZoom" }, RefreshViewers, {
             min = 0, max = 1, step = 0.01,

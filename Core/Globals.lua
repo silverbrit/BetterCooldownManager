@@ -250,7 +250,6 @@ function BCDM:UpdateBCDM()
     BCDM:RefreshCustomTrackers()
     BCDM:UpdateTrinketBar()
     BCDM:RefreshCustomGlows()
-    BCDM:DisableAuraOverlay()
 end
 
 function BCDM:CreateCooldownViewerOverlays()

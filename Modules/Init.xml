@@ -2,7 +2,6 @@
 	<Script file="CastBar.lua"/>
 	<Script file="CooldownManager.lua"/>
 	<Script file="CustomGlows.lua"/>
-	<Script file="DisableAuraOverlay.lua"/>
 	<Script file="PowerBar.lua"/>
 	<Script file="SecondaryPowerBar.lua"/>
 	<Script file="EditMode.lua"/>
