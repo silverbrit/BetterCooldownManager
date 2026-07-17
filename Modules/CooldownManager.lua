@@ -155,17 +155,11 @@ local function StyleChargeCount()
     end
 end
 
-local centerBuffsUpdateThrottle = 0.01
-local nextcenterBuffsUpdate = 0
-
 local function CenterBuffs()
-    local currentTime = GetTime()
-    if currentTime < nextcenterBuffsUpdate then return end
-    nextcenterBuffsUpdate = currentTime + centerBuffsUpdateThrottle
     local visibleBuffIcons = {}
 
-    for _, childFrame in ipairs({ BuffIconCooldownViewer:GetChildren() }) do
-        if childFrame and childFrame.Icon and childFrame:IsShown() then
+    for _, childFrame in ipairs(BuffIconCooldownViewer:GetItemFrames()) do
+        if childFrame and childFrame.Icon then
             table.insert(visibleBuffIcons, childFrame)
         end
     end
@@ -192,28 +186,70 @@ local function CenterBuffs()
     end
 
     for index, iconFrame in ipairs(visibleBuffIcons) do
-        if BuffIconCooldownViewer.isHorizontal then
+        pcall(function()
             iconFrame:ClearAllPoints()
-            iconFrame:SetPoint("CENTER", BuffIconCooldownViewer, "CENTER", startX + (index - 1) * (iconWidth + iconSpacing), 0)
-        else
-            iconFrame:ClearAllPoints()
-            iconFrame:SetPoint("CENTER", BuffIconCooldownViewer, "CENTER", 0, startY - (index - 1) * (iconHeight + iconSpacing))
-        end
+            if BuffIconCooldownViewer.isHorizontal then
+                iconFrame:SetPoint("CENTER", BuffIconCooldownViewer, "CENTER", startX + (index - 1) * (iconWidth + iconSpacing), 0)
+            else
+                iconFrame:SetPoint("CENTER", BuffIconCooldownViewer, "CENTER", 0, startY - (index - 1) * (iconHeight + iconSpacing))
+            end
+        end)
     end
 
     return visibleCount
 end
 
-local centerBuffsEventFrame = CreateFrame("Frame")
+local centerBuffsPending = false
+local centerBuffsViewerHooked = false
+local centeredBuffIconHooks = setmetatable({}, { __mode = "k" })
+
+local function IsCenterBuffsEnabled()
+    local profile = BCDM.db and BCDM.db.profile
+    local settings = profile and profile.CooldownManager and profile.CooldownManager.Buffs
+    return settings and settings.CenterBuffs == true
+end
+
+local function QueueCenterBuffs()
+    if centerBuffsPending or not IsCenterBuffsEnabled() then return end
+    centerBuffsPending = true
+    C_Timer.After(0, function()
+        centerBuffsPending = false
+        if IsCenterBuffsEnabled() and BuffIconCooldownViewer then CenterBuffs() end
+    end)
+end
+
+local function HookBuffIconItems()
+    if not BuffIconCooldownViewer then return end
+    for _, childFrame in ipairs({ BuffIconCooldownViewer:GetChildren() }) do
+        if childFrame and childFrame.layoutIndex and not centeredBuffIconHooks[childFrame] then
+            centeredBuffIconHooks[childFrame] = true
+            hooksecurefunc(childFrame, "SetShown", QueueCenterBuffs)
+        end
+    end
+end
+
+local function EnsureCenterBuffsHooks()
+    if centerBuffsViewerHooked or not BuffIconCooldownViewer then return end
+    centerBuffsViewerHooked = true
+    hooksecurefunc(BuffIconCooldownViewer, "Layout", function()
+        HookBuffIconItems()
+        QueueCenterBuffs()
+    end)
+    hooksecurefunc(BuffIconCooldownViewer, "RefreshLayout", function()
+        HookBuffIconItems()
+        QueueCenterBuffs()
+    end)
+    HookBuffIconItems()
+end
 
 local function SetupCenterBuffs()
     local buffsSettings = BCDM.db.profile.CooldownManager.Buffs
-
+    EnsureCenterBuffsHooks()
     if buffsSettings.CenterBuffs then
-        centerBuffsEventFrame:SetScript("OnUpdate", CenterBuffs)
-    else
-        centerBuffsEventFrame:SetScript("OnUpdate", nil)
-        centerBuffsEventFrame:Hide()
+        HookBuffIconItems()
+        QueueCenterBuffs()
+    elseif BuffIconCooldownViewer and BuffIconCooldownViewer.Layout then
+        BuffIconCooldownViewer:Layout()
     end
 end
 
