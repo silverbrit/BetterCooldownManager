@@ -348,7 +348,7 @@ local function CreateEntries(panel, controls)
         row.Label:SetPoint("RIGHT", row.Up, "LEFT", -10, 0)
         row.Display = Canvas.CreateDropdown(row)
         row.Display:SetSize(120, 24)
-        row.Display:SetPoint("BOTTOMLEFT", 0, 0)
+        row.Display:SetPoint("TOPLEFT", 0, -30)
         row.Visual = Canvas.CreateDropdown(row)
         row.Visual:SetSize(120, 24)
         row.Visual:SetPoint("LEFT", row.Display, "RIGHT", 8, 0)
@@ -365,6 +365,13 @@ local function CreateEntries(panel, controls)
         row.TooltipLabel = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
         row.TooltipLabel:SetPoint("LEFT", row.Tooltip, "RIGHT", 2, 0)
         row.TooltipLabel:SetText("Tooltip")
+        row.AuraLabel = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        row.AuraLabel:SetPoint("BOTTOMLEFT", 0, 3)
+        row.AuraLabel:SetText("Extra Aura IDs (source and override are automatic)")
+        row.AuraInput = Canvas.CreateInput(row)
+        row.AuraInput:SetPoint("LEFT", row.AuraLabel, "RIGHT", 8, 0)
+        row.AuraInput:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        row.AuraInput:SetHeight(24)
         rows[index] = row
         return row
     end
@@ -375,6 +382,7 @@ local function CreateEntries(panel, controls)
         local bar = SelectedBar()
         local order = bar and bar.EntryOrder or {}
         local previous
+        local totalHeight = 0
         for index, entryID in ipairs(order) do
             local entry = bar.Entries[entryID]
             local row = EnsureRow(index)
@@ -384,6 +392,9 @@ local function CreateEntries(panel, controls)
             row:SetPoint("RIGHT", self, "RIGHT", 0, 0)
             previous = row
             local name, icon = EntryName(entry)
+            local isSpell = entry.Source and entry.Source.Type == "spell"
+            row:SetHeight(isSpell and 86 or 58)
+            totalHeight = totalHeight + row:GetHeight() + (index > 1 and 6 or 0)
             row.Label:SetText(string.format("|T%s:16:16|t %s", tostring(icon), name))
             row.Check:SetChecked(entry.Enabled ~= false)
             row.Check:SetScript("OnClick", function(button) entry.Enabled = button:GetChecked() == true Changed(panel) end)
@@ -405,10 +416,27 @@ local function CreateEntries(panel, controls)
             SetupFilterMenu(row.Filters, entry, panel)
             row.Tooltip:SetChecked(entry.Tooltip ~= false)
             row.Tooltip:SetScript("OnClick", function(button) entry.Tooltip = button:GetChecked() == true Changed(panel) end)
+            row.AuraLabel:SetShown(isSpell)
+            row.AuraInput:SetShown(isSpell)
+            if isSpell then
+                if not row.AuraInput:HasFocus() then
+                    row.AuraInput:SetText(table.concat(entry.Source.AuraIDs or {}, ", "))
+                end
+                row.AuraInput:SetScript("OnEnterPressed", function(input)
+                    local auraIDs = BCDM:NormalizeCustomTrackerAuraIDs(input:GetText())
+                    entry.Source.AuraIDs = #auraIDs > 0 and auraIDs or nil
+                    input:ClearFocus()
+                    Changed(panel)
+                end)
+                row.AuraInput:SetScript("OnEscapePressed", function(input)
+                    input:SetText(table.concat(entry.Source.AuraIDs or {}, ", "))
+                    input:ClearFocus()
+                end)
+            end
             row:Show()
         end
         for index = #order + 1, #rows do rows[index]:Hide() end
-        self:SetHeight(math.max(28, #order * 64))
+        self:SetHeight(math.max(28, totalHeight))
     end
 end
 

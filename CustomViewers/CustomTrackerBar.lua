@@ -208,9 +208,13 @@ local function ReleaseUnusedIcons(barID, used)
         if not used[entryID] then
             BCDM:StopCustomGlow(icon)
             icon:Hide()
-            icon.Entry, icon.Adapter, icon.LastState = nil, nil, nil
-            icons[entryID] = nil
-            Runtime.IconPool[#Runtime.IconPool + 1] = icon
+            if BCDM:HasCustomTrackerAuraDisplay(icon) then
+                BCDM:HideCustomTrackerAuraDisplay(icon)
+            else
+                icon.Entry, icon.Adapter, icon.LastState = nil, nil, nil
+                icons[entryID] = nil
+                Runtime.IconPool[#Runtime.IconPool + 1] = icon
+            end
         end
     end
 end
@@ -239,6 +243,7 @@ local function ConfigureIcon(icon, bar, entry, adapter, width, height)
     icon.Count:SetFont(BCDM.Media.Font, text.FontSize or 12, general.Fonts.FontFlag)
     local colour = text.Colour or { 1, 1, 1 }
     icon.Count:SetTextColor(colour[1], colour[2], colour[3], 1)
+    BCDM:EnsureCustomTrackerAuraDisplay(icon, entry, bar)
 end
 
 local function UpdateIconState(icon, state)
@@ -341,12 +346,14 @@ local function RefreshBar(barID, bar)
                     if state.active == nil then state.active = existing.LastState.active end
                     if state.ready == nil then state.ready = existing.LastState.ready end
                 end
-                if BCDM:ShouldDisplayCustomTrackerEntry(entry, state) then
+                local shouldDisplay = BCDM:ShouldDisplayCustomTrackerEntry(entry, state)
+                if shouldDisplay or entry.Source.Type == "spell" then
                     local icon = AcquireIcon(barID, entryID, container)
                     local width, height = BCDM:GetIconDimensions(bar)
                     ConfigureIcon(icon, bar, entry, adapter, width, height)
                     UpdateIconState(icon, state)
-                    used[entryID], visible[#visible + 1] = true, icon
+                    used[entryID] = true
+                    if shouldDisplay then visible[#visible + 1] = icon else icon:Hide() end
                 end
             end
         end
@@ -425,11 +432,13 @@ function BCDM:SetupCustomTrackers()
         for _, event in ipairs({
             "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED", "SPELL_UPDATE_COOLDOWN",
             "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "BAG_UPDATE_DELAYED", "ITEM_COUNT_CHANGED",
-            "PLAYER_EQUIPMENT_CHANGED",
+            "PLAYER_EQUIPMENT_CHANGED", "PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED",
         }) do frame:RegisterEvent(event) end
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         frame:SetScript("OnEvent", function(_, event, _, _, spellID)
             if event == "UNIT_SPELLCAST_SUCCEEDED" then BCDM:TriggerCustomTrackerTimers(spellID)
+            elseif event == "PLAYER_TARGET_CHANGED" then BCDM:RefreshCustomTrackerAuraUnit("target")
+            elseif event == "PLAYER_REGEN_ENABLED" then BCDM:PreparePendingCustomTrackerAuraDisplays()
             else BCDM:QueueCustomTrackerRefresh() end
         end)
         Runtime.EventFrame = frame

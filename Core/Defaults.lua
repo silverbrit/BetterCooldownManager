@@ -195,7 +195,7 @@ local Defaults = {
                 OffsetByParentHeight = true,
             },
             CustomTrackers = {
-                SchemaVersion = 1,
+                SchemaVersion = 2,
                 NextBarID = 1,
                 NextEntryID = 1,
                 BarOrder = {},

@@ -1,6 +1,6 @@
 local _, BCDM = ...
 
-local SCHEMA_VERSION = 1
+local SCHEMA_VERSION = 2
 local LEGACY_VIEWERS = {
     { key = "Custom", name = "Custom Cooldowns", entries = "Spells", sourceType = "spell", frame = "BCDM_CustomCooldownViewer" },
     { key = "AdditionalCustom", name = "Additional Custom", entries = "Spells", sourceType = "spell", frame = "BCDM_AdditionalCustomCooldownViewer" },
@@ -18,6 +18,65 @@ local function Copy(value, seen)
         result[Copy(key, seen)] = Copy(child, seen)
     end
     return result
+end
+
+local function NormalizeAuraIDs(value)
+    local normalized, seen = {}, {}
+    local function Add(candidate)
+        candidate = tonumber(candidate)
+        if candidate and candidate > 0 and candidate == math.floor(candidate) and not seen[candidate] then
+            normalized[#normalized + 1] = candidate
+            seen[candidate] = true
+        end
+    end
+    if type(value) == "string" then
+        for candidate in value:gmatch("[^,%s]+") do Add(candidate) end
+    elseif type(value) == "table" then
+        for _, candidate in ipairs(value) do Add(candidate) end
+    end
+    return normalized
+end
+
+function BCDM:NormalizeCustomTrackerAuraIDs(value)
+    return NormalizeAuraIDs(value)
+end
+
+function BCDM:BuildCustomTrackerAuraCandidateIDs(source, overrideSpellID)
+    local candidates, seen = {}, {}
+    local function Add(candidate)
+        candidate = tonumber(candidate)
+        if candidate and candidate > 0 and candidate == math.floor(candidate) and not seen[candidate] then
+            candidates[#candidates + 1] = candidate
+            seen[candidate] = true
+        end
+    end
+    if type(source) == "table" and source.Type == "spell" then
+        Add(source.ID)
+        Add(overrideSpellID)
+        for _, candidate in ipairs(NormalizeAuraIDs(source.AuraIDs)) do Add(candidate) end
+    end
+    return candidates
+end
+
+local function NormalizeStoreAuraIDs(store)
+    local changed = false
+    for _, bar in pairs(store.Bars or {}) do
+        for _, entry in pairs(type(bar.Entries) == "table" and bar.Entries or {}) do
+            local source = type(entry) == "table" and entry.Source
+            if type(source) == "table" and source.Type == "spell" and source.AuraIDs ~= nil then
+                local normalized = NormalizeAuraIDs(source.AuraIDs)
+                local same = type(source.AuraIDs) == "table" and #source.AuraIDs == #normalized
+                if same then
+                    for index, spellID in ipairs(normalized) do
+                        if source.AuraIDs[index] ~= spellID then same = false break end
+                    end
+                end
+                if not same then changed = true end
+                source.AuraIDs = #normalized > 0 and normalized or nil
+            end
+        end
+    end
+    return changed
 end
 
 local function NewStore()
@@ -190,6 +249,8 @@ function BCDM:MigrateCustomTrackerProfile(profile)
     if type(profile) ~= "table" then return false end
     local store = GetTrackerStore(profile)
     if store.SchemaVersion >= SCHEMA_VERSION and store.LegacyMigrated then return false end
+    local changed = store.SchemaVersion < SCHEMA_VERSION or store.LegacyMigrated ~= true
+    if NormalizeStoreAuraIDs(store) then changed = true end
 
     local cooldownManager = profile.CooldownManager
     local pending, frameMap = {}, {}
@@ -226,7 +287,7 @@ function BCDM:MigrateCustomTrackerProfile(profile)
     store.LegacyMigrated = true
     store.BarOrder = NormalizeOrder(store.BarOrder, store.Bars)
     for _, descriptor in ipairs(LEGACY_VIEWERS) do cooldownManager[descriptor.key] = nil end
-    return #pending > 0
+    return changed or #pending > 0
 end
 
 function BCDM:MigrateCustomTrackerProfiles(db)
@@ -335,6 +396,7 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
     local bar = store.Bars[barID]
     if not bar or type(sourceType) ~= "string" then return end
     local entryID = AllocateEntryID(store)
+    local auraIDs = sourceType == "spell" and NormalizeAuraIDs(extra and extra.AuraIDs) or {}
     bar.Entries[entryID] = {
         ID = entryID,
         Enabled = true,
@@ -345,7 +407,12 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
         Glow = "NONE",
         ClassSpecFilters = extra and Copy(extra.ClassSpecFilters),
         FilterClass = extra and extra.FilterClass,
-        Source = { Type = sourceType, ID = tonumber(sourceID), Duration = extra and tonumber(extra.Duration) },
+        Source = {
+            Type = sourceType,
+            ID = tonumber(sourceID),
+            Duration = extra and tonumber(extra.Duration),
+            AuraIDs = #auraIDs > 0 and auraIDs or nil,
+        },
     }
     bar.EntryOrder[#bar.EntryOrder + 1] = entryID
     return entryID

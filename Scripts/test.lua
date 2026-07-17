@@ -27,6 +27,11 @@ Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ALWA
 Check(not BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "READY" }, { ready = false }), "ready-only entry collapses while active")
 Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ACTIVE" }, { active = true }), "active-only entry shows on cooldown")
 Check(BCDM:ShouldGlowCustomTrackerEntry({ Glow = "READY" }, { ready = true }), "ready glow uses resolved state")
+local auraCandidates = BCDM:BuildCustomTrackerAuraCandidateIDs(
+    { Type = "spell", ID = 100, AuraIDs = { 300, 100, "400", -1 } }, 200)
+Check(table.concat(auraCandidates, ",") == "100,200,300,400", "aura candidates combine source, override, and explicit IDs")
+Check(#BCDM:BuildCustomTrackerAuraCandidateIDs({ Type = "item", ID = 100 }, 200) == 0,
+    "non-spell entries do not receive aura candidates")
 Check(BCDM:ShouldSmoothBar({ Smoothing = "INHERIT" }, true), "bar smoothing can inherit the shared setting")
 Check(not BCDM:ShouldSmoothBar({ Smoothing = "OFF" }, true), "bar smoothing override can disable interpolation")
 Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
@@ -76,6 +81,11 @@ Check(custom.Layout[2] == "BCDM_CustomTrackerBar_2", "legacy inter-viewer anchor
 Check(profile.CooldownManager.Custom == nil and profile.CooldownManager.Item == nil, "legacy fields are removed after conversion")
 local nextBarID = store.NextBarID
 Check(not BCDM:MigrateCustomTrackerProfile(profile) and store.NextBarID == nextBarID, "migration is idempotent")
+spell.Source.AuraIDs = { 700, "800", 700, 0 }
+store.SchemaVersion = 1
+Check(BCDM:MigrateCustomTrackerProfile(profile), "schema-v2 aura IDs migrate")
+Check(table.concat(spell.Source.AuraIDs, ",") == "700,800", "schema-v2 migration normalizes aura IDs")
+Check(not BCDM:MigrateCustomTrackerProfile(profile), "schema-v2 migration is idempotent")
 
 BCDM.db = { profile = profile }
 local newBar = BCDM:AddCustomTrackerBar("Timers")
@@ -91,6 +101,9 @@ local timerEntry = BCDM:AddCustomTrackerEntry(newBar, "timer", 123, { Duration =
 Check(store.Bars[newBar].Entries[timerEntry].Source.Duration == 8, "typed entry stores timer duration")
 local equipmentEntry = BCDM:AddCustomTrackerEntry(newBar, "equipment", 13)
 Check(store.Bars[newBar].Entries[equipmentEntry].Source.ID == 13, "typed entry stores equipment slot")
+local auraEntry = BCDM:AddCustomTrackerEntry(newBar, "spell", 456, { AuraIDs = "789, 789, 987" })
+Check(table.concat(store.Bars[newBar].Entries[auraEntry].Source.AuraIDs, ",") == "789,987",
+    "new spell entries normalize optional aura IDs")
 Check(BCDM:DeleteCustomTrackerEntry(newBar, timerEntry), "entry can be deleted")
 Check(BCDM:DeleteCustomTrackerBar(newBar), "bar can be deleted")
 
