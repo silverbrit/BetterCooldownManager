@@ -22,6 +22,10 @@ Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "
 visibility.HideMounted = true
 Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld", Mounted = true }, true), "state toggles veto macro visibility")
 Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld" }, "hide"), "macro condition can hide")
+Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ALWAYS" }, nil), "always entries reserve layout without readable state")
+Check(not BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "READY" }, { ready = false }), "ready-only entry collapses while active")
+Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ACTIVE" }, { active = true }), "active-only entry shows on cooldown")
+Check(BCDM:ShouldGlowCustomTrackerEntry({ Glow = "READY" }, { ready = true }), "ready glow uses resolved state")
 
 local profile = {
     CooldownManager = {

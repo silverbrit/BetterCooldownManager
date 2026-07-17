@@ -351,6 +351,21 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
     return entryID
 end
 
+function BCDM:ShouldDisplayCustomTrackerEntry(entry, state)
+    if type(entry) ~= "table" or entry.Enabled == false then return false end
+    local mode = entry.DisplayMode or "ALWAYS"
+    if mode == "READY" then return state and state.ready == true end
+    if mode == "ACTIVE" then return state and state.active == true end
+    return true
+end
+
+function BCDM:ShouldGlowCustomTrackerEntry(entry, state)
+    if type(entry) ~= "table" or type(state) ~= "table" then return false end
+    if entry.Glow == "READY" then return state.ready == true end
+    if entry.Glow == "ACTIVE" then return state.active == true end
+    return false
+end
+
 function BCDM:MoveCustomTrackerEntry(barID, entryID, direction)
     local bar = self:GetCustomTrackerStore().Bars[barID]
     if not bar then return false end

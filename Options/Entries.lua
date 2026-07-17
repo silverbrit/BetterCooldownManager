@@ -195,6 +195,39 @@ local function EntryName(entry)
     return name or (source.Type .. " " .. tostring(source.ID)), icon
 end
 
+local DISPLAY_MODES = {
+    { text = "Always", value = "ALWAYS" }, { text = "Ready Only", value = "READY" },
+    { text = "Active Only", value = "ACTIVE" },
+}
+local VISUAL_MODES = {
+    { text = "Full", value = "FULL" }, { text = "Desaturate", value = "DESATURATE" },
+    { text = "Lower Alpha", value = "LOW_ALPHA" },
+}
+local GLOW_MODES = {
+    { text = "No Glow", value = "NONE" }, { text = "Glow Ready", value = "READY" },
+    { text = "Glow Active", value = "ACTIVE" },
+}
+
+local function SetupFilterMenu(button, entry, panel)
+    if type(button.SetupMenu) ~= "function" then return end
+    button:SetupMenu(function(_, root)
+        root:SetScrollMode(420)
+        for _, classEntry in ipairs(BCDM:GetClassSpecCatalog(entry.FilterClass)) do
+            local submenu = root:CreateButton(classEntry.className or classEntry.classToken)
+            for _, specEntry in ipairs(classEntry.specs or {}) do
+                local value = classEntry.classToken .. ":" .. specEntry.specToken
+                submenu:CreateCheckbox(specEntry.specName or specEntry.specToken, function()
+                    return entry.ClassSpecFilters and entry.ClassSpecFilters[value] == true
+                end, function()
+                    entry.ClassSpecFilters = entry.ClassSpecFilters or {}
+                    entry.ClassSpecFilters[value] = not entry.ClassSpecFilters[value] or nil
+                    Changed(panel)
+                end)
+            end
+        end
+    end)
+end
+
 local function CreateEntries(panel, controls)
     local section = U.Section(controls, "Selected Bar Entries", true)
     local addRow = Canvas.CreateBaseRow(section.Content, 38)
@@ -238,17 +271,17 @@ local function CreateEntries(panel, controls)
     local function EnsureRow(index)
         if rows[index] then return rows[index] end
         local row = CreateFrame("Frame", nil, section.Content)
-        row:SetHeight(28)
+        row:SetHeight(58)
         row.Check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
         row.Check:SetSize(24, 24)
-        row.Check:SetPoint("LEFT", 0, 0)
+        row.Check:SetPoint("TOPLEFT", 0, -1)
         row.Label = row:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
         row.Label:SetPoint("LEFT", row.Check, "RIGHT", 4, 0)
         row.Label:SetJustifyH("LEFT")
         row.Label:SetWordWrap(false)
         row.Remove = Canvas.CreateActionButton(row, "Remove")
         row.Remove:SetSize(76, 24)
-        row.Remove:SetPoint("RIGHT", 0, 0)
+        row.Remove:SetPoint("TOPRIGHT", 0, -1)
         row.Down = Canvas.CreateActionButton(row, "Down")
         row.Down:SetSize(54, 24)
         row.Down:SetPoint("RIGHT", row.Remove, "LEFT", -6, 0)
@@ -256,6 +289,25 @@ local function CreateEntries(panel, controls)
         row.Up:SetSize(54, 24)
         row.Up:SetPoint("RIGHT", row.Down, "LEFT", -6, 0)
         row.Label:SetPoint("RIGHT", row.Up, "LEFT", -10, 0)
+        row.Display = Canvas.CreateDropdown(row)
+        row.Display:SetSize(120, 24)
+        row.Display:SetPoint("BOTTOMLEFT", 0, 0)
+        row.Visual = Canvas.CreateDropdown(row)
+        row.Visual:SetSize(120, 24)
+        row.Visual:SetPoint("LEFT", row.Display, "RIGHT", 8, 0)
+        row.Glow = Canvas.CreateDropdown(row)
+        row.Glow:SetSize(120, 24)
+        row.Glow:SetPoint("LEFT", row.Visual, "RIGHT", 8, 0)
+        row.Filters = Canvas.CreateDropdown(row)
+        row.Filters:SetSize(120, 24)
+        row.Filters:SetPoint("LEFT", row.Glow, "RIGHT", 8, 0)
+        row.Filters:OverrideText("Class / Spec")
+        row.Tooltip = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+        row.Tooltip:SetSize(24, 24)
+        row.Tooltip:SetPoint("LEFT", row.Filters, "RIGHT", 10, 0)
+        row.TooltipLabel = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+        row.TooltipLabel:SetPoint("LEFT", row.Tooltip, "RIGHT", 2, 0)
+        row.TooltipLabel:SetText("Tooltip")
         rows[index] = row
         return row
     end
@@ -281,10 +333,25 @@ local function CreateEntries(panel, controls)
             row.Up:SetScript("OnClick", function() BCDM:MoveCustomTrackerEntry(selectedBarID, entryID, -1) Changed(panel) end)
             row.Down:SetScript("OnClick", function() BCDM:MoveCustomTrackerEntry(selectedBarID, entryID, 1) Changed(panel) end)
             row.Remove:SetScript("OnClick", function() BCDM:DeleteCustomTrackerEntry(selectedBarID, entryID) Changed(panel) end)
+            Canvas.AttachDropdownMenu(row.Display, function() return DISPLAY_MODES end,
+                function() return entry.DisplayMode or "ALWAYS" end,
+                function(value) entry.DisplayMode = value Changed(panel) end, "Display Mode")
+            Canvas.AttachDropdownMenu(row.Visual, function() return VISUAL_MODES end,
+                function() return entry.VisualMode or "FULL" end,
+                function(value) entry.VisualMode = value Changed(panel) end, "Visual Mode")
+            Canvas.AttachDropdownMenu(row.Glow, function() return GLOW_MODES end,
+                function() return entry.Glow or "NONE" end,
+                function(value) entry.Glow = value Changed(panel) end, "Glow Mode")
+            Canvas.RefreshDropdownState(row.Display, false)
+            Canvas.RefreshDropdownState(row.Visual, false)
+            Canvas.RefreshDropdownState(row.Glow, false)
+            SetupFilterMenu(row.Filters, entry, panel)
+            row.Tooltip:SetChecked(entry.Tooltip ~= false)
+            row.Tooltip:SetScript("OnClick", function(button) entry.Tooltip = button:GetChecked() == true Changed(panel) end)
             row:Show()
         end
         for index = #order + 1, #rows do rows[index]:Hide() end
-        self:SetHeight(math.max(28, #order * 34))
+        self:SetHeight(math.max(28, #order * 64))
     end
 end
 

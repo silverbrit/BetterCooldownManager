@@ -191,6 +191,10 @@ end
 
 local function UpdateIconState(icon, state)
     if not state then return end
+    if icon.LastState then
+        if state.active == nil then state.active = icon.LastState.active end
+        if state.ready == nil then state.ready = icon.LastState.ready end
+    end
     icon.LastState = state
     if state.durationObject and icon.Cooldown.SetCooldownFromDurationObject then
         icon.Cooldown:SetCooldownFromDurationObject(state.durationObject, true)
@@ -198,7 +202,11 @@ local function UpdateIconState(icon, state)
         ClearCooldown(icon.Cooldown)
     end
     icon.Count:SetText(state.count and state.count > 1 and tostring(state.count) or "")
-    SetDesaturated(icon.Icon, state.active == true)
+    local visualMode = icon.Entry.VisualMode or "FULL"
+    icon:SetAlpha(visualMode == "LOW_ALPHA" and (tonumber(icon.Entry.Alpha) or 0.45) or 1)
+    SetDesaturated(icon.Icon, visualMode == "DESATURATE")
+    if BCDM:ShouldGlowCustomTrackerEntry(icon.Entry, state) then BCDM:StartCustomGlow(icon)
+    else BCDM:StopCustomGlow(icon) end
 end
 
 local function ResolveAnchor(barID, bar)
@@ -275,11 +283,19 @@ local function RefreshBar(barID, bar)
             and (not adapter.IsAvailable or adapter.IsAvailable(entry.Source)) then
             local name = adapter.GetMetadata(entry.Source)
             if name then
-                local icon = AcquireIcon(barID, entryID, container)
-                local width, height = BCDM:GetIconDimensions(bar)
-                ConfigureIcon(icon, bar, entry, adapter, width, height)
-                UpdateIconState(icon, adapter.GetState(entry.Source))
-                used[entryID], visible[#visible + 1] = true, icon
+                local existing = Runtime.Icons[barID] and Runtime.Icons[barID][entryID]
+                local state = adapter.GetState(entry.Source) or {}
+                if existing and existing.LastState then
+                    if state.active == nil then state.active = existing.LastState.active end
+                    if state.ready == nil then state.ready = existing.LastState.ready end
+                end
+                if BCDM:ShouldDisplayCustomTrackerEntry(entry, state) then
+                    local icon = AcquireIcon(barID, entryID, container)
+                    local width, height = BCDM:GetIconDimensions(bar)
+                    ConfigureIcon(icon, bar, entry, adapter, width, height)
+                    UpdateIconState(icon, state)
+                    used[entryID], visible[#visible + 1] = true, icon
+                end
             end
         end
     end
