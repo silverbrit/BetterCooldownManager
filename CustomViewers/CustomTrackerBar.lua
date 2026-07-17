@@ -1,0 +1,325 @@
+local _, BCDM = ...
+
+local Runtime = {
+    Containers = {},
+    Icons = {},
+    IconPool = {},
+    PendingRefresh = false,
+}
+BCDM.CustomTrackerRuntime = Runtime
+
+local function ReadNumber(value)
+    if type(value) ~= "number" or BCDM:IsSecretValue(value) then return end
+    return value
+end
+
+local function ReadField(object, key)
+    if object == nil then return end
+    local ok, value = pcall(function() return object[key] end)
+    if not ok or BCDM:IsSecretValue(value) then return end
+    return value
+end
+
+local function SetDesaturated(texture, value)
+    if texture.SetDesaturation then texture:SetDesaturation(value and 1 or 0)
+    elseif texture.SetDesaturated then texture:SetDesaturated(value == true) end
+end
+
+local function ClearCooldown(cooldown)
+    if C_DurationUtil and C_DurationUtil.CreateDuration and cooldown.SetCooldownFromDurationObject then
+        cooldown:SetCooldownFromDurationObject(C_DurationUtil.CreateDuration(), true)
+    else
+        cooldown:Clear()
+    end
+end
+
+local SourceAdapters = {}
+BCDM.CustomTrackerSourceAdapters = SourceAdapters
+
+SourceAdapters.spell = {
+    GetMetadata = function(source)
+        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(source.ID)
+        if not info then return end
+        return info.name, info.iconID
+    end,
+    IsAvailable = function(source)
+        return C_SpellBook and C_SpellBook.IsSpellInSpellBook and C_SpellBook.IsSpellInSpellBook(source.ID) == true
+    end,
+    GetState = function(source)
+        local charges = C_Spell.GetSpellCharges(source.ID)
+        local cooldown = C_Spell.GetSpellCooldown(source.ID)
+        local state = { count = nil, active = nil, ready = nil, durationObject = nil }
+        local maxCharges = ReadNumber(ReadField(charges, "maxCharges"))
+        if maxCharges and maxCharges > 1 then
+            state.count = ReadNumber(ReadField(charges, "currentCharges"))
+            state.ready = state.count and state.count > 0 or nil
+            state.active = state.count and state.count <= 0 or nil
+            state.durationObject = C_Spell.GetSpellChargeDuration and C_Spell.GetSpellChargeDuration(source.ID)
+            return state
+        end
+        local isOnGCD = ReadField(cooldown, "isOnGCD")
+        if isOnGCD == true then
+            state.active, state.ready = false, true
+        else
+            local startTime = ReadNumber(ReadField(cooldown, "startTime"))
+            local duration = ReadNumber(ReadField(cooldown, "duration"))
+            if startTime and duration then
+                state.active = startTime > 0 and duration > 0
+                state.ready = not state.active
+            end
+        end
+        state.durationObject = C_Spell.GetSpellCooldownDuration and C_Spell.GetSpellCooldownDuration(source.ID)
+        return state
+    end,
+    SetTooltip = function(source, tooltip) tooltip:SetSpellByID(source.ID) end,
+}
+
+SourceAdapters.item = {
+    GetMetadata = function(source)
+        if not (C_Item and C_Item.GetItemInfo) then return end
+        local name, _, _, _, _, _, _, _, _, icon = C_Item.GetItemInfo(source.ID)
+        if not name then return end
+        return name, icon
+    end,
+    IsAvailable = function(source)
+        return C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(source.ID) ~= nil
+    end,
+    GetState = function(source)
+        local count = C_Item.GetItemCount(source.ID)
+        local startTime, duration = C_Item.GetItemCooldown(source.ID)
+        startTime, duration = ReadNumber(startTime), ReadNumber(duration)
+        local state = { count = ReadNumber(count), active = nil, ready = nil }
+        if startTime and duration then
+            state.active = startTime > 0 and duration > 0
+            state.ready = not state.active
+            if state.active and C_DurationUtil and C_DurationUtil.CreateDuration then
+                state.durationObject = C_DurationUtil.CreateDuration()
+                state.durationObject:SetTimeFromStart(startTime, duration)
+            end
+        end
+        return state
+    end,
+    SetTooltip = function(source, tooltip) tooltip:SetItemByID(source.ID) end,
+}
+
+function BCDM:RegisterCustomTrackerSourceAdapter(sourceType, adapter)
+    if type(sourceType) ~= "string" or type(adapter) ~= "table" then return false end
+    if type(adapter.GetMetadata) ~= "function" or type(adapter.GetState) ~= "function" then return false end
+    SourceAdapters[sourceType] = adapter
+    return true
+end
+
+local function PlayerMatchesFilters(entry)
+    local filters = entry.ClassSpecFilters
+    if type(filters) ~= "table" then return true end
+    if next(filters) == nil then return false end
+    local classToken = select(2, UnitClass("player"))
+    local specIndex = GetSpecialization()
+    local specID, specName = specIndex and GetSpecializationInfo(specIndex)
+    local specToken = BCDM:NormalizeSpecToken(specName, specID, specIndex)
+    return filters[tostring(classToken) .. ":" .. tostring(specToken)] == true
+end
+
+local function AcquireIcon(barID, entryID, container)
+    Runtime.Icons[barID] = Runtime.Icons[barID] or {}
+    local icon = Runtime.Icons[barID][entryID]
+    if icon then return icon end
+    icon = table.remove(Runtime.IconPool)
+    if not icon then
+        icon = CreateFrame("Button", nil, UIParent, "BackdropTemplate")
+        icon.Icon = icon:CreateTexture(nil, "BACKGROUND")
+        icon.Cooldown = CreateFrame("Cooldown", nil, icon, "CooldownFrameTemplate")
+        icon.Cooldown:SetAllPoints(icon)
+        icon.Cooldown:SetDrawEdge(false)
+        icon.Cooldown:SetDrawBling(false)
+        icon.Cooldown:SetDrawSwipe(true)
+        icon.Cooldown:SetSwipeColor(0, 0, 0, 0.8)
+        icon.Count = icon:CreateFontString(nil, "OVERLAY")
+        icon:SetScript("OnEnter", function(self)
+            if not self.Entry or self.Entry.Tooltip == false or not self.Adapter or not self.Adapter.SetTooltip then return end
+            GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+            self.Adapter.SetTooltip(self.Entry.Source, GameTooltip)
+            GameTooltip:Show()
+        end)
+        icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    end
+    icon:SetParent(container)
+    icon:EnableMouse(true)
+    Runtime.Icons[barID][entryID] = icon
+    return icon
+end
+
+local function ReleaseUnusedIcons(barID, used)
+    local icons = Runtime.Icons[barID]
+    if not icons then return end
+    for entryID, icon in pairs(icons) do
+        if not used[entryID] then
+            BCDM:StopCustomGlow(icon)
+            icon:Hide()
+            icon.Entry, icon.Adapter, icon.LastState = nil, nil, nil
+            icons[entryID] = nil
+            Runtime.IconPool[#Runtime.IconPool + 1] = icon
+        end
+    end
+end
+
+local function ConfigureIcon(icon, bar, entry, adapter, width, height)
+    local general = BCDM.db.profile.General
+    local cooldownGeneral = BCDM.db.profile.CooldownManager.General
+    local border = cooldownGeneral.BorderSize or 0
+    local _, texture = adapter.GetMetadata(entry.Source)
+    icon.Entry, icon.Adapter = entry, adapter
+    icon:SetSize(width, height)
+    icon:SetFrameStrata(bar.FrameStrata or "LOW")
+    icon:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = border,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 } })
+    icon:SetBackdropColor(0, 0, 0, 0)
+    icon:SetBackdropBorderColor(0, 0, 0, border > 0 and 1 or 0)
+    icon.Icon:ClearAllPoints()
+    icon.Icon:SetPoint("TOPLEFT", border, -border)
+    icon.Icon:SetPoint("BOTTOMRIGHT", -border, border)
+    icon.Icon:SetTexture(texture)
+    BCDM:ApplyIconTexCoord(icon.Icon, width, height, (cooldownGeneral.IconZoom or 0) * 0.5)
+    local text = bar.Text or {}
+    local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 }
+    icon.Count:ClearAllPoints()
+    icon.Count:SetPoint(layout[1], icon, layout[2], layout[3], layout[4])
+    icon.Count:SetFont(BCDM.Media.Font, text.FontSize or 12, general.Fonts.FontFlag)
+    local colour = text.Colour or { 1, 1, 1 }
+    icon.Count:SetTextColor(colour[1], colour[2], colour[3], 1)
+end
+
+local function UpdateIconState(icon, state)
+    if not state then return end
+    icon.LastState = state
+    if state.durationObject and icon.Cooldown.SetCooldownFromDurationObject then
+        icon.Cooldown:SetCooldownFromDurationObject(state.durationObject, true)
+    elseif state.active == false then
+        ClearCooldown(icon.Cooldown)
+    end
+    icon.Count:SetText(state.count and state.count > 1 and tostring(state.count) or "")
+    SetDesaturated(icon.Icon, state.active == true)
+end
+
+local function ResolveAnchor(barID, bar)
+    local layout = bar.Layout or { "CENTER", "NONE", "CENTER", 0, 0 }
+    local parentName = layout[2]
+    local targetID = type(parentName) == "string" and tonumber(parentName:match("^BCDM_CustomTrackerBar_(%d+)$"))
+    if targetID and BCDM:WouldCustomTrackerAnchorCycle(barID, targetID) then parentName = "NONE" end
+    local parent = parentName == "NONE" and UIParent or _G[parentName]
+    if not parent then parent = UIParent end
+    return layout, parent
+end
+
+local function AnchorContainer(container, barID, bar)
+    local layout, parent = ResolveAnchor(barID, bar)
+    container:ClearAllPoints()
+    local ok = pcall(container.SetPoint, container, layout[1] or "CENTER", parent,
+        layout[3] or "CENTER", tonumber(layout[4]) or 0, tonumber(layout[5]) or 0)
+    if not ok then
+        container:ClearAllPoints()
+        container:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
+end
+
+local function LayoutIcons(container, bar, icons)
+    local width, height = BCDM:GetIconDimensions(bar)
+    local spacing = tonumber(bar.Spacing) or 1
+    local growth = bar.GrowthDirection or "RIGHT"
+    local wrap = math.max(math.floor(tonumber(bar.Columns) or 0), 0)
+    local lineLimit = wrap > 0 and wrap or math.max(#icons, 1)
+    local horizontal = growth == "LEFT" or growth == "RIGHT"
+    local columns = horizontal and math.min(#icons, lineLimit) or math.ceil(#icons / lineLimit)
+    local rows = horizontal and math.ceil(#icons / lineLimit) or math.min(#icons, lineLimit)
+    container:SetSize(math.max(1, columns * width + math.max(0, columns - 1) * spacing),
+        math.max(1, rows * height + math.max(0, rows - 1) * spacing))
+    for index, icon in ipairs(icons) do
+        local line = math.floor((index - 1) / lineLimit)
+        local position = (index - 1) % lineLimit
+        local x, y = 0, 0
+        if horizontal then
+            x = position * (width + spacing) * (growth == "LEFT" and -1 or 1)
+            y = line * (height + spacing) * -1
+        else
+            y = position * (height + spacing) * (growth == "UP" and 1 or -1)
+            x = line * (width + spacing)
+        end
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", container, "CENTER", x, y)
+        icon:Show()
+    end
+end
+
+local function GetContainer(barID)
+    local container = Runtime.Containers[barID]
+    if container then return container end
+    container = CreateFrame("Frame", "BCDM_CustomTrackerBar_" .. barID, UIParent)
+    container:SetSize(1, 1)
+    Runtime.Containers[barID] = container
+    return container
+end
+
+local function RefreshBar(barID, bar)
+    local container = GetContainer(barID)
+    container:SetFrameStrata(bar.FrameStrata or "LOW")
+    AnchorContainer(container, barID, bar)
+    local used, visible = {}, {}
+    for _, entryID in ipairs(bar.EntryOrder or {}) do
+        local entry = bar.Entries and bar.Entries[entryID]
+        local adapter = entry and entry.Source and SourceAdapters[entry.Source.Type]
+        if entry and entry.Enabled ~= false and adapter and PlayerMatchesFilters(entry)
+            and (not adapter.IsAvailable or adapter.IsAvailable(entry.Source)) then
+            local name = adapter.GetMetadata(entry.Source)
+            if name then
+                local icon = AcquireIcon(barID, entryID, container)
+                local width, height = BCDM:GetIconDimensions(bar)
+                ConfigureIcon(icon, bar, entry, adapter, width, height)
+                UpdateIconState(icon, adapter.GetState(entry.Source))
+                used[entryID], visible[#visible + 1] = true, icon
+            end
+        end
+    end
+    ReleaseUnusedIcons(barID, used)
+    LayoutIcons(container, bar, visible)
+    container:SetShown(bar.Enabled ~= false and #visible > 0)
+end
+
+function BCDM:RefreshCustomTrackers()
+    local store = self:GetCustomTrackerStore()
+    local active = {}
+    for _, barID in ipairs(store.BarOrder or {}) do
+        local bar = store.Bars[barID]
+        if bar then
+            active[barID] = true
+            RefreshBar(barID, bar)
+        end
+    end
+    for barID, container in pairs(Runtime.Containers) do
+        if not active[barID] then
+            container:Hide()
+            ReleaseUnusedIcons(barID, {})
+        end
+    end
+end
+
+function BCDM:QueueCustomTrackerRefresh()
+    if Runtime.PendingRefresh then return end
+    Runtime.PendingRefresh = true
+    C_Timer.After(0, function()
+        Runtime.PendingRefresh = false
+        BCDM:RefreshCustomTrackers()
+    end)
+end
+
+function BCDM:SetupCustomTrackers()
+    if not Runtime.EventFrame then
+        local frame = CreateFrame("Frame", "BCDMCustomTrackerEventFrame")
+        for _, event in ipairs({
+            "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED", "SPELL_UPDATE_COOLDOWN",
+            "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "BAG_UPDATE_DELAYED", "ITEM_COUNT_CHANGED",
+        }) do frame:RegisterEvent(event) end
+        frame:SetScript("OnEvent", function() BCDM:QueueCustomTrackerRefresh() end)
+        Runtime.EventFrame = frame
+    end
+    self:RefreshCustomTrackers()
+end

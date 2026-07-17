@@ -3,5 +3,6 @@
 	<Script file="CustomCooldownViewer.lua"/>
 	<Script file="CustomItemViewer.lua"/>
 	<Script file="CustomItemSpellViewer.lua"/>
+	<Script file="CustomTrackerBar.lua"/>
 	<Script file="TrinketBar.lua"/>
 </Ui>
