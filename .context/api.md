@@ -11,4 +11,7 @@ Use `.libraries/wow-ui-source/Interface/AddOns` for Blizzard implementation rese
 - `SetParent` and `SetPoint` can error when forbidden aspects propagate. BCM-owned frames should anchor only to safe known frames and fall back to `UIParent` when an imported anchor fails.
 - Prefer `C_DurationUtil.CreateDuration()` and widget duration bindings when they can accept source timing without Lua countdown polling.
 - Equipment cooldown trackers use `GetInventoryItemCooldown("player", slot)` and refresh from equipment/bag/cooldown events.
+- `UnitCastingInfo("player")` returns `notInterruptible` in position 8; `UnitChannelInfo("player")` returns it in position 7. Guard either value before branching because cast information can be secret.
+- `UNIT_SPELLCAST_INTERRUPTIBLE` and `UNIT_SPELLCAST_NOT_INTERRUPTIBLE` provide a readable event-state transition without re-reading or restarting the cast duration.
+- `StatusBar:SetReverseFill` is the verified widget method for leftward resource and cast-bar fill.
 - Re-verify exact signatures against the installed PTR source before adding or changing API calls.

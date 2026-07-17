@@ -16,6 +16,20 @@
 ### Cooldown Viewers and Profiles
 
 - Migrated the existing viewer layout, anchoring, icon, text, glow, spell, item, ordering, and load-condition controls to the new Settings interface.
+- Added shared visibility policies with optional per-bar overrides for BCM-owned custom tracker, trinket, resource, and cast bars.
+
+### Custom Trackers
+
+- Replaced separate Custom Cooldowns and Additional Custom configurations with named, reorderable, duplicable mixed-source tracker bars.
+- Added lossless profile migration for legacy spell, item, and item-spell trackers, including specialization filters and anchor remapping.
+- Added equipment-slot cooldown and fixed-duration spellcast timer sources.
+- Added per-entry ready/active display rules, inactive appearance, glow state, tooltips, and class/specialization filters.
+- Removed the dormant BuffBar implementation and settings.
+
+### Cast and Resource Bars
+
+- Added per-resource smoothing overrides, fill direction, optional sparks, and current/maximum/percent text modes.
+- Added interruptible and non-interruptible cast colours, configurable empowered-stage pips, fill direction, and richer Settings previews.
 
 ### Development
 
@@ -23,3 +37,4 @@
 - Removed the AceGUI, AceDBOptions, and unused SharedMedia widget dependencies.
 - Added `install-deps.sh` for refreshing vendored libraries.
 - Updated packaging configuration to include only the required libraries.
+- Added Retail 12.1 Blizzard UI source installation, pure-Lua model tests, and repository-local Codex architecture guidance.

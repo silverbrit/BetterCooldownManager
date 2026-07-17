@@ -2,10 +2,11 @@
 
 Better Cooldown Manager hosts its LibSettingsCanvas panels in a draggable, resizable addon-owned window and also registers them with Blizzard's AddOns Settings.
 
-- `Settings.lua` keeps addon-wide controls and shared bar appearance on the root page, registers the
-  shared Cooldown Viewer page, and owns the individual viewer, power bar, and cast bar pages.
+- `Settings.lua` keeps addon-wide controls, shared visibility, and shared bar appearance on the root page,
+  registers the Cooldown Viewer page, and owns the individual viewer, power bar, and cast bar pages.
 - `Profiles.lua` owns profile management, specialization and Edit Mode layout routing, and import/export controls.
-- `Entries.lua` owns the dynamic spell, item, ordering, activation, and load-condition editors.
+- `Entries.lua` owns named custom-bar management and the spell, item, equipment, timer, ordering,
+  activation, appearance, and load-condition editors for each entry.
 - `Utils.lua` adapts BCDM state and callbacks to `LibSettingsCanvas-1.0` rows.
 - `Window.lua` hosts those panels in BCDM's draggable and resizable settings window.
 

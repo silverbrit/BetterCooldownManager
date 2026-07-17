@@ -14,9 +14,13 @@
 - Clean, Pixel Border Skinning. Borders can be adjusted.
 - Custom Cooldown Text & Tweaks.
 - Custom Power & Secondary Power Colours.
-- Power Bar, Secondary Power Bar & Cast Bar with Anchoring & Auto Adjustment for Width.
+- Power Bar, Secondary Power Bar & Cast Bar with anchoring, automatic width matching, fill direction, and display controls.
 - Named Custom Tracker Bars: create, rename, duplicate, reorder, and anchor reusable mixed-source bars.
-- Track spells and items together with per-entry ordering and specialization filters.
+- Track spells, items, equipment slots, and fixed-duration cast timers together.
+- Per-entry ready/active visibility, inactive appearance, glow state, tooltip, class, and specialization behavior.
+- Shared visibility rules with per-bar overrides for combat, instance type, mounted/skyriding, dead, vehicle, resting, and macro-condition states.
+- Resource text modes, per-bar smoothing overrides, and optional power-bar sparks.
+- Interruptible cast colours plus configurable empowered-stage pips and Settings previews.
 - Custom Trinket Bar: This bar will automatically create trackers for equipped & usable trinkets.
 - API for AddOns to add anchors to Utility, Buff Icons, Custom Trackers, and Trinket Bars.
 
@@ -33,5 +37,6 @@ All of these libraries contribute to the success of BetterCooldownManager & are 
 ## About the Project
 This is a passion project & this has to be maintained as much as possible in order for the longevity of the AddOn. It is solo-developed, but some very kind people from the community have already started contributing.
 
-## Future Plans
-Custom Glows and additional cooldown-tracking controls will continue to be refined as the Retail Cooldown Manager evolves.
+## Development
+
+The repository targets Retail 12.1 and includes local Codex architecture guidance in `AGENTS.md`, `.context/`, and `.codex/skills/wow-addon-architect/`. Run `install-deps.sh` to refresh development-only Blizzard UI sources and libraries, then use `lua Scripts/test.lua .` for the pure-Lua model tests.
