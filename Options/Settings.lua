@@ -212,7 +212,7 @@ local function CreateGeneralPanel()
     return panel
 end
 
-local function OpenBlizzardCooldownManager()
+local function OpenBlizzardCooldownManager(displayMode)
     if InCombatLockdown() then
         BCDM:PrettyPrint("Blizzard's Cooldown Manager cannot be opened during combat.")
         return
@@ -225,6 +225,11 @@ local function OpenBlizzardCooldownManager()
             ShowUIPanel(CooldownViewerSettings)
         else
             BCDM:PrettyPrint("Blizzard's Cooldown Manager is not available.")
+            return
+        end
+        if displayMode and CooldownViewerSettings
+            and type(CooldownViewerSettings.SetDisplayMode) == "function" then
+            CooldownViewerSettings:SetDisplayMode(displayMode)
         end
     end
 
@@ -238,13 +243,6 @@ local function OpenBlizzardCooldownManager()
 end
 
 AddSharedCooldownSettings = function(controls)
-    local nativeSettings = U.Section(controls, "Blizzard Cooldown Manager", true)
-    U.Text(controls, nativeSettings,
-        "Open Blizzard's editor to choose and order cooldowns.")
-    U.Buttons(controls, nativeSettings, {
-        { text = L("Open Blizzard Cooldown Manager"), width = 260, click = OpenBlizzardCooldownManager },
-    })
-
     local cooldownText = U.Section(controls, "Shared Cooldown Text", true)
     PathColor(controls, cooldownText, "Text Colour", ProfileRoot,
         { "CooldownManager", "General", "CooldownText", "Colour" }, RefreshViewers, false)
@@ -501,6 +499,11 @@ local function CreateViewerPanel(viewerType)
         end
     end
     panel.RefreshSettingsHighlight = RefreshViewerHighlight
+    if viewerType == "Essential" or viewerType == "Utility" or viewerType == "Buffs" then
+        panel.OnStandaloneSettingsActivated = function()
+            OpenBlizzardCooldownManager(viewerType == "Buffs" and "auras" or "spells")
+        end
+    end
     panel:HookScript("OnShow", function()
         if viewerType == "Trinket" then
             BCDM.TrinketSettingsPreview = true

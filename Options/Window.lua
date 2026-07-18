@@ -65,6 +65,9 @@ local function SelectPanel(frame, entry)
         if entry and type(entry.panel.RefreshSettingsHighlight) == "function" then
             entry.panel:RefreshSettingsHighlight()
         end
+        if entry and type(entry.panel.OnStandaloneSettingsActivated) == "function" then
+            entry.panel:OnStandaloneSettingsActivated()
+        end
         return
     end
 
@@ -85,6 +88,9 @@ local function SelectPanel(frame, entry)
     if type(panel.OnSettingsActivated) == "function" then panel:OnSettingsActivated() end
     if type(panel.Refresh) == "function" then panel:Refresh() end
     if type(panel.RefreshSettingsHighlight) == "function" then panel:RefreshSettingsHighlight() end
+    if type(panel.OnStandaloneSettingsActivated) == "function" then
+        panel:OnStandaloneSettingsActivated()
+    end
 end
 
 local function CreateNavigationButton(parent, entry, previousButton)
