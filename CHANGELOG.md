@@ -15,6 +15,7 @@
 - Added the Better Cooldown Manager logo beside the settings-window title.
 - Removed obsolete Apply Size Changes controls and misleading Edit Mode refresh guidance.
 - Standardized profile-scoped General settings on Shared terminology and renamed the Buff Icons category to Tracked Buffs.
+- Added a dedicated Tracked Bars settings page recommending Better Tracked Bars.
 - Added location highlights for the trinket viewer and selected custom tracker bar, including empty-bar footprints.
 - Trinket Viewer now includes passive trinkets by default, offers an on-use-only filter, and displays active-aura stacks from 12.1 equip-slot aura metadata.
 - Added an equipped-trinket selector, live Settings preview, shared entry behavior, and optional per-slot overrides matching Custom Trackers.

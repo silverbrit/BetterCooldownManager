@@ -519,6 +519,24 @@ local function CreateViewerPanel(viewerType)
     return panel
 end
 
+local function CreateTrackedBarsPanel()
+    local panel, controls = U.NewPanel()
+    local section = U.Section(controls, "Tracked Bars", true)
+    U.Text(controls, section,
+        "Looking for tracked buff and cooldown bars? Better Tracked Bars is compatible with Better Cooldown Manager and can be used alongside it.")
+    U.Buttons(controls, section, {
+        {
+            text = "View Better Tracked Bars",
+            width = 220,
+            click = function()
+                BCDM:OpenURL("Better Tracked Bars on CurseForge",
+                    "https://www.curseforge.com/wow/addons/better-tracked-bars")
+            end,
+        },
+    })
+    return panel
+end
+
 local function CreateCustomTrackersPanel()
     local panel, controls = U.NewPanel()
     BCDM:AddCustomTrackerSettings(panel, controls)
@@ -848,6 +866,9 @@ function BCDM:RegisterSettings()
         { "Trinket", "Trinkets" },
     }) do
         RegisterPanel(rootCategory, viewer[2], CreateViewerPanel(viewer[1]))
+        if viewer[1] == "Buffs" then
+            RegisterPanel(rootCategory, "Tracked Bars", CreateTrackedBarsPanel())
+        end
     end
     RegisterPanel(rootCategory, "Custom Trackers", CreateCustomTrackersPanel())
     RegisterPanel(rootCategory, "Power Bar", CreateBarPanel("PowerBar"))
