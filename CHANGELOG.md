@@ -5,8 +5,9 @@
 ### Settings
 
 - Replaced the AceGUI configuration window with a draggable, resizable Better Cooldown Manager window powered by LibSettingsCanvas-1.0, while retaining access through Blizzard's AddOns Settings.
-- Added dedicated categories for cooldown viewers, power bars, the cast bar, and profiles, with all sections expanded by default.
+- Added dedicated categories for individual cooldown viewers, power bars, the cast bar, and profiles, with all sections expanded by default.
 - Reorganized settings by scope: shared appearance options remain on the main page, viewer-specific options live with their viewer, resource colours live with their respective power bars, and Edit Mode layout routing now lives under Profiles.
+- Removed the redundant Cooldown Viewers category and moved native viewer skinning, Blizzard's editor shortcut, icon zoom, cooldown text, and custom glow settings to General according to their actual scope.
 - Removed redundant or empty settings groups and simplified category navigation.
 - Added compact, typeable numeric fields to every slider.
 - Added LibSharedMedia font previews and status-bar texture swatches.

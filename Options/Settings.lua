@@ -133,12 +133,18 @@ local function RegisterPanel(parentCategory, name, panel, isRoot)
     return category
 end
 
+local AddSharedCooldownSettings
+
 local function CreateGeneralPanel()
     local panel, controls = U.NewPanel()
 
     local general = U.Section(controls, "General", true)
     PathCheckbox(controls, general, "Display Login Message", GlobalRoot,
         { "DisplayLoginMessage" })
+    PathCheckbox(controls, general, "Skin Blizzard Cooldown Viewers", ProfileRoot,
+        { "CooldownManager", "Enable" }, function() BCDM:PromptReload() end, {
+            description = L("Apply Better Cooldown Manager styling to Blizzard's Essential, Utility, and Tracked Buff viewers. A UI reload is required when changing this setting."),
+        })
 
     BCDM:AddVisibilityPolicySettings(panel, controls, "Shared Visibility", ProfileRoot,
         { "Visibility" }, nil, function() BCDM:RefreshOwnedFrameVisibility() end)
@@ -149,6 +155,11 @@ local function CreateGeneralPanel()
     PathSlider(controls, appearance, "Border Size", ProfileRoot,
         { "CooldownManager", "General", "BorderSize" }, RefreshAll,
         { min = 0, max = 3, step = 1 })
+    PathSlider(controls, appearance, "Icon Zoom", ProfileRoot,
+        { "CooldownManager", "General", "IconZoom" }, RefreshViewers, {
+            min = 0, max = 1, step = 0.01,
+            formatter = function(value) return string.format("%d%%", value * 100) end,
+        })
     PathDropdown(controls, appearance, "Font", ProfileRoot,
         { "General", "Fonts", "Font" }, RefreshAll, U.MediaValues("font"), {
             maxHeight = 420, forceSingleColumn = true, minWidth = 360,
@@ -188,6 +199,8 @@ local function CreateGeneralPanel()
             minWidth = U.SupportsSharedMediaPreviews() and 430 or nil,
         })
 
+    AddSharedCooldownSettings(controls)
+
     local support = U.Section(controls, "Community & Support", true)
     U.Text(controls, support, "Open a link popup to join the community, report issues, or support development.")
     U.Buttons(controls, support, {
@@ -224,20 +237,7 @@ local function OpenBlizzardCooldownManager()
     else OpenNativeSettings() end
 end
 
-local function CreateCooldownViewersPanel()
-    local panel, controls = U.NewPanel()
-
-    local general = U.Section(controls, "Cooldown Viewer Defaults", true)
-    PathCheckbox(controls, general, "Enable Cooldown Manager Skinning", ProfileRoot,
-        { "CooldownManager", "Enable" }, function() BCDM:PromptReload() end, {
-            description = L("A UI reload is required when changing this setting."),
-        })
-    PathSlider(controls, general, "Icon Zoom", ProfileRoot,
-        { "CooldownManager", "General", "IconZoom" }, RefreshViewers, {
-            min = 0, max = 1, step = 0.01,
-            formatter = function(value) return string.format("%d%%", value * 100) end,
-        })
-
+AddSharedCooldownSettings = function(controls)
     local nativeSettings = U.Section(controls, "Blizzard Cooldown Manager", true)
     U.Text(controls, nativeSettings,
         "Open Blizzard's editor to choose and order cooldowns.")
@@ -245,7 +245,7 @@ local function CreateCooldownViewersPanel()
         { text = L("Open Blizzard Cooldown Manager"), width = 260, click = OpenBlizzardCooldownManager },
     })
 
-    local cooldownText = U.Section(controls, "Cooldown Text", true)
+    local cooldownText = U.Section(controls, "Shared Cooldown Text", true)
     PathColor(controls, cooldownText, "Text Colour", ProfileRoot,
         { "CooldownManager", "General", "CooldownText", "Colour" }, RefreshViewers, false)
     PathCheckbox(controls, cooldownText, "Scale By Icon Size", ProfileRoot,
@@ -322,7 +322,6 @@ local function CreateCooldownViewersPanel()
         { "CooldownManager", "General", "Glow", "Button", "Frequency" }, function() BCDM:RefreshCustomGlows() end,
         { min = -2, max = 2, step = 0.05, hidden = GlowHidden("Button") })
 
-    return panel
 end
 
 local function AnchorValues(viewerType)
@@ -844,7 +843,6 @@ function BCDM:RegisterSettings()
     })
 
     rootCategory = RegisterPanel(nil, "Better Cooldown Manager", CreateGeneralPanel(), true)
-    RegisterPanel(rootCategory, "Cooldown Viewers", CreateCooldownViewersPanel())
     for _, viewer in ipairs({
         { "Essential", "Essential Cooldowns" }, { "Utility", "Utility Cooldowns" }, { "Buffs", "Tracked Buffs" },
         { "Trinket", "Trinkets" },
