@@ -212,6 +212,9 @@ function M.SupportsSharedMediaPreviews()
 end
 
 function M.NewPanel(config)
+    config = type(config) == "table" and config or {}
+    if config.scrollTopInset == nil then config.scrollTopInset = 0 end
+    if config.topInset == nil then config.topInset = -1 end
     local panel, controls = SettingsCanvas.CreatePanel(config)
     controls.panel = panel
     panel.Refresh = function(self) SettingsCanvas.RefreshPanel(self) end

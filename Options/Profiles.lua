@@ -63,7 +63,7 @@ local function CreateProfilesPanel()
         copyButtonText = "Copy",
         deleteLabel = "Delete a Profile",
         deleteButtonText = "Delete",
-    })
+    }, { compactLayout = true })
     controls:RegisterSection(management)
 
     local globalSection = U.Section(controls, "Account-wide Profile", true)

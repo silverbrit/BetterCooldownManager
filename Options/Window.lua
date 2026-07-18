@@ -50,6 +50,7 @@ end
 local function DetachPanel(panel)
     if not panel then return end
     BCDM:HideAllSettingsHighlights()
+    if type(panel.OnSettingsDeactivated) == "function" then panel:OnSettingsDeactivated() end
     panel:Hide()
     panel:ClearAllPoints()
     panel:SetParent(UIParent)
@@ -58,6 +59,9 @@ end
 local function SelectPanel(frame, entry)
     if not entry or frame.ActiveEntry == entry then
         if entry and type(entry.panel.Refresh) == "function" then entry.panel:Refresh() end
+        if entry and type(entry.panel.OnSettingsActivated) == "function" then
+            entry.panel:OnSettingsActivated()
+        end
         if entry and type(entry.panel.RefreshSettingsHighlight) == "function" then
             entry.panel:RefreshSettingsHighlight()
         end
@@ -78,6 +82,7 @@ local function SelectPanel(frame, entry)
     panel:ClearAllPoints()
     panel:SetAllPoints(frame.Content)
     panel:Show()
+    if type(panel.OnSettingsActivated) == "function" then panel:OnSettingsActivated() end
     if type(panel.Refresh) == "function" then panel:Refresh() end
     if type(panel.RefreshSettingsHighlight) == "function" then panel:RefreshSettingsHighlight() end
 end

@@ -1,4 +1,4 @@
-local MAJOR, MINOR = "LibSettingsCanvas-1.0", 6
+local MAJOR, MINOR = "LibSettingsCanvas-1.0", 7
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then
 	return
@@ -830,6 +830,7 @@ end
 function lib.CreateButtonRow(parent, buttons)
 	local row = lib.CreateBaseRow(parent, 28)
 	row.Buttons = {}
+	row.ButtonInfo = {}
 
 	local previousButton
 	for _, buttonInfo in ipairs(buttons or {}) do
@@ -849,6 +850,7 @@ function lib.CreateButtonRow(parent, buttons)
 				end
 			end)
 			table.insert(row.Buttons, button)
+			row.ButtonInfo[button] = buttonInfo
 			previousButton = button
 		end
 	end
@@ -856,7 +858,9 @@ function lib.CreateButtonRow(parent, buttons)
 	function row:Refresh()
 		self:SetShown(#self.Buttons > 0)
 		for _, button in ipairs(self.Buttons) do
-			lib.SetWidgetEnabled(button, true)
+			local buttonInfo = self.ButtonInfo[button]
+			local disabled = buttonInfo and type(buttonInfo.disabled) == "function" and buttonInfo.disabled() == true
+			lib.SetWidgetEnabled(button, not disabled)
 		end
 	end
 
@@ -990,6 +994,15 @@ function lib.CreateProfileManagementSection(parent, title, strings, config)
 	local section = lib.CreateSection(parent, title or strings.title or "Profiles", 0, config.defaultExpanded ~= false)
 	section.lscManualLayout = true
 	local controls = {}
+	local compact = config.compactLayout == true
+	local newLabelY = compact and -162 or -186
+	local newControlY = compact and -190 or -214
+	local copyDescriptionY = compact and -230 or -258
+	local copyLabelY = compact and -264 or -312
+	local copyControlY = compact and -292 or -340
+	local deleteDescriptionY = compact and -332 or -380
+	local deleteLabelY = compact and -366 or -434
+	local deleteControlY = compact and -394 or -462
 
 	local introText = lib.CreateLabel(
 		section.Content,
@@ -1027,16 +1040,16 @@ function lib.CreateProfileManagementSection(parent, title, strings, config)
 	controls.chooseDesc = chooseDesc
 
 	local newLabel = lib.CreateLabel(section.Content, strings.newLabel or "New", "GameFontNormalLarge")
-	newLabel:SetPoint("TOPLEFT", 0, -186)
+	newLabel:SetPoint("TOPLEFT", 0, newLabelY)
 	newLabel:SetTextColor(1, 0.82, 0)
 	controls.newLabel = newLabel
 
 	controls.activeDropdownLabel = lib.CreateLabel(section.Content, strings.existingLabel or "Existing Profiles", "GameFontNormalLarge")
-	controls.activeDropdownLabel:SetPoint("TOPLEFT", config.existingColumnX or 330, -186)
+	controls.activeDropdownLabel:SetPoint("TOPLEFT", config.existingColumnX or 330, newLabelY)
 	controls.activeDropdownLabel:SetTextColor(1, 0.82, 0)
 
 	controls.createNameEdit = lib.CreateInput(section.Content)
-	controls.createNameEdit:SetPoint("TOPLEFT", 6, -214)
+	controls.createNameEdit:SetPoint("TOPLEFT", 6, newControlY)
 	controls.createNameEdit:SetWidth(config.createInputWidth or 200)
 
 	controls.createButton = lib.CreateActionButton(section.Content, strings.createButtonText or "Create")
@@ -1044,7 +1057,7 @@ function lib.CreateProfileManagementSection(parent, title, strings, config)
 	controls.createButton:SetWidth(config.createButtonWidth or 90)
 
 	controls.activeDropdown = lib.CreateDropdown(section.Content)
-	controls.activeDropdown:SetPoint("TOPLEFT", config.existingColumnX or 330, -214)
+	controls.activeDropdown:SetPoint("TOPLEFT", config.existingColumnX or 330, newControlY)
 	controls.activeDropdown:SetPoint("RIGHT", 0, 0)
 
 	local copyDesc = lib.CreateLabel(
@@ -1052,17 +1065,17 @@ function lib.CreateProfileManagementSection(parent, title, strings, config)
 		strings.copyDescription or "Copy the settings from one existing profile into the currently active profile.",
 		"GameFontHighlightLarge"
 	)
-	copyDesc:SetPoint("TOPLEFT", 0, -258)
+	copyDesc:SetPoint("TOPLEFT", 0, copyDescriptionY)
 	copyDesc:SetPoint("RIGHT", 0, 0)
 	controls.copyDescription = copyDesc
 
 	local copyLabel = lib.CreateLabel(section.Content, strings.copyLabel or "Copy From", "GameFontNormalLarge")
-	copyLabel:SetPoint("TOPLEFT", 0, -312)
+	copyLabel:SetPoint("TOPLEFT", 0, copyLabelY)
 	copyLabel:SetTextColor(1, 0.82, 0)
 	controls.copyLabel = copyLabel
 
 	controls.copyDropdown = lib.CreateDropdown(section.Content)
-	controls.copyDropdown:SetPoint("TOPLEFT", 0, -340)
+	controls.copyDropdown:SetPoint("TOPLEFT", 0, copyControlY)
 	controls.copyDropdown:SetPoint("RIGHT", -100, 0)
 
 	controls.copyButton = lib.CreateActionButton(section.Content, strings.copyButtonText or "Copy")
@@ -1074,24 +1087,24 @@ function lib.CreateProfileManagementSection(parent, title, strings, config)
 		strings.deleteDescription or "Delete existing and unused profiles from the database.",
 		"GameFontHighlightLarge"
 	)
-	deleteDesc:SetPoint("TOPLEFT", 0, -380)
+	deleteDesc:SetPoint("TOPLEFT", 0, deleteDescriptionY)
 	deleteDesc:SetPoint("RIGHT", 0, 0)
 	controls.deleteDescription = deleteDesc
 
 	local deleteLabel = lib.CreateLabel(section.Content, strings.deleteLabel or "Delete a Profile", "GameFontNormalLarge")
-	deleteLabel:SetPoint("TOPLEFT", 0, -434)
+	deleteLabel:SetPoint("TOPLEFT", 0, deleteLabelY)
 	deleteLabel:SetTextColor(1, 0.82, 0)
 	controls.deleteLabel = deleteLabel
 
 	controls.deleteDropdown = lib.CreateDropdown(section.Content)
-	controls.deleteDropdown:SetPoint("TOPLEFT", 0, -462)
+	controls.deleteDropdown:SetPoint("TOPLEFT", 0, deleteControlY)
 	controls.deleteDropdown:SetPoint("RIGHT", -100, 0)
 
 	controls.deleteButton = lib.CreateActionButton(section.Content, strings.deleteButtonText or "Delete")
 	controls.deleteButton:SetPoint("LEFT", controls.deleteDropdown, "RIGHT", 10, 0)
 	controls.deleteButton:SetPoint("RIGHT", 0, 0)
 
-	local contentHeight = type(config.contentHeight) == "number" and config.contentHeight or 496
+	local contentHeight = type(config.contentHeight) == "number" and config.contentHeight or (compact and 428 or 496)
 	section:SetContentHeight(contentHeight)
 
 	return section, controls
@@ -1138,7 +1151,7 @@ function lib.CreatePanel(config)
 
 	local panel = CreateFrame("Frame")
 	local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
-	scrollFrame:SetPoint("TOPLEFT", 0, -8)
+	scrollFrame:SetPoint("TOPLEFT", 0, config.scrollTopInset or -8)
 	scrollFrame:SetPoint("BOTTOMRIGHT", -24, 8)
 
 	if scrollFrame.ScrollBar then

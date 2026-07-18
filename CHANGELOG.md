@@ -17,6 +17,8 @@
 - Trinket Viewer now includes passive trinkets by default, offers an on-use-only filter, and displays active-aura stacks from 12.1 equip-slot aura metadata.
 - Fixed custom tracker and trinket location highlights lagging behind section changes or using offset container bounds.
 - Fixed custom tracker corner anchors drifting by half the bar size because icon layout started at the container center.
+- Tightened profile-management spacing and aligned the first Settings section with the navigation panel.
+- Clarified cast and secondary-resource controls by hiding unsupported colour choices and renaming the non-interruptible cast test.
 
 ### Cooldown Viewers and Profiles
 

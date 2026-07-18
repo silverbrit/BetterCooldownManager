@@ -520,7 +520,8 @@ local function AddSecondaryPowerColours(panel, controls, disabled)
             { "General", "Colours", "SecondaryPower", "RUNES", runeType }, RefreshAll, true, { disabled = disabled })
     end
     for _, state in ipairs({ "LIGHT", "MODERATE", "HEAVY" }) do
-        PathColor(controls, section, state .. " Stagger", ProfileRoot,
+        local label = state:sub(1, 1) .. state:sub(2):lower()
+        PathColor(controls, section, label .. " Stagger", ProfileRoot,
             { "General", "Colours", "SecondaryPower", "STAGGER_COLOURS", state }, RefreshAll, true, { disabled = disabled })
     end
     U.Buttons(controls, section, {
@@ -581,7 +582,7 @@ local function CreateBarPanel(barType)
                 getSecondColor = function() return BCDM.db.profile.CastBar.NonInterruptibleColour end,
                 description = "Use separate colours for interruptible and non-interruptible casts.",
             }
-        else
+        elseif not UnsupportedSecondary() then
             choices[#choices + 1] = { text = "Power Type", value = "POWER_TYPE", getColor = PowerTypeColour }
             if barType == "SecondaryPowerBar" and BCDM.IS_DEATHKNIGHT then
                 choices[#choices + 1] = { text = "Specialization", value = "SPECIALIZATION", getColor = SpecializationColour }
@@ -648,7 +649,9 @@ local function CreateBarPanel(barType)
             { text = "Normal Test", width = 130, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "NORMAL" BCDM:CreateTestCastBar()
             end },
-            { text = "Protected Test", width = 130, click = function()
+            { text = "Uninterruptible Test", width = 160, disabled = function()
+                return BCDM.db.profile.CastBar.ColourMode ~= "INTERRUPTIBILITY"
+            end, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "NON_INTERRUPTIBLE" BCDM:CreateTestCastBar()
             end },
             { text = "Empowered Test", width = 130, click = function()
@@ -755,14 +758,16 @@ local function CreateBarPanel(barType)
                     { min = 0, max = 100, step = 1, disabled = EnabledDisabled })
             end
         end
-        panel:HookScript("OnShow", function()
+        function panel:OnSettingsActivated()
             BCDM.CAST_BAR_TEST_MODE = true
             BCDM:CreateTestCastBar()
-        end)
-        panel:HookScript("OnHide", function()
+        end
+        function panel:OnSettingsDeactivated()
             BCDM.CAST_BAR_TEST_MODE = false
             BCDM:CreateTestCastBar()
-        end)
+        end
+        panel:HookScript("OnShow", panel.OnSettingsActivated)
+        panel:HookScript("OnHide", panel.OnSettingsDeactivated)
     end
 
     return panel
