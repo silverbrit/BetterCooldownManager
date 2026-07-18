@@ -3,6 +3,7 @@
     <Script file="Defaults.lua"/>
     <Script file="Visibility.lua"/>
     <Script file="BarBehavior.lua"/>
+    <Script file="ResourceCatalog.lua"/>
     <Script file="CustomTrackers.lua"/>
     <Script file="EventManager.lua"/>
     <Script file="Share.lua"/>

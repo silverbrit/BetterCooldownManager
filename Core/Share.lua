@@ -20,6 +20,9 @@ function BCDM:ImportSavedVariables(encodedInfo, profileName)
     if not decompressedInfo then BCDM:PrettyPrint("Invalid Import String.") return end
     local success, data = Serialize:Deserialize(decompressedInfo)
     if not success or type(data) ~= "table" then BCDM:PrettyPrint("Invalid Import String.") return end
+    if type(data.profile) == "table" then
+        BCDM:NormalizeImportedProfile(data.profile)
+    end
     if profileName then
         BCDM.db:SetProfile(profileName)
         wipe(BCDM.db.profile)

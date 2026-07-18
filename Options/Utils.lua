@@ -273,6 +273,92 @@ function M.Color(controls, section, title, getValue, setValue, options)
     ))
 end
 
+function M.ColorChoices(controls, section, title, getValue, setValue, choicesProvider, options)
+    options = options or {}
+    local Canvas = M.Canvas
+    local row = Canvas.CreateBaseRow(section.Content, 44)
+    row.Label = Canvas.CreateLabel(row, M.L(title), "GameFontHighlight")
+    row.Label:SetPoint("LEFT", 0, 0)
+    row.Label:SetWidth(170)
+    row.Choices = {}
+
+    local function ShowTooltip(button, choice)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(button, "ANCHOR_TOP")
+        GameTooltip:SetText(M.L(choice.text or tostring(choice.value)))
+        if choice.description then GameTooltip:AddLine(M.L(choice.description), 1, 1, 1, true) end
+        GameTooltip:Show()
+    end
+
+    local function EnsureChoice(index)
+        if row.Choices[index] then return row.Choices[index] end
+        local button = CreateFrame("Button", nil, row)
+        button:SetSize(82, 38)
+        button.Border = button:CreateTexture(nil, "BORDER")
+        button.Border:SetPoint("TOPLEFT", 0, 0)
+        button.Border:SetPoint("TOPRIGHT", 0, 0)
+        button.Border:SetHeight(20)
+        button.Border:SetColorTexture(0, 0, 0, 1)
+        button.Left = button:CreateTexture(nil, "ARTWORK")
+        button.Left:SetPoint("TOPLEFT", 2, -2)
+        button.Left:SetPoint("BOTTOMRIGHT", button.Border, "BOTTOM", 0, 2)
+        button.Right = button:CreateTexture(nil, "ARTWORK")
+        button.Right:SetPoint("TOPLEFT", button.Border, "TOP", 0, -2)
+        button.Right:SetPoint("BOTTOMRIGHT", button.Border, "BOTTOMRIGHT", -2, 2)
+        button.Text = Canvas.CreateLabel(button, "", "GameFontHighlightSmall")
+        button.Text:SetPoint("TOP", button.Border, "BOTTOM", 0, -3)
+        button.Text:SetWidth(82)
+        button:SetScript("OnEnter", function(self) if self.choice then ShowTooltip(self, self.choice) end end)
+        button:SetScript("OnLeave", function() if GameTooltip then GameTooltip:Hide() end end)
+        button:SetScript("OnClick", function(self)
+            local choice = self.choice
+            if not choice or (type(options.disabled) == "function" and options.disabled()) then return end
+            setValue(choice.value)
+            if choice.editColor and type(choice.getColor) == "function" and type(choice.setColor) == "function" then
+                Canvas.ShowColorPicker(choice.getColor(), function(colour)
+                    choice.setColor(colour)
+                    if row.lscRefreshPanel then row.lscRefreshPanel() end
+                end)
+            end
+            if row.lscRefreshPanel then row.lscRefreshPanel() end
+        end)
+        row.Choices[index] = button
+        return button
+    end
+
+    function row:Refresh()
+        local hidden = type(options.hidden) == "function" and options.hidden() == true
+        self:SetShown(not hidden)
+        if hidden then return end
+        local disabled = type(options.disabled) == "function" and options.disabled() == true
+        local choices = choicesProvider() or {}
+        local selected = getValue()
+        local previous
+        for index, choice in ipairs(choices) do
+            local button = EnsureChoice(index)
+            button.choice = choice
+            button:ClearAllPoints()
+            if previous then button:SetPoint("LEFT", previous, "RIGHT", 6, 0)
+            else button:SetPoint("LEFT", row, "LEFT", 180, 0) end
+            previous = button
+            local colour = Canvas.NormalizeColorTable(choice.getColor and choice.getColor() or choice.color)
+            local second = Canvas.NormalizeColorTable(choice.getSecondColor and choice.getSecondColor() or colour)
+            button.Left:SetColorTexture(colour[1], colour[2], colour[3], colour[4])
+            button.Right:SetColorTexture(second[1], second[2], second[3], second[4])
+            button.Text:SetText(M.L(choice.text or tostring(choice.value)))
+            local active = choice.value == selected
+            button.Border:SetColorTexture(active and 1 or 0, active and 0.82 or 0, 0, 1)
+            Canvas.SetWidgetEnabled(button, not disabled)
+            button:SetAlpha(disabled and 0.4 or active and 1 or 0.35)
+            button:Show()
+        end
+        for index = #choices + 1, #self.Choices do self.Choices[index]:Hide() end
+        Canvas.SetFontStringEnabled(self.Label, not disabled)
+    end
+
+    return M.Add(controls, section, row)
+end
+
 function M.Buttons(controls, section, buttons)
     return M.Add(controls, section, SettingsCanvas.CreateButtonRow(section.Content, buttons))
 end

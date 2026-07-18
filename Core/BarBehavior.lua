@@ -1,5 +1,107 @@
 local _, BCDM = ...
 
+local VALID_COLOUR_MODES = {
+    CastBar = { CLASS = true, CUSTOM = true, INTERRUPTIBILITY = true },
+    PowerBar = { CLASS = true, CUSTOM = true, POWER_TYPE = true },
+    SecondaryPowerBar = { CLASS = true, CUSTOM = true, POWER_TYPE = true, SPECIALIZATION = true },
+}
+
+local DEFAULT_COLOUR_MODES = {
+    CastBar = "CLASS",
+    PowerBar = "POWER_TYPE",
+    SecondaryPowerBar = "POWER_TYPE",
+}
+
+local LEGACY_COLOUR_FIELDS = { "ColourByClass", "ColourByType", "ColourBySpec" }
+
+local function LegacyColourMode(barType, settings)
+    if barType == "CastBar" then
+        return settings.ColourByClass == false and "INTERRUPTIBILITY" or "CLASS"
+    end
+    if settings.ColourByType ~= false then return "POWER_TYPE" end
+    if settings.ColourByClass == true then return "CLASS" end
+    if barType == "SecondaryPowerBar" and settings.ColourBySpec == true then return "SPECIALIZATION" end
+    return "CUSTOM"
+end
+
+function BCDM:NormalizeBarColourProfile(profile)
+    if type(profile) ~= "table" then return false end
+    local changed = false
+    for barType, validModes in pairs(VALID_COLOUR_MODES) do
+        local settings = profile[barType]
+        if type(settings) == "table" then
+            local mode = settings.ColourMode
+            if not validModes[mode] then
+                settings.ColourMode = LegacyColourMode(barType, settings)
+                changed = true
+            end
+            for _, field in ipairs(LEGACY_COLOUR_FIELDS) do
+                if settings[field] ~= nil then
+                    settings[field] = nil
+                    changed = true
+                end
+            end
+        end
+    end
+    return changed
+end
+
+function BCDM:NormalizeBarColourProfiles(db)
+    local profiles = db and db.sv and db.sv.profiles
+    if type(profiles) ~= "table" then return false end
+    local changed = false
+    for _, profile in pairs(profiles) do
+        if self:NormalizeBarColourProfile(profile) then changed = true end
+    end
+    return changed
+end
+
+function BCDM:NormalizeImportedProfile(profile)
+    if type(profile) ~= "table" then return false end
+    local changed = self:NormalizeBarColourProfile(profile)
+    if self:MigrateCustomTrackerProfile(profile) then changed = true end
+    return changed
+end
+
+local function ColourComponents(colour)
+    if type(colour) ~= "table" then return nil end
+    local r, g, b = colour[1] or colour.r, colour[2] or colour.g, colour[3] or colour.b
+    if r == nil or g == nil or b == nil then return nil end
+    return r, g, b, colour[4] or colour.a or 1
+end
+
+function BCDM:ResolveBarFillColour(barType, settings, context)
+    settings = settings or {}
+    context = context or {}
+    local validModes = VALID_COLOUR_MODES[barType] or {}
+    local mode = validModes[settings.ColourMode] and settings.ColourMode or DEFAULT_COLOUR_MODES[barType] or "CUSTOM"
+    local colour = context.OverrideColour
+
+    if colour then
+        -- Contextual resource states intentionally take precedence over the selected base mode.
+    elseif mode == "CLASS" then
+        colour = context.ClassColour
+    elseif mode == "POWER_TYPE" then
+        colour = context.PowerTypeColour
+    elseif mode == "SPECIALIZATION" then
+        colour = context.SpecializationColour or context.PowerTypeColour
+    elseif mode == "INTERRUPTIBILITY" then
+        if context.Interruptibility == "NON_INTERRUPTIBLE" then
+            colour = settings.NonInterruptibleColour
+        else
+            colour = settings.InterruptibleColour
+        end
+    else
+        colour = settings.ForegroundColour
+    end
+
+    local r, g, b, a = ColourComponents(colour)
+    if r ~= nil then return r, g, b, a end
+    r, g, b, a = ColourComponents(settings.ForegroundColour)
+    if r ~= nil then return r, g, b, a end
+    return 1, 1, 1, 1
+end
+
 function BCDM:ShouldSmoothBar(barSettings, sharedSmooth)
     local mode = barSettings and barSettings.Smoothing or "INHERIT"
     if mode == "ON" then return true end

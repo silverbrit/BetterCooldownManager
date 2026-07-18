@@ -4,54 +4,13 @@ local function FetchPowerBarColour(customPowerType)
     local CooldownManagerDB = BCDM.db.profile
     local GeneralDB = CooldownManagerDB.General
     local PowerBarDB = CooldownManagerDB.PowerBar
-    if PowerBarDB then
-        if PowerBarDB.ColourByType then
-            local powerType = customPowerType or UnitPowerType("player")
-            local powerColour = GeneralDB.Colours.PrimaryPower[powerType]
-            if powerColour then return GeneralDB.Colours.PrimaryPower[powerType][1], GeneralDB.Colours.PrimaryPower[powerType][2], GeneralDB.Colours.PrimaryPower[powerType][3], GeneralDB.Colours.PrimaryPower[powerType][4] or 1 end
-        elseif PowerBarDB.ColourByClass then
-            local _, class = UnitClass("player")
-            local classColour = RAID_CLASS_COLORS[class]
-            if classColour then return classColour.r, classColour.g, classColour.b, 1 end
-        else
-            return PowerBarDB.ForegroundColour[1], PowerBarDB.ForegroundColour[2], PowerBarDB.ForegroundColour[3], PowerBarDB.ForegroundColour[4]
-        end
-    end
-end
-
-local function DetectSecondaryPower()
-    local class = select(2, UnitClass("player"))
-    local spec  = GetSpecialization()
-    local specID = GetSpecializationInfo(spec)
-    local secondaryPowerBarDB = BCDM.db and BCDM.db.profile and BCDM.db.profile.SecondaryPowerBar
-    local showMana = secondaryPowerBarDB and (secondaryPowerBarDB.ShowMana or secondaryPowerBarDB.ShowManaBar)
-    if class == "MONK" then
-        if specID == 268 then return true end
-        if specID == 269 then return true end
-    elseif class == "ROGUE" then
-        return true
-    elseif class == "DRUID" then
-        local form = GetShapeshiftFormID()
-        if form == 1 then return true end
-    elseif class == "PALADIN" then
-        return true
-    elseif class == "WARLOCK" then
-        return true
-    elseif class == "MAGE" then
-        if specID == 62 then return true end
-    elseif class == "EVOKER" then
-        return true
-    elseif class == "DEATHKNIGHT" then
-        return true
-    elseif class == "DEMONHUNTER" then
-        if specID == 581 or specID == 1480 then return true end
-    elseif class == "SHAMAN" then
-        if specID == 262 and showMana then return true end
-        if specID == 263 then return true end
-    elseif class == "PRIEST" then
-        if specID == 258 and showMana then return true end    
-    end
-    return false
+    if not PowerBarDB then return 1, 1, 1, 1 end
+    local powerType = customPowerType or UnitPowerType("player")
+    local _, class = UnitClass("player")
+    return BCDM:ResolveBarFillColour("PowerBar", PowerBarDB, {
+        ClassColour = RAID_CLASS_COLORS[class],
+        PowerTypeColour = GeneralDB.Colours.PrimaryPower[powerType],
+    })
 end
 
 local function NudgePowerBar(powerBar, xOffset, yOffset)
@@ -106,11 +65,16 @@ end
 
 local updatePowerBarHeightEventFrame = CreateFrame("Frame")
 updatePowerBarHeightEventFrame:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+updatePowerBarHeightEventFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 updatePowerBarHeightEventFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_SPECIALIZATION_CHANGED" then
+        local unit = ...
+        if unit and unit ~= "player" then return end
+    end
     local PowerBarDB = BCDM.db.profile.PowerBar
     local PowerBar = BCDM.PowerBar
     if PowerBarDB.Enabled and PowerBar then
-        local hasSecondary = DetectSecondaryPower()
+        local hasSecondary = BCDM:GetCurrentSecondaryResource() ~= nil
         PowerBar:SetHeight(hasSecondary and PowerBarDB.Height or PowerBarDB.HeightWithoutSecondary)
     end
 end)
@@ -131,7 +95,7 @@ function BCDM:CreatePowerBar()
         PowerBar:SetBackdropBorderColor(0, 0, 0, 0)
     end
     PowerBar:SetBackdropColor(PowerBarDB.BackgroundColour[1], PowerBarDB.BackgroundColour[2], PowerBarDB.BackgroundColour[3], PowerBarDB.BackgroundColour[4])
-    local hasSecondary = DetectSecondaryPower()
+    local hasSecondary = BCDM:GetCurrentSecondaryResource() ~= nil
     PowerBar:SetSize(PowerBarDB.Width, hasSecondary and PowerBarDB.Height or PowerBarDB.HeightWithoutSecondary)
     PowerBar:SetPoint(PowerBarDB.Layout[1], _G[PowerBarDB.Layout[2]], PowerBarDB.Layout[3], PowerBarDB.Layout[4], PowerBarDB.Layout[5])
     PowerBar:SetFrameStrata(PowerBarDB.FrameStrata or "LOW")
@@ -215,7 +179,7 @@ function BCDM:UpdatePowerBar()
             else
                 PowerBar:SetWidth(PowerBarDB.Width)
             end
-            local hasSecondary = DetectSecondaryPower()
+            local hasSecondary = BCDM:GetCurrentSecondaryResource() ~= nil
             PowerBar:SetHeight(hasSecondary and PowerBarDB.Height or PowerBarDB.HeightWithoutSecondary)
             PowerBar:SetBackdropColor(PowerBarDB.BackgroundColour[1], PowerBarDB.BackgroundColour[2], PowerBarDB.BackgroundColour[3], PowerBarDB.BackgroundColour[4])
             PowerBar.Status:SetStatusBarTexture(BCDM.Media.Foreground)

@@ -472,7 +472,7 @@ end
 
 local function AddPrimaryPowerColours(panel, controls)
     local section = U.Section(controls, "Power Type Colours", true)
-    U.Text(controls, section, "Used when Colour By Power Type is enabled.")
+    U.Text(controls, section, "Used when the Power Type colour mode is selected.")
     local names = {
         [0] = "Mana", [1] = "Rage", [2] = "Focus", [3] = "Energy", [6] = "Runic Power",
         [8] = "Astral Power", [11] = "Maelstrom", [13] = "Insanity", [17] = "Fury", [18] = "Pain",
@@ -493,7 +493,7 @@ end
 
 local function AddSecondaryPowerColours(panel, controls)
     local section = U.Section(controls, "Secondary Resource Colours", true)
-    U.Text(controls, section, "Used when Colour By Power Type, Specialization, or Stagger is enabled.")
+    U.Text(controls, section, "Used by Power Type and Specialization modes, plus contextual resource-state colours.")
     local names = {
         { Enum.PowerType.Chi, "Chi" }, { Enum.PowerType.ComboPoints, "Combo Points" },
         { Enum.PowerType.HolyPower, "Holy Power" }, { Enum.PowerType.ArcaneCharges, "Arcane Charges" },
@@ -531,13 +531,62 @@ local function CreateBarPanel(barType)
         or barType == "SecondaryPowerBar" and function() BCDM:UpdateSecondaryPowerBar() end
         or function() BCDM:UpdateCastBar() end
     local function EnabledDisabled() return BCDM.db.profile[barType].Enabled ~= true end
+    local function ClassColour()
+        local colour = RAID_CLASS_COLORS[select(2, UnitClass("player"))]
+        return colour and { colour.r, colour.g, colour.b, 1 } or { 1, 1, 1, 1 }
+    end
+    local function CustomColour() return BCDM.db.profile[barType].ForegroundColour end
+    local function SetCustomColour(colour)
+        BCDM.db.profile[barType].ForegroundColour = colour
+        update()
+    end
+    local function PowerTypeColour()
+        local colours = BCDM.db.profile.General.Colours
+        if barType == "PowerBar" then
+            return colours.PrimaryPower[UnitPowerType("player")] or CustomColour()
+        end
+        local descriptor = BCDM:GetCurrentSecondaryResource()
+        local colour = descriptor and colours.SecondaryPower[descriptor.key]
+        if not colour and descriptor and descriptor.powerType == Enum.PowerType.Mana then
+            colour = colours.PrimaryPower[Enum.PowerType.Mana]
+        end
+        return colour or CustomColour()
+    end
+    local function SpecializationColour()
+        local descriptor = BCDM:GetCurrentSecondaryResource()
+        local runeColours = BCDM.db.profile.General.Colours.SecondaryPower.RUNES
+        return descriptor and descriptor.runeColourKey and runeColours[descriptor.runeColourKey] or PowerTypeColour()
+    end
+    local function ColourModeChoices()
+        local choices = {
+            { text = "Custom", value = "CUSTOM", getColor = CustomColour, setColor = SetCustomColour, editColor = true,
+                description = "Use and edit the bar's custom fill colour." },
+            { text = "Class", value = "CLASS", getColor = ClassColour },
+        }
+        if barType == "CastBar" then
+            choices[#choices + 1] = {
+                text = "Cast State", value = "INTERRUPTIBILITY",
+                getColor = function() return BCDM.db.profile.CastBar.InterruptibleColour end,
+                getSecondColor = function() return BCDM.db.profile.CastBar.NonInterruptibleColour end,
+                description = "Use separate colours for interruptible and non-interruptible casts.",
+            }
+        else
+            choices[#choices + 1] = { text = "Power Type", value = "POWER_TYPE", getColor = PowerTypeColour }
+            if barType == "SecondaryPowerBar" and BCDM.IS_DEATHKNIGHT then
+                choices[#choices + 1] = { text = "Specialization", value = "SPECIALIZATION", getColor = SpecializationColour }
+            end
+        end
+        return choices
+    end
 
     local behavior = U.Section(controls, "Toggles & Colours", true)
     PathCheckbox(controls, behavior, "Enable " .. (barType == "CastBar" and "Cast Bar" or barType == "PowerBar" and "Power Bar" or "Secondary Power Bar"),
         ProfileRoot, { barType, "Enabled" }, barType == "CastBar" and function() BCDM:PromptReload() end or update)
+    local getColourMode, setColourMode = U.Access(ProfileRoot, { barType, "ColourMode" }, update)
+    U.ColorChoices(controls, behavior, "Fill Colour", getColourMode, setColourMode, ColourModeChoices, {
+            disabled = EnabledDisabled,
+        })
     if barType ~= "CastBar" then
-        PathCheckbox(controls, behavior, "Colour By Power Type", ProfileRoot,
-            { barType, "ColourByType" }, update, { disabled = EnabledDisabled })
         PathDropdown(controls, behavior, "Smoothing", ProfileRoot,
             { barType, "Smoothing" }, update, function()
                 return {
@@ -553,8 +602,6 @@ local function CreateBarPanel(barType)
         { barType, "FillDirection" }, update, function()
             return { { text = "Right", value = "RIGHT" }, { text = "Left", value = "LEFT" } }
         end, { disabled = EnabledDisabled })
-    PathCheckbox(controls, behavior, "Colour By Class", ProfileRoot,
-        { barType, "ColourByClass" }, update, { disabled = EnabledDisabled })
     PathCheckbox(controls, behavior, "Match Width Of Anchor", ProfileRoot,
         { barType, "MatchWidthOfAnchor" }, update, { disabled = EnabledDisabled })
     if barType == "PowerBar" then
@@ -563,10 +610,6 @@ local function CreateBarPanel(barType)
     elseif barType == "SecondaryPowerBar" then
         PathCheckbox(controls, behavior, "Hide Ticks", ProfileRoot,
             { barType, "HideTicks" }, update, { disabled = EnabledDisabled })
-        if BCDM.IS_DEATHKNIGHT then
-            PathCheckbox(controls, behavior, "Colour by Specialization", ProfileRoot,
-                { barType, "ColourBySpec" }, update, { disabled = EnabledDisabled })
-        end
         if BCDM.IS_MONK then
             PathCheckbox(controls, behavior, "Colour by Stagger", ProfileRoot,
                 { barType, "ColourByState" }, update, { disabled = EnabledDisabled })
@@ -575,22 +618,21 @@ local function CreateBarPanel(barType)
         end
         PathCheckbox(controls, behavior, "Swap To Power Bar Position", ProfileRoot,
             { barType, "SwapToPowerBarPosition" }, update, {
-                disabled = function() return EnabledDisabled() or not BCDM:RepositionSecondaryBar() end,
+                disabled = function() return EnabledDisabled() or not BCDM:CanSwapSecondaryResourceToPrimary() end,
                 description = L("Automatically uses the primary power bar position when appropriate."),
             })
     end
-    PathColor(controls, behavior, "Foreground Colour", ProfileRoot,
-        { barType, "ForegroundColour" }, update, true, { disabled = function()
-            local db = BCDM.db.profile[barType]
-            return EnabledDisabled() or db.ColourByClass == true or db.ColourByType == true
-        end })
     PathColor(controls, behavior, "Background Colour", ProfileRoot,
         { barType, "BackgroundColour" }, update, true, { disabled = EnabledDisabled })
     if barType == "CastBar" then
         PathColor(controls, behavior, "Interruptible Colour", ProfileRoot,
-            { "CastBar", "InterruptibleColour" }, update, true, { disabled = EnabledDisabled })
+            { "CastBar", "InterruptibleColour" }, update, true, { disabled = function()
+                return EnabledDisabled() or BCDM.db.profile.CastBar.ColourMode ~= "INTERRUPTIBILITY"
+            end })
         PathColor(controls, behavior, "Non-Interruptible Colour", ProfileRoot,
-            { "CastBar", "NonInterruptibleColour" }, update, true, { disabled = EnabledDisabled })
+            { "CastBar", "NonInterruptibleColour" }, update, true, { disabled = function()
+                return EnabledDisabled() or BCDM.db.profile.CastBar.ColourMode ~= "INTERRUPTIBILITY"
+            end })
         PathColor(controls, behavior, "Empower Pip Colour", ProfileRoot,
             { "CastBar", "EmpowerPips", "Colour" }, update, true, { disabled = EnabledDisabled })
         PathSlider(controls, behavior, "Empower Pip Width", ProfileRoot,

@@ -20,17 +20,15 @@ end
 
 local function FetchCastBarColour(notInterruptible)
     local CastBarDB = BCDM.db.profile.CastBar
+    local _, class = UnitClass("player")
+    local interruptibility = "UNKNOWN"
     if not BCDM:IsSecretValue(notInterruptible) and type(notInterruptible) == "boolean" then
-        local colour = notInterruptible and CastBarDB.NonInterruptibleColour or CastBarDB.InterruptibleColour
-        return colour[1], colour[2], colour[3], colour[4]
+        interruptibility = notInterruptible and "NON_INTERRUPTIBLE" or "INTERRUPTIBLE"
     end
-    if CastBarDB.ColourByClass then
-        local _, class = UnitClass("player")
-        local colour = RAID_CLASS_COLORS[class]
-        return colour.r, colour.g, colour.b, 1
-    else
-        return CastBarDB.ForegroundColour[1], CastBarDB.ForegroundColour[2], CastBarDB.ForegroundColour[3], CastBarDB.ForegroundColour[4]
-    end
+    return BCDM:ResolveBarFillColour("CastBar", CastBarDB, {
+        ClassColour = RAID_CLASS_COLORS[class],
+        Interruptibility = interruptibility,
+    })
 end
 
 local function UpdateCastBarColour(notInterruptible)

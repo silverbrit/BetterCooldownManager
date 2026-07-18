@@ -24,7 +24,7 @@ function BCDMG:ImportBCDM(importString, profileKey)
     if not success or type(profileData) ~= "table" then BCDM:PrettyPrint("Invalid Import String.") return end
 
     if type(profileData.profile) == "table" then
-        BCDM:MigrateCustomTrackerProfile(profileData.profile)
+        BCDM:NormalizeImportedProfile(profileData.profile)
         BCDM.db.profiles[profileKey] = profileData.profile
         BCDM.db:SetProfile(profileKey)
         LEMO:LoadLayouts()

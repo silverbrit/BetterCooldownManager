@@ -9,8 +9,13 @@ local function Check(condition, message)
 end
 
 local BCDM = {}
+Enum = { PowerType = {
+    Mana = 0, ComboPoints = 4, Runes = 5, SoulShards = 7, HolyPower = 9,
+    Maelstrom = 11, Chi = 12, ArcaneCharges = 16, Essence = 19,
+} }
 assert(loadfile(root .. "/Core/Visibility.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/BarBehavior.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Core/ResourceCatalog.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
 
 local visibility = BCDM:NewVisibilityPolicy()
@@ -43,6 +48,87 @@ BCDM.IsSecretValue = nil
 local directionCalls = {}
 BCDM:ApplyStatusBarDirection({ SetReverseFill = function(_, reverse) directionCalls.reverse = reverse end }, "LEFT")
 Check(directionCalls.reverse == true, "resource bars support reverse fill")
+
+local legacyColours = {
+    CastBar = { ColourByClass = true },
+    PowerBar = { ColourByType = false, ColourByClass = true },
+    SecondaryPowerBar = { ColourByType = false, ColourByClass = false, ColourBySpec = true },
+}
+Check(BCDM:NormalizeBarColourProfile(legacyColours), "legacy bar colours report migration")
+Check(legacyColours.CastBar.ColourMode == "CLASS", "cast migration honors the class setting")
+Check(legacyColours.PowerBar.ColourMode == "CLASS", "primary power migration honors legacy precedence")
+Check(legacyColours.SecondaryPowerBar.ColourMode == "SPECIALIZATION", "secondary power migration preserves specialization")
+Check(legacyColours.CastBar.ColourByClass == nil and legacyColours.PowerBar.ColourByType == nil
+    and legacyColours.SecondaryPowerBar.ColourBySpec == nil, "legacy colour fields are removed after migration")
+Check(not BCDM:NormalizeBarColourProfile(legacyColours), "bar colour migration is idempotent")
+
+local implicitLegacyDefaults = { CastBar = {}, PowerBar = {}, SecondaryPowerBar = {} }
+BCDM:NormalizeBarColourProfile(implicitLegacyDefaults)
+Check(implicitLegacyDefaults.CastBar.ColourMode == "CLASS", "missing cast toggle uses its legacy default")
+Check(implicitLegacyDefaults.PowerBar.ColourMode == "POWER_TYPE", "missing primary toggle uses its legacy default")
+Check(implicitLegacyDefaults.SecondaryPowerBar.ColourMode == "POWER_TYPE", "missing secondary toggle uses its legacy default")
+
+local colourSettings = {
+    ColourMode = "CUSTOM",
+    ForegroundColour = { 0.1, 0.2, 0.3, 0.4 },
+    InterruptibleColour = { 0.2, 0.8, 0.2, 1 },
+    NonInterruptibleColour = { 0.8, 0.2, 0.2, 1 },
+}
+local r, g, b, a = BCDM:ResolveBarFillColour("CastBar", colourSettings)
+Check(r == 0.1 and g == 0.2 and b == 0.3 and a == 0.4, "custom mode uses the foreground colour")
+colourSettings.ColourMode = "CLASS"
+r, g, b, a = BCDM:ResolveBarFillColour("CastBar", colourSettings, { ClassColour = { r = 0.4, g = 0.5, b = 0.6 } })
+Check(r == 0.4 and g == 0.5 and b == 0.6 and a == 1, "class mode accepts Blizzard class colour tables")
+colourSettings.ColourMode = "INTERRUPTIBILITY"
+r, g, b = BCDM:ResolveBarFillColour("CastBar", colourSettings, { Interruptibility = "NON_INTERRUPTIBLE" })
+Check(r == 0.8 and g == 0.2 and b == 0.2, "protected casts use the non-interruptible colour")
+r, g, b = BCDM:ResolveBarFillColour("CastBar", colourSettings, { Interruptibility = "UNKNOWN" })
+Check(r == 0.2 and g == 0.8 and b == 0.2, "unknown cast state safely uses the interruptible colour")
+
+colourSettings.ColourMode = "POWER_TYPE"
+r, g, b = BCDM:ResolveBarFillColour("PowerBar", colourSettings, { PowerTypeColour = { 0.7, 0.6, 0.5 } })
+Check(r == 0.7 and g == 0.6 and b == 0.5, "power-type mode uses the resource palette")
+colourSettings.ColourMode = "SPECIALIZATION"
+r, g, b = BCDM:ResolveBarFillColour("SecondaryPowerBar", colourSettings, {
+    PowerTypeColour = { 0.3, 0.2, 0.1 }, SpecializationColour = { 0.9, 0.8, 0.7 },
+})
+Check(r == 0.9 and g == 0.8 and b == 0.7, "specialization mode uses the specialization palette")
+r, g, b = BCDM:ResolveBarFillColour("SecondaryPowerBar", colourSettings, { PowerTypeColour = { 0.3, 0.2, 0.1 } })
+Check(r == 0.3 and g == 0.2 and b == 0.1, "missing specialization falls back to power type")
+r, g, b = BCDM:ResolveBarFillColour("SecondaryPowerBar", colourSettings, {
+    PowerTypeColour = { 0.3, 0.2, 0.1 }, OverrideColour = { 1, 0.5, 0 },
+})
+Check(r == 1 and g == 0.5 and b == 0, "resource state colours override the selected base mode")
+colourSettings.ColourMode = "CLASS"
+r, g, b, a = BCDM:ResolveBarFillColour("PowerBar", colourSettings)
+Check(r == 0.1 and g == 0.2 and b == 0.3 and a == 0.4, "missing selected colours fall back to foreground")
+
+local descriptor = BCDM:ResolveSecondaryResource({ class = "WARLOCK", specID = 267, powerTypes = Enum.PowerType })
+Check(descriptor and descriptor.kind == "SOUL_SHARDS" and descriptor.fractional,
+    "destruction resolves fractional soul shards")
+Check(descriptor.swapToPrimaryEligible, "warlock resources can use the primary position")
+descriptor = BCDM:ResolveSecondaryResource({ class = "DEATHKNIGHT", specID = 250, powerTypes = Enum.PowerType })
+Check(descriptor and descriptor.kind == "RUNES" and descriptor.runeColourKey == "BLOOD",
+    "death knight descriptors own specialization rune colours")
+descriptor = BCDM:ResolveSecondaryResource({ class = "SHAMAN", specID = 262, showMana = false, powerTypes = Enum.PowerType })
+Check(descriptor == nil, "elemental mana remains opt-in")
+descriptor = BCDM:ResolveSecondaryResource({ class = "SHAMAN", specID = 262, showMana = true, powerTypes = Enum.PowerType })
+Check(descriptor and descriptor.powerType == Enum.PowerType.Mana, "elemental mana resolves when enabled")
+descriptor = BCDM:ResolveSecondaryResource({ class = "DRUID", specID = 103, formID = 1, powerTypes = Enum.PowerType })
+Check(descriptor and descriptor.powerType == Enum.PowerType.ComboPoints, "cat form resolves combo points")
+Check(BCDM:ResolveSecondaryResource({ class = "DRUID", specID = 103, formID = 0, powerTypes = Enum.PowerType }) == nil,
+    "druid combo points require cat form")
+for _, expected in ipairs({
+    { "MONK", 268, "STAGGER" }, { "MONK", 269, "STANDARD" }, { "ROGUE", 259, "COMBO_POINTS" },
+    { "PALADIN", 70, "STANDARD" }, { "MAGE", 62, "STANDARD" }, { "EVOKER", 1467, "ESSENCE" },
+    { "DEMONHUNTER", 581, "SPELL_CHARGES" }, { "DEMONHUNTER", 1480, "DEVOURER_SOUL" },
+    { "SHAMAN", 263, "AURA_STACKS" },
+}) do
+    descriptor = BCDM:ResolveSecondaryResource({ class = expected[1], specID = expected[2], powerTypes = Enum.PowerType })
+    Check(descriptor and descriptor.kind == expected[3], expected[1] .. " resource resolves through the shared catalog")
+end
+Check(not BCDM:ResolveSecondaryResource({ class = "PALADIN", specID = 65, powerTypes = Enum.PowerType }).swapToPrimaryEligible,
+    "holy paladin retains the separate secondary position")
 
 local profile = {
     CooldownManager = {
