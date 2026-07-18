@@ -12,6 +12,11 @@
 - Added LibSharedMedia font previews and status-bar texture swatches.
 - Added a persistent Community & Support footer and installed version display to the addon-owned settings window.
 - Removed obsolete Apply Size Changes controls and misleading Edit Mode refresh guidance.
+- Standardized profile-scoped General settings on Shared terminology and renamed the Buff Icons category to Tracked Buffs.
+- Added location highlights for the trinket viewer and selected custom tracker bar, including empty-bar footprints.
+- Trinket Viewer now includes passive trinkets by default, offers an on-use-only filter, and displays active-aura stacks from 12.1 equip-slot aura metadata.
+- Fixed custom tracker and trinket location highlights lagging behind section changes or using offset container bounds.
+- Fixed custom tracker corner anchors drifting by half the bar size because icon layout started at the container center.
 
 ### Cooldown Viewers and Profiles
 
@@ -29,7 +34,8 @@
 
 ### Cast and Resource Bars
 
-- Added per-resource smoothing overrides, fill direction, optional sparks, and current/maximum/percent text modes.
+- Added fill direction, optional sparks, and current/maximum/percent text modes.
+- Reworked the trinket viewer around persistent equipment-slot icons, asynchronous item loading, and slot cooldown events.
 - Added interruptible and non-interruptible cast colours, configurable empowered-stage pips, fill direction, and richer Settings previews.
 
 ### Development

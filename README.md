@@ -19,11 +19,11 @@
 - Track spells, items, equipment slots, and fixed-duration cast timers together.
 - Custom spells use Retail 12.1 AuraContainers for active player and target auras, with normal cooldowns underneath as the automatic fallback.
 - Per-entry ready/active visibility, inactive appearance, glow state, tooltip, class, and specialization behavior.
-- Shared visibility rules for combat, instance type, mounted/skyriding, dead, vehicle, and resting states, with per-bar overrides and optional macro conditions.
+- Shared visibility rules for combat, instance type, mounted/skyriding, dead, vehicle, and resting states, with per-bar overrides.
 - Resource text modes, responsive power updates, and optional power-bar sparks.
 - Class, interruptibility, or custom cast-colour modes plus configurable empowered-stage pips and Settings previews.
-- Custom Trinket Bar: This bar will automatically create trackers for equipped & usable trinkets.
-- API for AddOns to add anchors to Utility, Buff Icons, Custom Trackers, and Trinket Bars.
+- Trinket Viewer: automatically tracks equipped trinkets, can be limited to on-use items, and displays active-aura stacks exposed by the 12.1 equipment catalog.
+- API for AddOns to add anchors to Utility, Tracked Buffs, Custom Trackers, and Trinket Bars.
 
 ## Libraries
 - [Ace3](https://www.curseforge.com/wow/addons/ace3): Provides the addon lifecycle, profiles, localization, and serialization.

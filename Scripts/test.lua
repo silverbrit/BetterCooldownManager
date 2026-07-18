@@ -18,17 +18,24 @@ assert(loadfile(root .. "/Core/Anchors.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/BarBehavior.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/ResourceCatalog.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
+
+local defaults = BCDM:GetDefaultDB()
+Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == false,
+    "trinket viewer includes passive equipment by default")
+Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,
+    "trinket aura stacks have configurable text defaults")
 
 local visibility = BCDM:NewVisibilityPolicy()
 Check(BCDM:EvaluateVisibilityState(visibility, { Combat = false, Instance = "OpenWorld" }), "default visibility allows open world")
+Check(visibility.MacroCondition == nil, "visibility policies do not expose macro conditions")
 visibility.Mode = "IN_COMBAT"
 Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = false, Instance = "OpenWorld" }), "combat mode hides out of combat")
 Check(BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld" }), "combat mode shows in combat")
 visibility.Instances.Raid = false
 Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "Raid" }), "instance filter vetoes visibility")
 visibility.HideMounted = true
-Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld", Mounted = true }, true), "state toggles veto macro visibility")
-Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld" }, "hide"), "macro condition can hide")
+Check(not BCDM:EvaluateVisibilityState(visibility, { Combat = true, Instance = "OpenWorld", Mounted = true }), "state toggles veto visibility")
 Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ALWAYS" }, nil), "always entries reserve layout without readable state")
 Check(not BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "READY" }, { ready = false }), "ready-only entry collapses while active")
 Check(BCDM:ShouldDisplayCustomTrackerEntry({ Enabled = true, DisplayMode = "ACTIVE" }, { active = true }), "active-only entry shows on cooldown")
@@ -64,16 +71,25 @@ Check(not BCDM:NormalizeBarColourProfile(legacyColours), "bar colour migration i
 local removedSettings = {
     Visibility = { MacroCondition = "[combat] show" },
     General = { Animation = { SmoothBars = true } },
-    PowerBar = { Smoothing = "ON", FrequentUpdates = false },
+    PowerBar = { Smoothing = "ON", FrequentUpdates = false, Visibility = { MacroCondition = "[combat] show" } },
     SecondaryPowerBar = { Smoothing = "OFF", Visibility = { MacroCondition = "[combat] show" } },
+    CastBar = { Visibility = { MacroCondition = "[combat] show" } },
+    CooldownManager = {
+        Trinket = { Visibility = { MacroCondition = "[combat] show" } },
+        CustomTrackers = { Bars = { [1] = { Visibility = { MacroCondition = "[combat] show" } } } },
+    },
 }
 Check(BCDM:NormalizeRemovedSettingsProfile(removedSettings), "removed settings report migration")
 Check(removedSettings.Visibility.MacroCondition == nil, "shared macro condition is removed")
 Check(removedSettings.General.Animation == nil, "empty legacy animation settings are removed")
 Check(removedSettings.PowerBar.Smoothing == nil and removedSettings.PowerBar.FrequentUpdates == nil
     and removedSettings.SecondaryPowerBar.Smoothing == nil, "legacy bar update controls are removed")
-Check(removedSettings.SecondaryPowerBar.Visibility.MacroCondition ~= nil,
-    "per-bar macro conditions are preserved")
+Check(removedSettings.PowerBar.Visibility.MacroCondition == nil
+    and removedSettings.SecondaryPowerBar.Visibility.MacroCondition == nil
+    and removedSettings.CastBar.Visibility.MacroCondition == nil
+    and removedSettings.CooldownManager.Trinket.Visibility.MacroCondition == nil
+    and removedSettings.CooldownManager.CustomTrackers.Bars[1].Visibility.MacroCondition == nil,
+    "macro conditions are removed from all owned bars")
 Check(not BCDM:NormalizeRemovedSettingsProfile(removedSettings), "removed settings migration is idempotent")
 
 local anchorSource = {

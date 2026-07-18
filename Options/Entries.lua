@@ -3,6 +3,7 @@ local _, BCDM = ...
 local U = BCDM.SettingsUtils
 local Canvas = U.Canvas
 local selectedBarID
+local customTrackerPanel
 
 local ANCHOR_POINTS = {
     { text = "Top Left", value = "TOPLEFT" }, { text = "Top", value = "TOP" },
@@ -34,8 +35,31 @@ local function SelectedBar()
     return selectedBarID and store.Bars[selectedBarID] or nil
 end
 
+local function RefreshSelectedBarHighlight()
+    if not customTrackerPanel or not customTrackerPanel:IsShown() then
+        BCDM:HideSettingsHighlight("CustomTrackerOverlay")
+        return
+    end
+    local bar = SelectedBar()
+    local container = selectedBarID and BCDM.CustomTrackerRuntime
+        and BCDM.CustomTrackerRuntime.Containers[selectedBarID]
+    if not bar or not container then
+        BCDM:HideSettingsHighlight("CustomTrackerOverlay")
+        return
+    end
+    local width, height = BCDM:GetIconDimensions(bar)
+    local point = select(1, container:GetPoint(1)) or (bar.Layout and bar.Layout[1]) or "CENTER"
+    local icons = BCDM.CustomTrackerRuntime.Icons[selectedBarID]
+    BCDM:ShowSettingsHighlightForFrames("CustomTrackerOverlay", icons, container, {
+        width = width,
+        height = height,
+        point = point,
+    })
+end
+
 local function Changed(panel)
     BCDM:RefreshCustomTrackers()
+    RefreshSelectedBarHighlight()
     panel:Refresh()
 end
 
@@ -109,6 +133,7 @@ local function CreateManagement(panel, controls)
         return selectedBarID
     end, function(value)
         selectedBarID = value
+        RefreshSelectedBarHighlight()
         panel:Refresh()
     end, BarValues, { forceSingleColumn = true, minWidth = 360 })
 
@@ -443,9 +468,18 @@ local function CreateEntries(panel, controls)
 end
 
 function BCDM:AddCustomTrackerSettings(panel, controls)
+    customTrackerPanel = panel
     CreateManagement(panel, controls)
     AddLayoutControls(panel, controls)
     self:AddVisibilityPolicySettings(panel, controls, "Selected Bar Visibility", SelectedBar,
         { "Visibility" }, { "UseSharedVisibility" }, function() self:RefreshCustomTrackers() end)
     CreateEntries(panel, controls)
+    panel.RefreshSettingsHighlight = RefreshSelectedBarHighlight
+    panel:HookScript("OnShow", function()
+        BCDM:RefreshCustomTrackers()
+        RefreshSelectedBarHighlight()
+    end)
+    panel:HookScript("OnHide", function()
+        BCDM:HideSettingsHighlight("CustomTrackerOverlay")
+    end)
 end

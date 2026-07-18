@@ -291,18 +291,27 @@ local function LayoutIcons(container, bar, icons)
     local horizontal = growth == "LEFT" or growth == "RIGHT"
     local columns = horizontal and math.min(#icons, lineLimit) or math.ceil(#icons / lineLimit)
     local rows = horizontal and math.ceil(#icons / lineLimit) or math.min(#icons, lineLimit)
-    container:SetSize(math.max(1, columns * width + math.max(0, columns - 1) * spacing),
-        math.max(1, rows * height + math.max(0, rows - 1) * spacing))
+    local totalWidth = math.max(1, columns * width + math.max(0, columns - 1) * spacing)
+    local totalHeight = math.max(1, rows * height + math.max(0, rows - 1) * spacing)
+    container:SetSize(totalWidth, totalHeight)
     for index, icon in ipairs(icons) do
         local line = math.floor((index - 1) / lineLimit)
         local position = (index - 1) % lineLimit
         local x, y = 0, 0
         if horizontal then
-            x = position * (width + spacing) * (growth == "LEFT" and -1 or 1)
-            y = line * (height + spacing) * -1
+            if growth == "LEFT" then
+                x = (totalWidth / 2) - (width / 2) - position * (width + spacing)
+            else
+                x = -(totalWidth / 2) + (width / 2) + position * (width + spacing)
+            end
+            y = (totalHeight / 2) - (height / 2) - line * (height + spacing)
         else
-            y = position * (height + spacing) * (growth == "UP" and 1 or -1)
-            x = line * (width + spacing)
+            x = -(totalWidth / 2) + (width / 2) + line * (width + spacing)
+            if growth == "UP" then
+                y = -(totalHeight / 2) + (height / 2) + position * (height + spacing)
+            else
+                y = (totalHeight / 2) - (height / 2) - position * (height + spacing)
+            end
         end
         icon:ClearAllPoints()
         icon:SetPoint("CENTER", container, "CENTER", x, y)

@@ -10,25 +10,16 @@ function BCDM:NewVisibilityPolicy()
         HideDead = false,
         HideVehicle = false,
         HideResting = false,
-        MacroCondition = "",
     }
 end
 
-function BCDM:EvaluateVisibilityState(policy, state, macroResult)
+function BCDM:EvaluateVisibilityState(policy, state)
     if type(policy) ~= "table" then return true end
     state = type(state) == "table" and state or {}
-    if macroResult ~= nil then
-        if macroResult == false then return false end
-        if type(macroResult) == "string" then
-            local normalized = macroResult:lower()
-            if normalized == "" or normalized == "hide" or normalized == "false" or normalized == "0" then return false end
-        end
-    else
-        if policy.Mode == "IN_COMBAT" and not state.Combat then return false end
-        if policy.Mode == "OUT_OF_COMBAT" and state.Combat then return false end
-        local instances = policy.Instances or {}
-        if state.Instance and instances[state.Instance] == false then return false end
-    end
+    if policy.Mode == "IN_COMBAT" and not state.Combat then return false end
+    if policy.Mode == "OUT_OF_COMBAT" and state.Combat then return false end
+    local instances = policy.Instances or {}
+    if state.Instance and instances[state.Instance] == false then return false end
     if policy.HideMounted and state.Mounted then return false end
     if policy.HideDead and state.Dead then return false end
     if policy.HideVehicle and state.Vehicle then return false end
@@ -59,20 +50,13 @@ end
 
 function BCDM:GetOwnedFrameVisibilityPolicy(config)
     if type(config) ~= "table" or config.UseSharedVisibility ~= false then
-        return self.db and self.db.profile and self.db.profile.Visibility, true
+        return self.db and self.db.profile and self.db.profile.Visibility
     end
-    return config.Visibility, false
+    return config.Visibility
 end
 
 function BCDM:ShouldShowOwnedFrame(config)
-    local policy, isShared = self:GetOwnedFrameVisibilityPolicy(config)
-    local macroResult
-    if not isShared and policy and type(policy.MacroCondition) == "string" and policy.MacroCondition ~= ""
-        and type(SecureCmdOptionParse) == "function" then
-        local ok, result = pcall(SecureCmdOptionParse, policy.MacroCondition)
-        if ok then macroResult = result or false end
-    end
-    return self:EvaluateVisibilityState(policy, CurrentState(), macroResult)
+    return self:EvaluateVisibilityState(self:GetOwnedFrameVisibilityPolicy(config), CurrentState())
 end
 
 function BCDM:RegisterOwnedFrameVisibility(frame, configProvider)

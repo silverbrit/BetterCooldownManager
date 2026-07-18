@@ -49,6 +49,7 @@ end
 
 local function DetachPanel(panel)
     if not panel then return end
+    BCDM:HideAllSettingsHighlights()
     panel:Hide()
     panel:ClearAllPoints()
     panel:SetParent(UIParent)
@@ -57,6 +58,9 @@ end
 local function SelectPanel(frame, entry)
     if not entry or frame.ActiveEntry == entry then
         if entry and type(entry.panel.Refresh) == "function" then entry.panel:Refresh() end
+        if entry and type(entry.panel.RefreshSettingsHighlight) == "function" then
+            entry.panel:RefreshSettingsHighlight()
+        end
         return
     end
 
@@ -75,6 +79,7 @@ local function SelectPanel(frame, entry)
     panel:SetAllPoints(frame.Content)
     panel:Show()
     if type(panel.Refresh) == "function" then panel:Refresh() end
+    if type(panel.RefreshSettingsHighlight) == "function" then panel:RefreshSettingsHighlight() end
 end
 
 local function CreateNavigationButton(parent, entry, previousButton)

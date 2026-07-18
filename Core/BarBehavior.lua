@@ -67,10 +67,12 @@ end
 function BCDM:NormalizeRemovedSettingsProfile(profile)
     if type(profile) ~= "table" then return false end
     local changed = false
-    if type(profile.Visibility) == "table" and profile.Visibility.MacroCondition ~= nil then
-        profile.Visibility.MacroCondition = nil
+    local function RemoveMacroCondition(policy)
+        if type(policy) ~= "table" or policy.MacroCondition == nil then return end
+        policy.MacroCondition = nil
         changed = true
     end
+    RemoveMacroCondition(profile.Visibility)
     if type(profile.General) == "table" and type(profile.General.Animation) == "table" then
         if profile.General.Animation.SmoothBars ~= nil then changed = true end
         profile.General.Animation.SmoothBars = nil
@@ -84,6 +86,17 @@ function BCDM:NormalizeRemovedSettingsProfile(profile)
                 settings.FrequentUpdates = nil
                 changed = true
             end
+        end
+    end
+    for _, barType in ipairs({ "PowerBar", "SecondaryPowerBar", "CastBar" }) do
+        RemoveMacroCondition(type(profile[barType]) == "table" and profile[barType].Visibility)
+    end
+    local cooldownManager = profile.CooldownManager
+    if type(cooldownManager) == "table" then
+        RemoveMacroCondition(type(cooldownManager.Trinket) == "table" and cooldownManager.Trinket.Visibility)
+        local store = cooldownManager.CustomTrackers
+        for _, bar in pairs(type(store) == "table" and type(store.Bars) == "table" and store.Bars or {}) do
+            RemoveMacroCondition(type(bar) == "table" and bar.Visibility)
         end
     end
     return changed

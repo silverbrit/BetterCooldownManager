@@ -8,14 +8,7 @@ local function VisibilityDefaults()
         HideDead = false,
         HideVehicle = false,
         HideResting = false,
-        MacroCondition = "",
     }
-end
-
-local function SharedVisibilityDefaults()
-    local defaults = VisibilityDefaults()
-    defaults.MacroCondition = nil
-    return defaults
 end
 
 local Defaults = {
@@ -42,7 +35,7 @@ local Defaults = {
         },
     },
     profile = {
-        Visibility = SharedVisibilityDefaults(),
+        Visibility = VisibilityDefaults(),
         General = {
             Fonts = {
                 Font = "Friz Quadrata TT",
@@ -185,6 +178,7 @@ local Defaults = {
             },
             Trinket = {
                 Enabled = true,
+                DisplayOnUseOnly = false,
                 UseSharedVisibility = true,
                 Visibility = VisibilityDefaults(),
                 IconSize = 38,
@@ -196,6 +190,11 @@ local Defaults = {
                 Spacing = 1,
                 GrowthDirection = "LEFT",
                 OffsetByParentHeight = true,
+                Text = {
+                    FontSize = 15,
+                    Colour = {1, 1, 1},
+                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3},
+                },
             },
             CustomTrackers = {
                 SchemaVersion = 3,

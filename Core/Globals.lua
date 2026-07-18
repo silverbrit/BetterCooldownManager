@@ -252,39 +252,103 @@ function BCDM:UpdateBCDM()
     BCDM:RefreshCustomGlows()
 end
 
+BCDM.SettingsHighlights = {}
+
+local EMPTY_HIGHLIGHT_OFFSETS = {
+    TOPLEFT = { -8, 8 }, TOP = { 0, 8 }, TOPRIGHT = { 8, 8 },
+    LEFT = { -8, 0 }, CENTER = { 0, 0 }, RIGHT = { 8, 0 },
+    BOTTOMLEFT = { -8, -8 }, BOTTOM = { 0, -8 }, BOTTOMRIGHT = { 8, -8 },
+}
+
+local function CreateSettingsHighlight(key, globalName)
+    local highlight = BCDM.SettingsHighlights[key]
+    if highlight then return highlight end
+    highlight = CreateFrame("Frame", globalName, UIParent, "BackdropTemplate")
+    highlight:SetBackdrop({
+        edgeFile = "Interface\\AddOns\\BetterCooldownManager\\Media\\Glow.tga",
+        edgeSize = 8,
+        insets = { left = -8, right = -8, top = -8, bottom = -8 },
+    })
+    highlight:SetBackdropColor(0, 0, 0, 0)
+    highlight:SetBackdropBorderColor(64/255, 128/255, 255/255, 1)
+    highlight:SetFrameStrata("DIALOG")
+    highlight:Hide()
+    BCDM.SettingsHighlights[key] = highlight
+    return highlight
+end
+
+function BCDM:ShowSettingsHighlight(key, target, options)
+    local highlight = self.SettingsHighlights[key] or CreateSettingsHighlight(key)
+    if not target then highlight:Hide() return end
+    options = options or {}
+    local ok = pcall(function()
+        highlight:ClearAllPoints()
+        if options.empty == true then
+            local point = options.point or "CENTER"
+            local offset = EMPTY_HIGHLIGHT_OFFSETS[point] or EMPTY_HIGHLIGHT_OFFSETS.CENTER
+            highlight:SetSize((options.width or 1) + 16, (options.height or 1) + 16)
+            highlight:SetPoint(point, target, point, offset[1], offset[2])
+        else
+            highlight:SetPoint("TOPLEFT", target, "TOPLEFT", -8, 8)
+            highlight:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", 8, -8)
+        end
+    end)
+    highlight:SetShown(ok)
+end
+
+function BCDM:HideSettingsHighlight(key)
+    local highlight = self.SettingsHighlights[key]
+    if highlight then highlight:Hide() end
+end
+
+function BCDM:HideAllSettingsHighlights()
+    for _, highlight in pairs(self.SettingsHighlights) do
+        highlight:Hide()
+    end
+end
+
+function BCDM:ShowSettingsHighlightForFrames(key, frames, fallbackTarget, options)
+    local parentScale = UIParent:GetEffectiveScale()
+    local left, bottom, right, top
+    for _, frame in pairs(frames or {}) do
+        if frame and frame:IsShown() then
+            local frameLeft, frameBottom, width, height = frame:GetRect()
+            if frameLeft and frameBottom and width and height then
+                local scale = frame:GetEffectiveScale() / parentScale
+                frameLeft, frameBottom = frameLeft * scale, frameBottom * scale
+                width, height = width * scale, height * scale
+                left = not left and frameLeft or math.min(left, frameLeft)
+                bottom = not bottom and frameBottom or math.min(bottom, frameBottom)
+                right = not right and (frameLeft + width) or math.max(right, frameLeft + width)
+                top = not top and (frameBottom + height) or math.max(top, frameBottom + height)
+            end
+        end
+    end
+
+    if not left then
+        options = options or {}
+        options.empty = true
+        self:ShowSettingsHighlight(key, fallbackTarget, options)
+        return
+    end
+
+    local highlight = self.SettingsHighlights[key] or CreateSettingsHighlight(key)
+    highlight:ClearAllPoints()
+    highlight:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left - 8, bottom - 8)
+    highlight:SetSize((right - left) + 16, (top - bottom) + 16)
+    highlight:Show()
+end
+
 function BCDM:CreateCooldownViewerOverlays()
-    local OVERLAY_COLOUR = { 64/255, 128/255, 255/255, 1 }
-    if _G["EssentialCooldownViewer"] then
-        local EssentialCooldownViewerOverlay = CreateFrame("Frame", "BCDM_EssentialCooldownViewerOverlay", UIParent, "BackdropTemplate")
-        EssentialCooldownViewerOverlay:SetPoint("TOPLEFT", _G["EssentialCooldownViewer"], "TOPLEFT", -8, 8)
-        EssentialCooldownViewerOverlay:SetPoint("BOTTOMRIGHT", _G["EssentialCooldownViewer"], "BOTTOMRIGHT", 8, -8)
-        EssentialCooldownViewerOverlay:SetBackdrop({ edgeFile = "Interface\\AddOns\\BetterCooldownManager\\Media\\Glow.tga", edgeSize = 8, insets = {left = -8, right = -8, top = -8, bottom = -8} })
-        EssentialCooldownViewerOverlay:SetBackdropColor(0, 0, 0, 0)
-        EssentialCooldownViewerOverlay:SetBackdropBorderColor(unpack(OVERLAY_COLOUR))
-        EssentialCooldownViewerOverlay:Hide()
-        BCDM.EssentialCooldownViewerOverlay = EssentialCooldownViewerOverlay
-    end
-
-    if _G["UtilityCooldownViewer"] then
-        local UtilityCooldownViewerOverlay = CreateFrame("Frame", "BCDM_UtilityCooldownViewerOverlay", UIParent, "BackdropTemplate")
-        UtilityCooldownViewerOverlay:SetPoint("TOPLEFT", _G["UtilityCooldownViewer"], "TOPLEFT", -8, 8)
-        UtilityCooldownViewerOverlay:SetPoint("BOTTOMRIGHT", _G["UtilityCooldownViewer"], "BOTTOMRIGHT", 8, -8)
-        UtilityCooldownViewerOverlay:SetBackdrop({ edgeFile = "Interface\\AddOns\\BetterCooldownManager\\Media\\Glow.tga", edgeSize = 8, insets = {left = -8, right = -8, top = -8, bottom = -8} })
-        UtilityCooldownViewerOverlay:SetBackdropColor(0, 0, 0, 0)
-        UtilityCooldownViewerOverlay:SetBackdropBorderColor(unpack(OVERLAY_COLOUR))
-        UtilityCooldownViewerOverlay:Hide()
-        BCDM.UtilityCooldownViewerOverlay = UtilityCooldownViewerOverlay
-    end
-
-    if _G["BuffIconCooldownViewer"] then
-        local BuffIconCooldownViewerOverlay = CreateFrame("Frame", "BCDM_BuffIconCooldownViewerOverlay", UIParent, "BackdropTemplate")
-        BuffIconCooldownViewerOverlay:SetPoint("TOPLEFT", _G["BuffIconCooldownViewer"], "TOPLEFT", -8, 8)
-        BuffIconCooldownViewerOverlay:SetPoint("BOTTOMRIGHT", _G["BuffIconCooldownViewer"], "BOTTOMRIGHT", 8, -8)
-        BuffIconCooldownViewerOverlay:SetBackdrop({ edgeFile = "Interface\\AddOns\\BetterCooldownManager\\Media\\Glow.tga", edgeSize = 8, insets = {left = -8, right = -8, top = -8, bottom = -8} })
-        BuffIconCooldownViewerOverlay:SetBackdropColor(0, 0, 0, 0)
-        BuffIconCooldownViewerOverlay:SetBackdropBorderColor(unpack(OVERLAY_COLOUR))
-        BuffIconCooldownViewerOverlay:Hide()
-        BCDM.BuffIconCooldownViewerOverlay = BuffIconCooldownViewerOverlay
+    for _, viewerName in ipairs(self.CooldownManagerViewers) do
+        local viewer = _G[viewerName]
+        if viewer then
+            local key = viewerName .. "Overlay"
+            local highlight = CreateSettingsHighlight(key, "BCDM_" .. key)
+            highlight:SetPoint("TOPLEFT", viewer, "TOPLEFT", -8, 8)
+            highlight:SetPoint("BOTTOMRIGHT", viewer, "BOTTOMRIGHT", 8, -8)
+            self[key] = highlight
+        end
     end
 end
 

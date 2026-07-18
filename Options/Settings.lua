@@ -114,28 +114,6 @@ function BCDM:AddVisibilityPolicySettings(panel, controls, title, rootProvider, 
         U.Checkbox(controls, section, toggle[2], get, set, Options())
     end
 
-    if useSharedPath then
-        local Canvas = U.Canvas
-        local row = Canvas.CreateBaseRow(section.Content, 54)
-        U.Add(controls, section, row)
-        local label = Canvas.CreateLabel(row, "Macro Condition", "GameFontHighlight")
-        label:SetPoint("TOPLEFT", 0, 0)
-        local input = Canvas.CreateInput(row)
-        input:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -5)
-        input:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-        local macroPath = ChildPath("MacroCondition")
-        input:SetScript("OnEnterPressed", function(self)
-            if not (disabled and disabled()) and rootProvider() then U.Set(rootProvider, macroPath, self:GetText()) Refresh() end
-            self:ClearFocus()
-        end)
-        function row:Refresh()
-            local isHidden = hidden and hidden()
-            self:SetShown(not isHidden)
-            Canvas.SetWidgetEnabled(input, not (disabled and disabled()))
-            Canvas.SetFontStringEnabled(label, not (disabled and disabled()))
-            if not isHidden and not input:HasFocus() then input:SetText(U.Get(rootProvider, macroPath) or "") end
-        end
-    end
 end
 
 local function RegisterPanel(parentCategory, name, panel, isRoot)
@@ -165,7 +143,7 @@ local function CreateGeneralPanel()
     BCDM:AddVisibilityPolicySettings(panel, controls, "Shared Visibility", ProfileRoot,
         { "Visibility" }, nil, function() BCDM:RefreshOwnedFrameVisibility() end)
 
-    local appearance = U.Section(controls, "Global Appearance", true)
+    local appearance = U.Section(controls, "Shared Appearance", true)
     U.Text(controls, appearance,
         "These settings are shared by cooldown viewers, power bars, and the cast bar.")
     PathSlider(controls, appearance, "Border Size", ProfileRoot,
@@ -356,7 +334,12 @@ end
 
 local function CreateViewerPanel(viewerType)
     local panel, controls = U.NewPanel()
-    local function ViewerChanged() BCDM:UpdateCooldownViewer(viewerType) end
+    local RefreshViewerHighlight
+    local function ViewerChanged()
+        if viewerType == "Trinket" then BCDM:UpdateTrinketBar()
+        else BCDM:UpdateCooldownViewer(viewerType) end
+        if RefreshViewerHighlight then RefreshViewerHighlight() end
+    end
     local isCustom = viewerType == "Trinket"
     local hasAnchorParent = viewerType ~= "Essential"
     local supportsWrap = false
@@ -365,6 +348,10 @@ local function CreateViewerPanel(viewerType)
         local behavior = U.Section(controls, "Trinket Viewer", true)
         PathCheckbox(controls, behavior, "Enable Trinket Viewer", ProfileRoot,
             { "CooldownManager", "Trinket", "Enabled" }, ViewerChanged)
+        PathCheckbox(controls, behavior, "Display On-Use Only", ProfileRoot,
+            { "CooldownManager", "Trinket", "DisplayOnUseOnly" }, ViewerChanged, {
+                description = L("Hide equipped trinkets that do not have an on-use spell."),
+            })
         BCDM:AddVisibilityPolicySettings(panel, controls, "Visibility", ProfileRoot,
             { "CooldownManager", "Trinket", "Visibility" },
             { "CooldownManager", "Trinket", "UseSharedVisibility" }, ViewerChanged)
@@ -436,7 +423,7 @@ local function CreateViewerPanel(viewerType)
         { min = 16, max = 128, step = 0.1, disabled = function()
             return BCDM.db.profile.CooldownManager[viewerType].KeepAspectRatio ~= false
         end })
-    if viewerType ~= "Trinket" then
+    do
         local text = U.Section(controls, "Text Settings", true)
         PathDropdown(controls, text, "Anchor From", ProfileRoot,
             { "CooldownManager", viewerType, "Text", "Layout", 1 }, ViewerChanged, function() return ANCHOR_POINTS end)
@@ -457,12 +444,28 @@ local function CreateViewerPanel(viewerType)
     end
 
     local overlayName = BCDM.DBViewerToCooldownManagerViewer[viewerType]
-    local overlayKey = overlayName and (overlayName .. "Overlay") or nil
+    local overlayKey = overlayName and (overlayName .. "Overlay") or "TrinketViewerOverlay"
+    RefreshViewerHighlight = function()
+        if not panel:IsShown() then return end
+        if viewerType == "Trinket" then
+            local target = BCDM.TrinketBarContainer
+            local settings = BCDM.db.profile.CooldownManager.Trinket
+            local width, height = BCDM:GetIconDimensions(settings)
+            local point = target and select(1, target:GetPoint(1)) or settings.Layout[1]
+            BCDM:ShowSettingsHighlightForFrames(overlayKey, BCDM.TrinketBarIcons, target, {
+                width = width, height = height, point = point,
+            })
+        else
+            BCDM:ShowSettingsHighlight(overlayKey, _G[overlayName])
+        end
+    end
+    panel.RefreshSettingsHighlight = RefreshViewerHighlight
     panel:HookScript("OnShow", function()
-        if overlayKey and BCDM[overlayKey] then BCDM[overlayKey]:Show() end
+        if viewerType == "Trinket" then BCDM:UpdateTrinketBar() end
+        RefreshViewerHighlight()
     end)
     panel:HookScript("OnHide", function()
-        if overlayKey and BCDM[overlayKey] then BCDM[overlayKey]:Hide() end
+        BCDM:HideSettingsHighlight(overlayKey)
     end)
 
     return panel
@@ -768,6 +771,7 @@ end
 function BCDM:RefreshSettings()
     for _, panel in ipairs(panels) do
         if type(panel.Refresh) == "function" then panel:Refresh() end
+        if type(panel.RefreshSettingsHighlight) == "function" then panel:RefreshSettingsHighlight() end
     end
     if BCDMG and type(BCDMG.RefreshProfiles) == "function" then BCDMG.RefreshProfiles() end
 end
@@ -788,7 +792,7 @@ function BCDM:RegisterSettings()
     rootCategory = RegisterPanel(nil, "Better Cooldown Manager", CreateGeneralPanel(), true)
     RegisterPanel(rootCategory, "Cooldown Viewers", CreateCooldownViewersPanel())
     for _, viewer in ipairs({
-        { "Essential", "Essential Cooldowns" }, { "Utility", "Utility Cooldowns" }, { "Buffs", "Buff Icons" },
+        { "Essential", "Essential Cooldowns" }, { "Utility", "Utility Cooldowns" }, { "Buffs", "Tracked Buffs" },
         { "Trinket", "Trinkets" },
     }) do
         RegisterPanel(rootCategory, viewer[2], CreateViewerPanel(viewer[1]))

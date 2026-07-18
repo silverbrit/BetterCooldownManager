@@ -1,5 +1,15 @@
 local _, BCDM = ...
 
+local TRINKET_SLOTS = { 13, 14 }
+local slotIcons = {}
+local pendingItemData = {}
+BCDM.TrinketBarIcons = slotIcons
+
+local function ReadNumber(value)
+    if type(value) ~= "number" or BCDM:IsSecretValue(value) then return end
+    return value
+end
+
 local function FetchCooldownTextRegion(cooldown)
     if not cooldown then return end
     for _, region in ipairs({ cooldown:GetRegions() }) do
@@ -52,47 +62,123 @@ local function SetIconDesaturation(icon, value)
     end
 end
 
-local function CalculateFallbackDesaturation(startTime, duration)
-    if not startTime or not duration then return 0 end
-    if BCDM:IsSecretValue(startTime) or BCDM:IsSecretValue(duration) then return 0 end
-    local remaining = (startTime + duration) - GetTime()
-    return remaining > 0.001 and 1 or 0
+local function ClearCooldown(cooldown)
+    if C_DurationUtil and C_DurationUtil.CreateDuration and cooldown.SetCooldownFromDurationObject then
+        cooldown:SetCooldownFromDurationObject(C_DurationUtil.CreateDuration(), true)
+    elseif cooldown.Clear then
+        cooldown:Clear()
+    end
 end
 
-local function FetchItemData(itemId)
-    local startTime, durationTime = C_Item.GetItemCooldown(itemId)
-    return startTime, durationTime
-end
-
-local function IsOnUseTrinket(itemId)
-    if not itemId then return false end
+local function GetItemSpellData(itemId)
+    if not itemId then return nil, false end
+    if C_Item.IsItemDataCachedByID and not C_Item.IsItemDataCachedByID(itemId) then
+        if not pendingItemData[itemId] then
+            pendingItemData[itemId] = true
+            C_Item.RequestLoadItemDataByID(itemId)
+        end
+        return nil, false
+    end
     local spellName, spellID = C_Item.GetItemSpell(itemId)
-    return (spellID and spellID > 0) or (spellName and spellName ~= "")
+    spellID = ReadNumber(spellID)
+    local hasSpellName = type(spellName) == "string" and not BCDM:IsSecretValue(spellName) and spellName ~= ""
+    return spellID, (spellID and spellID > 0) or hasSpellName
 end
 
-local function FetchEquippedOnUseTrinkets()
-    local equipped = {}
-    local trinketSlots = { 13, 14 }
+local function GetTrinketAuraSpellIDs(slotID, itemSpellID)
+    local spellIDs, seen = {}, {}
+    local function AddSpellID(spellID)
+        spellID = ReadNumber(spellID)
+        if spellID and spellID > 0 and not seen[spellID] then
+            seen[spellID] = true
+            spellIDs[#spellIDs + 1] = spellID
+        end
+    end
+    AddSpellID(itemSpellID)
 
-    for _, slotID in ipairs(trinketSlots) do
+    if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
+        and C_CooldownViewer.GetCooldownViewerCooldownInfo and Enum.CooldownViewerCategory) then
+        return spellIDs
+    end
+    for _, category in ipairs({
+        Enum.CooldownViewerCategory.EquipSlotEssential,
+        Enum.CooldownViewerCategory.EquipSlotTracked,
+    }) do
+        local okSet, cooldownIDs = pcall(C_CooldownViewer.GetCooldownViewerCategorySet, category, true)
+        if okSet and type(cooldownIDs) == "table" then
+            for _, cooldownID in ipairs(cooldownIDs) do
+                local okInfo, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cooldownID)
+                if okInfo and type(info) == "table" and ReadNumber(info.equipSlot) == slotID then
+                    for _, linkedSpellID in ipairs(info.linkedSpellIDs or {}) do AddSpellID(linkedSpellID) end
+                end
+            end
+        end
+    end
+    return spellIDs
+end
+
+local function FetchEquippedTrinkets(settings)
+    local equipped = {}
+    for _, slotID in ipairs(TRINKET_SLOTS) do
         local itemId = GetInventoryItemID("player", slotID)
-        if itemId and IsOnUseTrinket(itemId) then
-            equipped[#equipped + 1] = { itemId = itemId, slotID = slotID }
+        itemId = ReadNumber(itemId)
+        if itemId then
+            local spellID, isOnUse = GetItemSpellData(itemId)
+            if settings.DisplayOnUseOnly ~= true or isOnUse then
+                equipped[#equipped + 1] = {
+                    itemId = itemId,
+                    slotID = slotID,
+                    auraSpellIDs = GetTrinketAuraSpellIDs(slotID, spellID),
+                }
+            end
         end
     end
 
     return equipped
 end
 
-local function CreateCustomIcon(itemId, slotID)
+local function RefreshIconCooldown(customIcon)
+    if not customIcon or not customIcon.Cooldown or not customIcon.SlotID then return end
+    local startTime, durationTime, enabled = GetInventoryItemCooldown("player", customIcon.SlotID)
+    startTime, durationTime = ReadNumber(startTime), ReadNumber(durationTime)
+    if not startTime or not durationTime or BCDM:IsSecretValue(enabled) then return end
+    if enabled ~= false and startTime > 0 and durationTime > 0 then
+        local durationObject = C_DurationUtil.CreateDuration()
+        durationObject:SetTimeFromStart(startTime, durationTime)
+        customIcon.Cooldown:SetCooldownFromDurationObject(durationObject, true)
+        SetIconDesaturation(customIcon.Icon, 1)
+    else
+        ClearCooldown(customIcon.Cooldown)
+        SetIconDesaturation(customIcon.Icon, 0)
+    end
+end
+
+local function AcquireCustomIcon(itemId, slotID, auraSpellIDs)
     local CooldownManagerDB = BCDM.db.profile
-    local GeneralDB = CooldownManagerDB.General
     local CustomDB = CooldownManagerDB.CooldownManager.Trinket
     if not itemId then return end
-    if not C_Item.GetItemInfo(itemId) then return end
-
-    local uniqueFrameId = slotID or itemId
-    local customIcon = CreateFrame("Button", "BCDM_Custom_Trinket_" .. uniqueFrameId, UIParent, "BackdropTemplate")
+    local customIcon = slotIcons[slotID]
+    if not customIcon then
+        customIcon = CreateFrame("Button", "BCDM_Custom_Trinket_" .. slotID, BCDM.TrinketBarContainer, "BackdropTemplate")
+        customIcon:EnableMouse(false)
+        customIcon.Cooldown = CreateFrame("Cooldown", nil, customIcon, "CooldownFrameTemplate")
+        customIcon.Cooldown:SetAllPoints(customIcon)
+        customIcon.Cooldown:SetDrawEdge(false)
+        customIcon.Cooldown:SetDrawSwipe(true)
+        customIcon.Cooldown:SetSwipeColor(0, 0, 0, 0.8)
+        customIcon.Cooldown:SetHideCountdownNumbers(false)
+        customIcon.Cooldown:SetReverse(false)
+        customIcon.Icon = customIcon:CreateTexture(nil, "BACKGROUND")
+        slotIcons[slotID] = customIcon
+    end
+    if customIcon.ItemID ~= itemId then
+        ClearCooldown(customIcon.Cooldown)
+        SetIconDesaturation(customIcon.Icon, 0)
+        BCDM:HideTrinketAuraCountDisplay(customIcon)
+    end
+    customIcon.ItemID = itemId
+    customIcon.SlotID = slotID
+    customIcon:SetParent(BCDM.TrinketBarContainer)
     customIcon:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = BCDM.db.profile.CooldownManager.General.BorderSize, insets = { left = 0, right = 0, top = 0, bottom = 0 } })
     customIcon:SetBackdropColor(0, 0, 0, 0)
     if BCDM.db.profile.CooldownManager.General.BorderSize <= 0 then
@@ -102,52 +188,16 @@ local function CreateCustomIcon(itemId, slotID)
     end
     local iconWidth, iconHeight = BCDM:GetIconDimensions(CustomDB)
     customIcon:SetSize(iconWidth, iconHeight)
-    local anchorParent = BCDM:ResolveAnchorParent(CustomDB.Layout[2])
-    customIcon:SetPoint(CustomDB.Layout[1], anchorParent, CustomDB.Layout[3], CustomDB.Layout[4], CustomDB.Layout[5])
-    customIcon:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-    customIcon:RegisterEvent("PLAYER_ENTERING_WORLD")
-    customIcon:EnableMouse(false)
     customIcon:SetFrameStrata(CustomDB.FrameStrata or "LOW")
-
-    local HighLevelContainer = CreateFrame("Frame", nil, customIcon)
-    HighLevelContainer:SetAllPoints(customIcon)
-    HighLevelContainer:SetFrameLevel(customIcon:GetFrameLevel() + 999)
-
-    customIcon.Cooldown = CreateFrame("Cooldown", nil, customIcon, "CooldownFrameTemplate")
-    customIcon.Cooldown:SetAllPoints(customIcon)
-    customIcon.Cooldown:SetDrawEdge(false)
-    customIcon.Cooldown:SetDrawSwipe(true)
-    customIcon.Cooldown:SetSwipeColor(0, 0, 0, 0.8)
-    customIcon.Cooldown:SetHideCountdownNumbers(false)
-    customIcon.Cooldown:SetReverse(false)
-
-    customIcon:HookScript("OnEvent", function(self, event, ...)
-        if event == "SPELL_UPDATE_COOLDOWN" or event == "PLAYER_ENTERING_WORLD" then
-            local startTime, durationTime = FetchItemData(itemId)
-            local hasActiveCooldown = (startTime and durationTime and startTime > 0 and durationTime > 0) or false
-            if hasActiveCooldown then
-                local durationObject = C_DurationUtil.CreateDuration()
-                durationObject:SetTimeFromStart(startTime, durationTime)
-                customIcon.Cooldown:SetCooldownFromDurationObject(durationObject, true)
-                if BCDM:IsSecretValue(startTime) or BCDM:IsSecretValue(durationTime) then
-                    SetIconDesaturation(customIcon.Icon, 0)
-                else
-                    SetIconDesaturation(customIcon.Icon, CalculateFallbackDesaturation(startTime, durationTime))
-                end
-            else
-                customIcon.Cooldown:SetCooldownFromDurationObject(C_DurationUtil.CreateDuration(), true)
-                SetIconDesaturation(customIcon.Icon, 0)
-            end
-        end
-    end)
-
-    customIcon.Icon = customIcon:CreateTexture(nil, "BACKGROUND")
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize
+    customIcon.Icon:ClearAllPoints()
     customIcon.Icon:SetPoint("TOPLEFT", customIcon, "TOPLEFT", borderSize, -borderSize)
     customIcon.Icon:SetPoint("BOTTOMRIGHT", customIcon, "BOTTOMRIGHT", -borderSize, borderSize)
     local iconZoom = BCDM.db.profile.CooldownManager.General.IconZoom * 0.5
     BCDM:ApplyIconTexCoord(customIcon.Icon, iconWidth, iconHeight, iconZoom)
-    customIcon.Icon:SetTexture(select(10, C_Item.GetItemInfo(itemId)))
+    customIcon.Icon:SetTexture(GetInventoryItemTexture("player", slotID))
+    RefreshIconCooldown(customIcon)
+    BCDM:EnsureTrinketAuraCountDisplay(customIcon, auraSpellIDs, CustomDB)
 
     return customIcon
 end
@@ -155,9 +205,10 @@ end
 local function CreateCustomIcons(iconTable)
     wipe(iconTable)
 
-    local trinkets = FetchEquippedOnUseTrinkets()
+    local settings = BCDM.db.profile.CooldownManager.Trinket
+    local trinkets = FetchEquippedTrinkets(settings)
     for _, trinketEntry in ipairs(trinkets) do
-        local customTrinket = CreateCustomIcon(trinketEntry.itemId, trinketEntry.slotID)
+        local customTrinket = AcquireCustomIcon(trinketEntry.itemId, trinketEntry.slotID, trinketEntry.auraSpellIDs)
         if customTrinket then
             table.insert(iconTable, customTrinket)
         end
@@ -197,7 +248,10 @@ local function LayoutTrinketBar()
     local anchorParent = BCDM:ResolveAnchorParent(CustomDB.Layout[2])
     BCDM.TrinketBarContainer:SetPoint(containerAnchorFrom, anchorParent, CustomDB.Layout[3], CustomDB.Layout[4], CustomDB.Layout[5])
 
-    for _, child in ipairs({BCDM.TrinketBarContainer:GetChildren()}) do child:UnregisterAllEvents() child:Hide() child:SetParent(nil) end
+    for _, icon in pairs(slotIcons) do
+        icon:Hide()
+        BCDM:HideTrinketAuraCountDisplay(icon)
+    end
 
     CreateCustomIcons(customTrinketIcons)
 
@@ -289,18 +343,12 @@ function BCDM:SetupTrinketBar()
 end
 
 function BCDM:UpdateTrinketBar()
-    local CooldownManagerDB = BCDM.db.profile
-    local CustomDB = CooldownManagerDB.CooldownManager.Trinket
-    local isEnabled = CustomDB.Enabled
-    if BCDM.TrinketBarContainer and isEnabled then
-        BCDM.TrinketBarContainer:ClearAllPoints()
-        local anchorParent = BCDM:ResolveAnchorParent(CustomDB.Layout[2])
-        BCDM.TrinketBarContainer:SetPoint(CustomDB.Layout[1], anchorParent, CustomDB.Layout[3], CustomDB.Layout[4], CustomDB.Layout[5])
-        LayoutTrinketBar()
-    else
-        if BCDM.TrinketBarContainer then
-            BCDM.TrinketBarContainer:Hide()
-        end
+    LayoutTrinketBar()
+end
+
+function BCDM:RefreshTrinketCooldowns()
+    for _, icon in pairs(slotIcons) do
+        if icon:IsShown() then RefreshIconCooldown(icon) end
     end
 end
 
@@ -310,19 +358,53 @@ function BCDM:FetchEquippedTrinkets()
         if BCDM.TrinketBarContainer then BCDM.TrinketBarContainer:Hide() end
         return
     end
-    BCDM:UpdateCooldownViewer("Trinket")
+    BCDM:UpdateTrinketBar()
 end
 
 local trinketEquipmentEvents = CreateFrame("Frame")
 trinketEquipmentEvents:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 trinketEquipmentEvents:RegisterEvent("PLAYER_LOGIN")
 trinketEquipmentEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
-trinketEquipmentEvents:SetScript("OnEvent", function(_, event, slot)
-    if InCombatLockdown() then return end
+trinketEquipmentEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+trinketEquipmentEvents:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+trinketEquipmentEvents:RegisterEvent("BAG_UPDATE_COOLDOWN")
+trinketEquipmentEvents:RegisterEvent("COOLDOWN_VIEWER_DATA_LOADED")
+trinketEquipmentEvents:RegisterEvent("COOLDOWN_VIEWER_TABLE_HOTFIXED")
+local refreshAfterCombat = false
+local refreshQueued = false
+local function RefreshEquippedTrinkets()
+    if InCombatLockdown() then
+        refreshAfterCombat = true
+        return
+    end
+    refreshAfterCombat = false
+    BCDM:FetchEquippedTrinkets()
+end
+local function QueueEquippedTrinketRefresh()
+    if refreshQueued then return end
+    refreshQueued = true
+    C_Timer.After(0, function()
+        refreshQueued = false
+        RefreshEquippedTrinkets()
+    end)
+end
+trinketEquipmentEvents:SetScript("OnEvent", function(_, event, arg1, arg2)
+    if event == "BAG_UPDATE_COOLDOWN" then
+        BCDM:RefreshTrinketCooldowns()
+        return
+    end
     if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
-        C_Timer.After(1, function() BCDM:FetchEquippedTrinkets() end)
-    elseif event == "PLAYER_EQUIPMENT_CHANGED" and (slot == 13 or slot == 14) then
-        BCDM:FetchEquippedTrinkets()
+        C_Timer.After(1, RefreshEquippedTrinkets)
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" and (arg1 == 13 or arg1 == 14) then
+        QueueEquippedTrinketRefresh()
+    elseif event == "ITEM_DATA_LOAD_RESULT" and pendingItemData[arg1] then
+        pendingItemData[arg1] = nil
+        if arg2 == true then QueueEquippedTrinketRefresh() end
+    elseif event == "COOLDOWN_VIEWER_DATA_LOADED" or event == "COOLDOWN_VIEWER_TABLE_HOTFIXED" then
+        QueueEquippedTrinketRefresh()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        BCDM:PreparePendingCustomTrackerAuraDisplays()
+        if refreshAfterCombat then RefreshEquippedTrinkets() end
     end
 end)
 
@@ -332,6 +414,6 @@ function BCDM:AdjustTrinketLayoutIndex(direction, itemId)
 end
 
 function BCDM:AdjustTrinketList(itemId, adjustingHow)
-    -- Legacy compatibility: trinket list is now driven by equipped on-use trinkets.
+    -- Legacy compatibility: trinket list is now driven by equipped trinkets.
     BCDM:UpdateTrinketBar()
 end

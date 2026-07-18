@@ -20,7 +20,9 @@ Spell aura presentation is separate from cooldown-state policy. AuraContainers o
 
 ## Visibility and anchoring
 
-Resolve shared versus local visibility first, apply macro or mode/instance policy, then veto states, then enabled/source availability. Validate inter-bar anchors as a graph, reject cycles, and fall back to `UIParent` for missing or unsafe targets.
+Resolve shared versus local visibility first, apply mode/instance policy, then veto states, then enabled/source availability. Validate inter-bar anchors as a graph, reject cycles, and fall back to `UIParent` for missing or unsafe targets.
+
+Custom tracker icons must occupy the bounds of their anchored container. Horizontal right growth starts at the container's left edge, left growth starts at its right edge, and vertical growth uses the equivalent bottom/top edge. Do not place the first icon at container center because corner anchors then drift by half the bar size.
 
 ## Secret-safe rendering
 
@@ -30,4 +32,6 @@ Pre-create AuraContainers outside combat. Configure returned AuraButtons during 
 
 ## BCM-owned bars
 
-Put reusable resource and cast presentation decisions in `Core/BarBehavior.lua`; modules remain responsible for their own events and frame updates. Shared settings are defaults, while explicit per-bar choices such as smoothing and visibility override them.
+Put reusable resource and cast presentation decisions in `Core/BarBehavior.lua`; modules remain responsible for their own events and frame updates. Shared settings are defaults, while explicit per-bar visibility choices override them.
+
+For equipped trinkets, source linked aura candidates from the 12.1 Cooldown Viewer `EquipSlotEssential` and `EquipSlotTracked` catalog records, then bind stack text through `CustomAuraContainerTemplate` and `SetApplicationCount`. Do not enumerate player auras or read secret aura stack values in addon Lua.
