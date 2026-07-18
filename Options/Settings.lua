@@ -450,6 +450,10 @@ local function CreateViewerPanel(viewerType)
         if viewerType == "Trinket" then
             local target = BCDM.TrinketBarContainer
             local settings = BCDM.db.profile.CooldownManager.Trinket
+            if not settings.Enabled then
+                BCDM:HideSettingsHighlight(overlayKey)
+                return
+            end
             local width, height = BCDM:GetIconDimensions(settings)
             local point = target and select(1, target:GetPoint(1)) or settings.Layout[1]
             BCDM:ShowSettingsHighlightForFrames(overlayKey, BCDM.TrinketBarIcons, target, {

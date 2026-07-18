@@ -8,6 +8,34 @@ local Runtime = {
     TimerStates = setmetatable({}, { __mode = "k" }),
 }
 BCDM.CustomTrackerRuntime = Runtime
+local UNKNOWN_ICON = 134400
+local requestedItemData = {}
+
+local function RequestItemDataOnce(itemID)
+    if type(itemID) ~= "number" or BCDM:IsSecretValue(itemID) or requestedItemData[itemID] then return end
+    requestedItemData[itemID] = true
+    if C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID, itemID) end
+end
+
+function BCDM:RequestCustomTrackerItemData(itemID)
+    RequestItemDataOnce(itemID)
+end
+
+local function ResolveItemIcon(itemID, loadedIcon)
+    local candidates = { loadedIcon }
+    if C_Item and C_Item.GetItemIconByID then
+        local ok, icon = pcall(C_Item.GetItemIconByID, itemID)
+        if ok then candidates[#candidates + 1] = icon end
+    end
+    if C_Item and C_Item.GetItemInfoInstant then
+        local ok, _, _, _, _, icon = pcall(C_Item.GetItemInfoInstant, itemID)
+        if ok then candidates[#candidates + 1] = icon end
+    end
+    for _, icon in ipairs(candidates) do
+        if type(icon) == "number" and not BCDM:IsSecretValue(icon) and icon ~= UNKNOWN_ICON then return icon end
+    end
+    return UNKNOWN_ICON
+end
 
 local function ReadNumber(value)
     if type(value) ~= "number" or BCDM:IsSecretValue(value) then return end
@@ -79,11 +107,12 @@ SourceAdapters.item = {
     GetMetadata = function(source)
         if not (C_Item and C_Item.GetItemInfo) then return end
         local name, _, _, _, _, _, _, _, _, icon = C_Item.GetItemInfo(source.ID)
-        if not name then return end
-        return name, icon
+        icon = ResolveItemIcon(source.ID, icon)
+        if not name or icon == UNKNOWN_ICON then RequestItemDataOnce(source.ID) end
+        return name or ("Item " .. tostring(source.ID)), icon
     end,
     IsAvailable = function(source)
-        return C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(source.ID) ~= nil
+        return C_Item and (not C_Item.DoesItemExistByID or C_Item.DoesItemExistByID(source.ID) == true)
     end,
     GetState = function(source)
         local count = C_Item.GetItemCount(source.ID)
@@ -108,8 +137,9 @@ SourceAdapters.equipment = {
         local itemID = GetInventoryItemID("player", source.ID)
         if not itemID then return end
         local name, _, _, _, _, _, _, _, _, icon = C_Item.GetItemInfo(itemID)
-        if not name then return end
-        return name, icon
+        icon = ResolveItemIcon(itemID, icon)
+        if not name or icon == UNKNOWN_ICON then RequestItemDataOnce(itemID) end
+        return name or ("Equipment Slot " .. tostring(source.ID)), icon
     end,
     IsAvailable = function(source) return GetInventoryItemID("player", source.ID) ~= nil end,
     GetState = function(source)
@@ -184,7 +214,8 @@ local function AcquireIcon(barID, entryID, container)
         icon.Cooldown:SetSwipeColor(0, 0, 0, 0.8)
         icon.Count = icon:CreateFontString(nil, "OVERLAY")
         icon:SetScript("OnEnter", function(self)
-            if not self.Entry or self.Entry.Tooltip == false or not self.Adapter or not self.Adapter.SetTooltip then return end
+            if not self.Entry or not self.EntryStyle or self.EntryStyle.Tooltip == false
+                or not self.Adapter or not self.Adapter.SetTooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
             self.Adapter.SetTooltip(self.Entry.Source, GameTooltip)
             GameTooltip:Show()
@@ -207,7 +238,7 @@ local function ReleaseUnusedIcons(barID, used)
             if BCDM:HasCustomTrackerAuraDisplay(icon) then
                 BCDM:HideCustomTrackerAuraDisplay(icon)
             else
-                icon.Entry, icon.Adapter, icon.LastState = nil, nil, nil
+                icon.Entry, icon.EntryStyle, icon.Adapter, icon.LastState = nil, nil, nil, nil
                 icons[entryID] = nil
                 Runtime.IconPool[#Runtime.IconPool + 1] = icon
             end
@@ -220,7 +251,7 @@ local function ConfigureIcon(icon, bar, entry, adapter, width, height)
     local cooldownGeneral = BCDM.db.profile.CooldownManager.General
     local border = cooldownGeneral.BorderSize or 0
     local _, texture = adapter.GetMetadata(entry.Source)
-    icon.Entry, icon.Adapter = entry, adapter
+    icon.Entry, icon.EntryStyle, icon.Adapter = entry, BCDM:GetCustomTrackerEntrySettings(bar, entry), adapter
     icon:SetSize(width, height)
     icon:SetFrameStrata(bar.FrameStrata or "LOW")
     icon:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = border,
@@ -230,7 +261,7 @@ local function ConfigureIcon(icon, bar, entry, adapter, width, height)
     icon.Icon:ClearAllPoints()
     icon.Icon:SetPoint("TOPLEFT", border, -border)
     icon.Icon:SetPoint("BOTTOMRIGHT", -border, border)
-    icon.Icon:SetTexture(texture)
+    icon.Icon:SetTexture(texture or UNKNOWN_ICON)
     BCDM:ApplyIconTexCoord(icon.Icon, width, height, (cooldownGeneral.IconZoom or 0) * 0.5)
     local text = bar.Text or {}
     local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 }
@@ -254,11 +285,12 @@ local function UpdateIconState(icon, state)
     elseif state.active == false then
         ClearCooldown(icon.Cooldown)
     end
-    icon.Count:SetText(state.count and state.count > 1 and tostring(state.count) or "")
-    local visualMode = icon.Entry.VisualMode or "FULL"
-    icon:SetAlpha(visualMode == "LOW_ALPHA" and (tonumber(icon.Entry.Alpha) or 0.45) or 1)
+    local style = icon.EntryStyle or icon.Entry
+    icon.Count:SetText(style.TextEnabled ~= false and state.count and state.count > 1 and tostring(state.count) or "")
+    local visualMode = style.VisualMode or "FULL"
+    icon:SetAlpha(visualMode == "LOW_ALPHA" and (tonumber(style.Alpha) or 0.45) or 1)
     SetDesaturated(icon.Icon, visualMode == "DESATURATE")
-    if BCDM:ShouldGlowCustomTrackerEntry(icon.Entry, state) then BCDM:StartCustomGlow(icon)
+    if BCDM:ShouldGlowCustomTrackerEntry(style, state) then BCDM:StartCustomGlow(icon)
     else BCDM:StopCustomGlow(icon) end
 end
 
@@ -336,26 +368,39 @@ local function RefreshBar(barID, bar)
     local container = GetContainer(barID)
     container:SetFrameStrata(bar.FrameStrata or "LOW")
     AnchorContainer(container, barID, bar)
+    local previewing = BCDM.CustomTrackerSettingsPreviewBarID == barID
     local used, visible = {}, {}
     for _, entryID in ipairs(bar.EntryOrder or {}) do
         local entry = bar.Entries and bar.Entries[entryID]
         local adapter = entry and entry.Source and SourceAdapters[entry.Source.Type]
-        if entry and entry.Enabled ~= false and adapter and PlayerMatchesFilters(entry)
-            and (not adapter.IsAvailable or adapter.IsAvailable(entry.Source)) then
+        local available = entry and adapter and (not adapter.IsAvailable or adapter.IsAvailable(entry.Source))
+        local settings = entry and BCDM:GetCustomTrackerEntrySettings(bar, entry)
+        local eligible = previewing or (entry and entry.Enabled ~= false and PlayerMatchesFilters(settings) and available)
+        if entry and adapter and eligible then
             local name = adapter.GetMetadata(entry.Source)
-            if name then
+            if name or previewing then
+                local style = settings
                 local existing = Runtime.Icons[barID] and Runtime.Icons[barID][entryID]
-                local state = adapter.GetState(entry.Source, entry) or {}
+                local state = available and (adapter.GetState(entry.Source, entry) or {}) or {}
                 if existing and existing.LastState then
                     if state.active == nil then state.active = existing.LastState.active end
                     if state.ready == nil then state.ready = existing.LastState.ready end
                 end
-                local shouldDisplay = BCDM:ShouldDisplayCustomTrackerEntry(entry, state)
+                if previewing then
+                    if style.Glow == "ACTIVE" then state.active, state.ready = true, false
+                    elseif style.Glow == "READY" then state.active, state.ready = false, true end
+                end
+                local shouldDisplay = previewing or BCDM:ShouldDisplayCustomTrackerEntry(style, state)
                 if shouldDisplay or entry.Source.Type == "spell" then
                     local icon = AcquireIcon(barID, entryID, container)
                     local width, height = BCDM:GetIconDimensions(bar)
                     ConfigureIcon(icon, bar, entry, adapter, width, height)
                     UpdateIconState(icon, state)
+                    if previewing and entry.Enabled == false then
+                        icon:SetAlpha(math.min(icon:GetAlpha(), 0.45))
+                        SetDesaturated(icon.Icon, true)
+                        BCDM:StopCustomGlow(icon)
+                    end
                     used[entryID] = true
                     if shouldDisplay then visible[#visible + 1] = icon else icon:Hide() end
                 end
@@ -364,12 +409,16 @@ local function RefreshBar(barID, bar)
     end
     ReleaseUnusedIcons(barID, used)
     LayoutIcons(container, bar, visible)
-    container:SetShown(bar.Enabled ~= false and #visible > 0 and BCDM:ShouldShowOwnedFrame(bar))
+    container:SetShown(bar.Enabled ~= false and #visible > 0
+        and (previewing or BCDM:ShouldShowOwnedFrame(bar)))
 end
 
 function BCDM:RefreshCustomTrackers()
     local store = self:GetCustomTrackerStore()
     local active = {}
+    for _, barID in ipairs(store.BarOrder or {}) do
+        if store.Bars[barID] then GetContainer(barID) end
+    end
     for _, barID in ipairs(store.BarOrder or {}) do
         local bar = store.Bars[barID]
         if bar then
@@ -430,17 +479,38 @@ function BCDM:QueueCustomTrackerRefresh()
     end)
 end
 
+local function UsesCustomTrackerItemData(itemID)
+    itemID = ReadNumber(itemID)
+    if not itemID then return false end
+    local store = BCDM:GetCustomTrackerStore()
+    for _, barID in ipairs(store.BarOrder or {}) do
+        local bar = store.Bars[barID]
+        for _, entryID in ipairs(bar and bar.EntryOrder or {}) do
+            local entry = bar.Entries and bar.Entries[entryID]
+            local source = entry and entry.Source
+            if source and source.Type == "item" and source.ID == itemID then return true end
+            if source and source.Type == "equipment" then
+                local ok, equippedItemID = pcall(GetInventoryItemID, "player", source.ID)
+                if ok and ReadNumber(equippedItemID) == itemID then return true end
+            end
+        end
+    end
+    return false
+end
+
 function BCDM:SetupCustomTrackers()
     if not Runtime.EventFrame then
         local frame = CreateFrame("Frame", "BCDMCustomTrackerEventFrame")
         for _, event in ipairs({
             "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED", "SPELL_UPDATE_COOLDOWN",
             "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "BAG_UPDATE_DELAYED", "ITEM_COUNT_CHANGED",
-            "PLAYER_EQUIPMENT_CHANGED", "PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED",
+            "PLAYER_EQUIPMENT_CHANGED", "ITEM_DATA_LOAD_RESULT", "PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED",
         }) do frame:RegisterEvent(event) end
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
-        frame:SetScript("OnEvent", function(_, event, _, _, spellID)
+        frame:SetScript("OnEvent", function(_, event, arg1, _, spellID)
             if event == "UNIT_SPELLCAST_SUCCEEDED" then BCDM:TriggerCustomTrackerTimers(spellID)
+            elseif event == "ITEM_DATA_LOAD_RESULT" then
+                if UsesCustomTrackerItemData(arg1) then BCDM:QueueCustomTrackerRefresh() end
             elseif event == "PLAYER_TARGET_CHANGED" then BCDM:RefreshCustomTrackerAuraUnit("target")
             elseif event == "PLAYER_REGEN_ENABLED" then BCDM:PreparePendingCustomTrackerAuraDisplays()
             else BCDM:QueueCustomTrackerRefresh() end

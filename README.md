@@ -15,10 +15,10 @@
 - Custom Cooldown Text & Tweaks.
 - Clickable custom, power-type, class, specialization, and cast-state fill-colour swatches without conflicting toggles.
 - Power Bar, Secondary Power Bar & Cast Bar with anchoring, automatic width matching, fill direction, and display controls.
-- Named Custom Tracker Bars: create, rename, duplicate, reorder, and anchor reusable mixed-source bars.
+- Named Custom Tracker Bars: create, rename, duplicate, and anchor reusable mixed-source bars.
 - Track spells, items, equipment slots, and fixed-duration cast timers together.
 - Custom spells use Retail 12.1 AuraContainers for active player and target auras, with normal cooldowns underneath as the automatic fallback.
-- Per-entry ready/active visibility, inactive appearance, glow state, tooltip, class, and specialization behavior.
+- Drag-to-reorder Custom Tracker entries with shared display, appearance, glow, text, tooltip, class, and specialization defaults plus optional per-entry overrides.
 - Shared visibility rules for combat, instance type, mounted/skyriding, dead, vehicle, and resting states, with per-bar overrides.
 - Resource text modes, responsive power updates, and optional power-bar sparks.
 - Class, interruptibility, or custom cast-colour modes plus configurable empowered-stage pips and Settings previews.

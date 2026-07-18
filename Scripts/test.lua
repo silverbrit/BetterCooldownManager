@@ -207,6 +207,7 @@ Check(custom.Name == "Custom Cooldowns", "legacy bar name is retained")
 Check(#custom.EntryOrder == 2, "duplicate spells across specs merge")
 local spell = custom.Entries[custom.EntryOrder[1]]
 Check(spell.Source.ID == 100, "spell order uses earliest legacy layout index")
+Check(spell.OverrideBarSettings == true, "legacy entries preserve their per-entry behavior as overrides")
 Check(spell.SpecFilters[62] and spell.SpecFilters[63] and spell.ClassSpecFilters == nil,
     "merged spell migrates spec filters to specialization IDs")
 Check(custom.Layout[2] == "BCDM_CustomTrackerBar_2", "legacy inter-viewer anchor is remapped")
@@ -230,16 +231,28 @@ Check(table.concat(spell.Source.AuraIDs, ",") == "900,901", "current-schema aura
 
 BCDM.db = { profile = profile }
 local newBar = BCDM:AddCustomTrackerBar("Timers")
+Check(store.Bars[newBar].EntrySettings.TextEnabled == true, "new bars enable shared entry text by default")
+Check(store.Bars[newBar].EntrySettings.Tooltip == true, "new bars enable shared entry tooltips by default")
+Check(store.Bars[newBar].EntrySettings.DisplayMode == "ALWAYS", "new bars share display mode by default")
+Check(type(store.Bars[newBar].EntrySettings.SpecFilters) == "table", "new bars share specialization filters")
 Check(BCDM:RenameCustomTrackerBar(newBar, "Utility"), "bar can be renamed")
 local duplicate = BCDM:DuplicateCustomTrackerBar(store.BarOrder[1])
 Check(duplicate and #store.Bars[duplicate].EntryOrder == #custom.EntryOrder, "duplicate receives copied entries")
 Check(store.Bars[duplicate].EntryOrder[1] ~= custom.EntryOrder[1], "entry IDs remain globally unique")
-Check(BCDM:MoveCustomTrackerBar(duplicate, -1), "bar can be reordered")
+Check(store.BarOrder[#store.BarOrder] == duplicate, "duplicate is appended to stable bar order")
 store.Bars[newBar].Layout[2] = "BCDM_CustomTrackerBar_" .. duplicate
 store.Bars[duplicate].Layout[2] = "BCDM_CustomTrackerBar_" .. store.BarOrder[1]
 Check(BCDM:WouldCustomTrackerAnchorCycle(store.BarOrder[1], newBar), "indirect anchor cycle is rejected")
 local timerEntry = BCDM:AddCustomTrackerEntry(newBar, "timer", 123, { Duration = 8 })
 Check(store.Bars[newBar].Entries[timerEntry].Source.Duration == 8, "typed entry stores timer duration")
+Check(store.Bars[newBar].Entries[timerEntry].TextEnabled == true, "new entries enable text by default")
+Check(store.Bars[newBar].Entries[timerEntry].OverrideBarSettings == false,
+    "new entries use shared bar settings by default")
+local sharedStyle = BCDM:GetCustomTrackerEntrySettings(store.Bars[newBar], store.Bars[newBar].Entries[timerEntry])
+Check(sharedStyle == store.Bars[newBar].EntrySettings, "entries resolve shared bar styling by default")
+store.Bars[newBar].Entries[timerEntry].OverrideBarSettings = true
+Check(BCDM:GetCustomTrackerEntrySettings(store.Bars[newBar], store.Bars[newBar].Entries[timerEntry])
+    == store.Bars[newBar].Entries[timerEntry], "entry override resolves its own styling")
 local equipmentEntry = BCDM:AddCustomTrackerEntry(newBar, "equipment", 13)
 Check(store.Bars[newBar].Entries[equipmentEntry].Source.ID == 13, "typed entry stores equipment slot")
 Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[equipmentEntry], 62, "MAGE", "Arcane"),
@@ -252,11 +265,29 @@ Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry],
     "numeric specialization filters match directly")
 Check(not BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry], 63, "MAGE", "Fire"),
     "numeric specialization filters reject other specs")
+local order = store.Bars[newBar].EntryOrder
+Check(BCDM:ReorderCustomTrackerEntry(newBar, filteredEntry, 1) and order[1] == filteredEntry,
+    "entry can be dragged to the first position")
+Check(BCDM:ReorderCustomTrackerEntry(newBar, filteredEntry, #order) and order[#order] == filteredEntry,
+    "entry can be dragged to the last position")
+local middle = math.max(1, math.floor((#order + 1) / 2))
+Check(BCDM:ReorderCustomTrackerEntry(newBar, filteredEntry, middle) and order[middle] == filteredEntry,
+    "entry can be dragged to a middle position")
+Check(not BCDM:ReorderCustomTrackerEntry(newBar, filteredEntry, middle), "same-position drops are ignored")
+Check(not BCDM:ReorderCustomTrackerEntry(newBar, 999999, 1), "unknown entry reorder is rejected")
+Check(not BCDM:ReorderCustomTrackerEntry(newBar, filteredEntry, nil), "invalid reorder index is rejected")
 Check(BCDM:DeleteCustomTrackerEntry(newBar, timerEntry), "entry can be deleted")
+local expectedOrder = {}
+for _, barID in ipairs(store.BarOrder) do
+    if barID ~= newBar then expectedOrder[#expectedOrder + 1] = barID end
+end
 Check(BCDM:DeleteCustomTrackerBar(newBar), "bar can be deleted")
+Check(table.concat(store.BarOrder, ",") == table.concat(expectedOrder, ","),
+    "deleting a bar preserves the relative stable bar order")
 local recycledID = BCDM:AddCustomTrackerBar()
 Check(recycledID > newBar, "recycled tracker names retain monotonic internal IDs")
 Check(store.Bars[recycledID].Name == "Tracker Bar 1", "default tracker names reuse the lowest available number")
+Check(store.BarOrder[#store.BarOrder] == recycledID, "new bars append without reordering existing bars")
 
 if failures > 0 then os.exit(1) end
 print("Custom tracker model tests passed")

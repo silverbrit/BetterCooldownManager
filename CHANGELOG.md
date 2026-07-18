@@ -27,7 +27,12 @@
 
 ### Custom Trackers
 
-- Replaced separate Custom Cooldowns and Additional Custom configurations with named, reorderable, duplicable mixed-source tracker bars.
+- Replaced separate Custom Cooldowns and Additional Custom configurations with named, duplicable mixed-source tracker bars.
+- Replaced the dense entry rows with a scrollable icon strip, drag ordering, focused selected-entry controls, and a type-aware add menu.
+- Added per-bar Custom Tracker icon dimensions and charge, stack, and item-count text settings.
+- Added live Custom Tracker Settings previews for configured entries, including appearance, glow, text, and entries currently filtered or unavailable.
+- Added shared Custom Tracker display, appearance, glow, text, tooltip, class, and specialization settings with opt-in per-entry overrides, and real bag counts in the entry editor.
+- Split shared entry defaults into their own collapsible section and added item/spell drag-and-drop onto the entry list's + button.
 - Added lossless profile migration for legacy spell, item, and item-spell trackers, including specialization filters and anchor remapping.
 - Added equipment-slot cooldown and fixed-duration spellcast timer sources.
 - Added per-entry ready/active display rules, inactive appearance, glow state, tooltips, and class/specialization filters.

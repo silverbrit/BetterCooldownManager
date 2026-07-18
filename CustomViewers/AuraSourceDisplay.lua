@@ -77,12 +77,13 @@ local function ApplyVisualStyleUnsafe(visual, icon, entry, bar)
     local text = bar.Text or {}
     local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 }
     local colour = text.Colour or { 1, 1, 1 }
+    local style = BCDM:GetCustomTrackerEntrySettings(bar, entry)
 
     visual.icon:ClearAllPoints()
     visual.icon:SetPoint("TOPLEFT", visual.button, "TOPLEFT", border, -border)
     visual.icon:SetPoint("BOTTOMRIGHT", visual.button, "BOTTOMRIGHT", -border, border)
     BCDM:ApplyIconTexCoord(visual.icon, width, height, (cooldownGeneral.IconZoom or 0) * 0.5)
-    SetTextureDesaturated(visual.icon, (entry.VisualMode or "FULL") == "DESATURATE")
+    SetTextureDesaturated(visual.icon, (style.VisualMode or "FULL") == "DESATURATE")
 
     visual.cooldown:ClearAllPoints()
     visual.cooldown:SetPoint("TOPLEFT", visual.button, "TOPLEFT", border, -border)
@@ -97,8 +98,9 @@ local function ApplyVisualStyleUnsafe(visual, icon, entry, bar)
     visual.count:SetPoint(layout[1], visual.button, layout[2], layout[3], layout[4])
     visual.count:SetFont(BCDM.Media.Font, text.FontSize or 12, general.Fonts.FontFlag)
     visual.count:SetTextColor(colour[1], colour[2], colour[3], 1)
+    visual.count:SetAlpha(style.TextEnabled ~= false and 1 or 0)
 
-    Call(visual.button, "SetMouseMotionEnabled", entry.Tooltip ~= false)
+    Call(visual.button, "SetMouseMotionEnabled", style.Tooltip ~= false)
     return true
 end
 

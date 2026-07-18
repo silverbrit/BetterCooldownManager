@@ -1,6 +1,14 @@
 local _, BCDM = ...
 
 local SCHEMA_VERSION = 3
+local DEFAULT_ENTRY_SETTINGS = {
+    DisplayMode = "ALWAYS",
+    VisualMode = "FULL",
+    Alpha = 0.45,
+    Glow = "NONE",
+    TextEnabled = true,
+    Tooltip = true,
+}
 local LEGACY_SPEC_IDS = {
     ["MAGE:ARCANE"] = 62, ["MAGE:FIRE"] = 63, ["MAGE:FROST"] = 64,
     ["PALADIN:HOLY"] = 65, ["PALADIN:PROTECTION"] = 66, ["PALADIN:RETRIBUTION"] = 70,
@@ -317,6 +325,7 @@ local function CopyAppearance(legacy)
     bar.Enabled = legacy.Enabled ~= false
     bar.UseSharedVisibility = legacy.UseSharedVisibility ~= false
     bar.Visibility = Copy(legacy.Visibility or (BCDM.NewVisibilityPolicy and BCDM:NewVisibilityPolicy()))
+    bar.EntrySettings = Copy(legacy.EntrySettings or DEFAULT_ENTRY_SETTINGS)
     bar.EntryOrder = {}
     bar.Entries = {}
     return bar
@@ -384,9 +393,11 @@ local function AddMigratedEntry(store, bar, legacyEntry)
         ID = entryID,
         Enabled = data.isActive ~= false,
         DisplayMode = "ALWAYS",
+        OverrideBarSettings = true,
         VisualMode = "FULL",
         Alpha = 0.45,
         Tooltip = true,
+        TextEnabled = true,
         Glow = "NONE",
         ClassSpecFilters = Copy(data.classSpecFilters),
         FilterClass = data.filterClass,
@@ -481,6 +492,8 @@ function BCDM:AddCustomTrackerBar(name)
         while usedNames["Tracker Bar " .. displayIndex] do displayIndex = displayIndex + 1 end
         name = "Tracker Bar " .. displayIndex
     end
+    local entrySettings = Copy(DEFAULT_ENTRY_SETTINGS)
+    entrySettings.SpecFilters = self:BuildSpecFilters()
     store.Bars[id] = {
         ID = id,
         Name = name,
@@ -496,6 +509,7 @@ function BCDM:AddCustomTrackerBar(name)
         Spacing = 1,
         GrowthDirection = "RIGHT",
         Columns = 0,
+        EntrySettings = entrySettings,
         Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 } },
         EntryOrder = {},
         Entries = {},
@@ -509,19 +523,6 @@ function BCDM:RenameCustomTrackerBar(barID, name)
     if not bar or type(name) ~= "string" or name == "" then return false end
     bar.Name = name
     return true
-end
-
-function BCDM:MoveCustomTrackerBar(barID, direction)
-    local store = self:GetCustomTrackerStore()
-    for index, id in ipairs(store.BarOrder) do
-        if id == barID then
-            local target = index + direction
-            if target < 1 or target > #store.BarOrder then return false end
-            store.BarOrder[index], store.BarOrder[target] = store.BarOrder[target], store.BarOrder[index]
-            return true
-        end
-    end
-    return false
 end
 
 function BCDM:DuplicateCustomTrackerBar(barID)
@@ -581,9 +582,11 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
         ID = entryID,
         Enabled = true,
         DisplayMode = "ALWAYS",
+        OverrideBarSettings = false,
         VisualMode = "FULL",
         Alpha = 0.45,
         Tooltip = true,
+        TextEnabled = true,
         Glow = "NONE",
         SpecFilters = extra and Copy(extra.SpecFilters),
         FilterClass = extra and extra.FilterClass,
@@ -596,6 +599,12 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
     }
     bar.EntryOrder[#bar.EntryOrder + 1] = entryID
     return entryID
+end
+
+function BCDM:GetCustomTrackerEntrySettings(bar, entry)
+    if type(entry) == "table" and entry.OverrideBarSettings == true then return entry end
+    local shared = type(bar) == "table" and bar.EntrySettings
+    return type(shared) == "table" and shared or DEFAULT_ENTRY_SETTINGS
 end
 
 function BCDM:ShouldDisplayCustomTrackerEntry(entry, state)
@@ -613,14 +622,16 @@ function BCDM:ShouldGlowCustomTrackerEntry(entry, state)
     return false
 end
 
-function BCDM:MoveCustomTrackerEntry(barID, entryID, direction)
+function BCDM:ReorderCustomTrackerEntry(barID, entryID, targetIndex)
     local bar = self:GetCustomTrackerStore().Bars[barID]
-    if not bar then return false end
+    if not bar or type(targetIndex) ~= "number" then return false end
+    targetIndex = math.floor(targetIndex)
+    targetIndex = math.max(1, math.min(#bar.EntryOrder, targetIndex))
     for index, id in ipairs(bar.EntryOrder) do
         if id == entryID then
-            local target = index + direction
-            if target < 1 or target > #bar.EntryOrder then return false end
-            bar.EntryOrder[index], bar.EntryOrder[target] = bar.EntryOrder[target], bar.EntryOrder[index]
+            if index == targetIndex then return false end
+            table.remove(bar.EntryOrder, index)
+            table.insert(bar.EntryOrder, targetIndex, entryID)
             return true
         end
     end
