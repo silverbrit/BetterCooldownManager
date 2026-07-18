@@ -55,6 +55,7 @@ function BCDM:SetupEventManager()
             if unit ~= "player" then return end
             LEMO:ApplyChanges()
             BCDM:UpdateBCDM()
+            if BCDM.RefreshSettings then BCDM:RefreshSettings() end
         else
             BCDM:UpdateBCDM()
         end

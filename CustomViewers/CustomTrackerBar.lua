@@ -267,8 +267,7 @@ local function ResolveAnchor(barID, bar)
     local parentName = layout[2]
     local targetID = type(parentName) == "string" and tonumber(parentName:match("^BCDM_CustomTrackerBar_(%d+)$"))
     if targetID and BCDM:WouldCustomTrackerAnchorCycle(barID, targetID) then parentName = "NONE" end
-    local parent = parentName == "NONE" and UIParent or _G[parentName]
-    if not parent then parent = UIParent end
+    local parent = BCDM:ResolveAnchorParent(parentName)
     return layout, parent
 end
 

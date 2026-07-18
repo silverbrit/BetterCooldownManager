@@ -233,8 +233,16 @@ function M.Add(controls, section, row)
     return row
 end
 
-function M.Text(controls, section, text)
-    return M.Add(controls, section, SettingsCanvas.CreateTextRow(section.Content, M.L(text)))
+function M.Text(controls, section, text, options)
+    local row = SettingsCanvas.CreateTextRow(section.Content, M.L(text))
+    if options and type(options.hidden) == "function" then
+        local refresh = row.Refresh
+        function row:Refresh()
+            if refresh then refresh(self) end
+            self:SetShown(not options.hidden())
+        end
+    end
+    return M.Add(controls, section, row)
 end
 
 function M.Subsection(controls, section, text)
@@ -359,8 +367,17 @@ function M.ColorChoices(controls, section, title, getValue, setValue, choicesPro
     return M.Add(controls, section, row)
 end
 
-function M.Buttons(controls, section, buttons)
-    return M.Add(controls, section, SettingsCanvas.CreateButtonRow(section.Content, buttons))
+function M.Buttons(controls, section, buttons, options)
+    local row = SettingsCanvas.CreateButtonRow(section.Content, buttons)
+    if options and type(options.disabled) == "function" then
+        local refresh = row.Refresh
+        function row:Refresh()
+            if refresh then refresh(self) end
+            local enabled = not options.disabled()
+            for _, button in ipairs(self.Buttons or {}) do SettingsCanvas.SetWidgetEnabled(button, enabled) end
+        end
+    end
+    return M.Add(controls, section, row)
 end
 
 function M.Get(rootProvider, path)

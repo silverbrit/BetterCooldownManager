@@ -12,6 +12,12 @@ local function VisibilityDefaults()
     }
 end
 
+local function SharedVisibilityDefaults()
+    local defaults = VisibilityDefaults()
+    defaults.MacroCondition = nil
+    return defaults
+end
+
 local Defaults = {
     global = {
         UseGlobalProfile = false,
@@ -36,7 +42,7 @@ local Defaults = {
         },
     },
     profile = {
-        Visibility = VisibilityDefaults(),
+        Visibility = SharedVisibilityDefaults(),
         General = {
             Fonts = {
                 Font = "Friz Quadrata TT",
@@ -51,9 +57,6 @@ local Defaults = {
             Textures = {
                 Foreground = "Better Blizzard",
                 Background = "Better Blizzard",
-            },
-            Animation = {
-                SmoothBars = false,
             },
             Colours = {
                 PrimaryPower = {
@@ -211,8 +214,6 @@ local Defaults = {
             HeightWithoutSecondary = 20,
             MatchWidthOfAnchor = true,
             ColourMode = "POWER_TYPE",
-            FrequentUpdates = true,
-            Smoothing = "INHERIT",
             ShowSpark = false,
             FillDirection = "RIGHT",
             FrameStrata = "LOW",
@@ -239,7 +240,6 @@ local Defaults = {
             ColourByState = true,
             FrameStrata = "LOW",
             HideTicks = false,
-            Smoothing = "INHERIT",
             ShowSpark = false,
             FillDirection = "RIGHT",
             SwapToPowerBarPosition = false,

@@ -23,7 +23,6 @@ end
 
 local function UpdatePowerValues()
     local PowerBar = BCDM.PowerBar
-    local GeneralDB = BCDM.db.profile.General
     local _, class = UnitClass("player")
     local powerType = UnitPowerType("player")
     if class == "DRUID" then
@@ -48,14 +47,16 @@ local function UpdatePowerValues()
         end
         PowerBar.Status:SetStatusBarColor(FetchPowerBarColour(powerType))
         PowerBar.Status:SetMinMaxValues(0, powerMax)
-        local smoothBars = BCDM:ShouldSmoothBar(BCDM.db.profile.PowerBar,
-            GeneralDB.Animation and GeneralDB.Animation.SmoothBars)
-        if smoothBars and Enum and Enum.StatusBarInterpolation then
-            PowerBar.Status:SetValue(powerCurrent, Enum.StatusBarInterpolation.ExponentialEaseOut)
-        else
-            PowerBar.Status:SetValue(powerCurrent)
-        end
+        PowerBar.Status:SetValue(powerCurrent)
     end
+end
+
+local function RegisterPowerBarEvents(powerBar)
+    powerBar:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
+    powerBar:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+    powerBar:RegisterUnitEvent("UNIT_MAXPOWER", "player")
+    powerBar:RegisterEvent("PLAYER_ENTERING_WORLD")
+    powerBar:RegisterEvent("UPDATE_SHAPESHIFT_COOLDOWN")
 end
 
 local function SetHooks()
@@ -97,11 +98,11 @@ function BCDM:CreatePowerBar()
     PowerBar:SetBackdropColor(PowerBarDB.BackgroundColour[1], PowerBarDB.BackgroundColour[2], PowerBarDB.BackgroundColour[3], PowerBarDB.BackgroundColour[4])
     local hasSecondary = BCDM:GetCurrentSecondaryResource() ~= nil
     PowerBar:SetSize(PowerBarDB.Width, hasSecondary and PowerBarDB.Height or PowerBarDB.HeightWithoutSecondary)
-    PowerBar:SetPoint(PowerBarDB.Layout[1], _G[PowerBarDB.Layout[2]], PowerBarDB.Layout[3], PowerBarDB.Layout[4], PowerBarDB.Layout[5])
+    PowerBar:SetPoint(PowerBarDB.Layout[1], BCDM:ResolveAnchorParent(PowerBarDB.Layout[2]), PowerBarDB.Layout[3], PowerBarDB.Layout[4], PowerBarDB.Layout[5])
     PowerBar:SetFrameStrata(PowerBarDB.FrameStrata or "LOW")
 
     if PowerBarDB.MatchWidthOfAnchor then
-        local anchorFrame = _G[PowerBarDB.Layout[2]]
+        local anchorFrame = BCDM:ResolveAnchorParent(PowerBarDB.Layout[2])
         if anchorFrame then
             C_Timer.After(0.1, function() local anchorWidth = anchorFrame:GetWidth() PowerBar:SetWidth(anchorWidth) end)
         end
@@ -139,11 +140,7 @@ function BCDM:CreatePowerBar()
     BCDM:RegisterOwnedFrameVisibility(PowerBar, function() return BCDM.db.profile.PowerBar end)
 
     if PowerBarDB.Enabled then
-        PowerBar:RegisterEvent("UNIT_POWER_UPDATE")
-        PowerBar:RegisterEvent("UNIT_MAXPOWER")
-        PowerBar:RegisterEvent("PLAYER_ENTERING_WORLD")
-        PowerBar:RegisterEvent("UPDATE_SHAPESHIFT_COOLDOWN")
-        if PowerBarDB.FrequentUpdates then PowerBar:RegisterEvent("UNIT_POWER_FREQUENT") else PowerBar:UnregisterEvent("UNIT_POWER_FREQUENT") end
+        RegisterPowerBarEvents(PowerBar)
         PowerBar:SetScript("OnEvent", UpdatePowerValues)
         NudgePowerBar("BCDM_PowerBar", -0.1, 0)
     else
@@ -169,10 +166,10 @@ function BCDM:UpdatePowerBar()
             PowerBar.Status:SetPoint("TOPLEFT", PowerBar, "TOPLEFT", borderSize, -borderSize)
             PowerBar.Status:SetPoint("BOTTOMRIGHT", PowerBar, "BOTTOMRIGHT", -borderSize, borderSize)
             PowerBar:ClearAllPoints()
-            PowerBar:SetPoint(PowerBarDB.Layout[1], _G[PowerBarDB.Layout[2]], PowerBarDB.Layout[3], PowerBarDB.Layout[4], PowerBarDB.Layout[5])
+            PowerBar:SetPoint(PowerBarDB.Layout[1], BCDM:ResolveAnchorParent(PowerBarDB.Layout[2]), PowerBarDB.Layout[3], PowerBarDB.Layout[4], PowerBarDB.Layout[5])
             PowerBar:SetFrameStrata(PowerBarDB.FrameStrata or "LOW")
             if PowerBarDB.MatchWidthOfAnchor then
-                local anchorFrame = _G[PowerBarDB.Layout[2]]
+                local anchorFrame = BCDM:ResolveAnchorParent(PowerBarDB.Layout[2])
                 if anchorFrame then
                     C_Timer.After(0.1, function() local anchorWidth = anchorFrame:GetWidth() PowerBar:SetWidth(anchorWidth) end)
                 end
@@ -199,11 +196,7 @@ function BCDM:UpdatePowerBar()
             end
             PowerBar.Status:SetMinMaxValues(0, UnitPowerMax("player"))
             PowerBar.Status:SetStatusBarColor(FetchPowerBarColour())
-            PowerBar:RegisterEvent("UNIT_POWER_UPDATE")
-            PowerBar:RegisterEvent("UNIT_MAXPOWER")
-            PowerBar:RegisterEvent("PLAYER_ENTERING_WORLD")
-            PowerBar:RegisterEvent("UPDATE_SHAPESHIFT_COOLDOWN")
-            if PowerBarDB.FrequentUpdates then PowerBar:RegisterEvent("UNIT_POWER_FREQUENT") else PowerBar:UnregisterEvent("UNIT_POWER_FREQUENT") end
+            RegisterPowerBarEvents(PowerBar)
             PowerBar:SetScript("OnEvent", UpdatePowerValues)
             UpdatePowerValues()
             if PowerBarDB.Text.Enabled then PowerBar.Text:Show() else PowerBar.Text:Hide() end
@@ -222,7 +215,7 @@ function BCDM:UpdatePowerBarWidth()
     local PowerBarDB = BCDM.db.profile.PowerBar
     local PowerBar = BCDM.PowerBar
     if PowerBarDB.Enabled and PowerBarDB.MatchWidthOfAnchor then
-        local anchorFrame = _G[PowerBarDB.Layout[2]]
+        local anchorFrame = BCDM:ResolveAnchorParent(PowerBarDB.Layout[2])
         if anchorFrame then
             C_Timer.After(0.5, function() local anchorWidth = anchorFrame:GetWidth() PowerBar:SetWidth(anchorWidth) end)
         end

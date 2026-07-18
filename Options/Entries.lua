@@ -50,7 +50,7 @@ end
 
 local function AnchorValues()
     local values = {}
-    local anchors = BCDM.AnchorParents.CustomTrackers
+    local anchors = BCDM:GetAnchorParents("CustomTrackers")
     if anchors then
         for _, key in ipairs(anchors[2]) do
             values[#values + 1] = { text = anchors[1][key], value = key }

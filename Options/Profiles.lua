@@ -50,8 +50,19 @@ local function CreateProfilesPanel()
 
     local management, managementControls = Canvas.CreateProfileManagementSection(controls.scrollChild, "Profiles", {
         introText = "Switch the active profile, create new ones, copy settings between profiles, and remove unused profiles.",
-        resetDescription = "Reset the current profile to Better Cooldown Manager defaults.",
+        resetDescription = "Reset the current profile back to its default values, in case your configuration is broken, or you simply want to start over.",
         currentProfileText = "Current Profile: |cffffd100Default|r",
+        chooseDescription = "Create a new profile by entering a name in the edit box, or switch to one of the existing profiles.",
+        copyDescription = "Copy the settings from one existing profile into the currently active profile.",
+        deleteDescription = "Delete existing and unused profiles from the database to save space, and cleanup the SavedVariables file.",
+        resetButtonText = "Reset Profile",
+        newLabel = "New",
+        existingLabel = "Existing Profiles",
+        createButtonText = "Create",
+        copyLabel = "Copy From",
+        copyButtonText = "Copy",
+        deleteLabel = "Delete a Profile",
+        deleteButtonText = "Delete",
     })
     controls:RegisterSection(management)
 

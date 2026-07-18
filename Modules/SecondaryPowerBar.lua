@@ -6,14 +6,7 @@ local essenceTicks = {}
 local resizeTimer = nil
 
 local function SetBarValue(bar, value)
-    local GeneralDB = BCDM.db.profile.General
-    local smoothBars = BCDM:ShouldSmoothBar(BCDM.db.profile.SecondaryPowerBar,
-        GeneralDB.Animation and GeneralDB.Animation.SmoothBars)
-    if smoothBars and Enum and Enum.StatusBarInterpolation then
-        bar:SetValue(value, Enum.StatusBarInterpolation.ExponentialEaseOut)
-    else
-        bar:SetValue(value)
-    end
+    bar:SetValue(value)
 end
 
 local function NudgeSecondaryPowerBar(secondaryPowerBar, xOffset, yOffset)
@@ -538,7 +531,7 @@ local function UpdateBarWidth()
 
     if not secondaryPowerBar or not secondaryPowerBarDB.MatchWidthOfAnchor then return end
 
-    local anchorFrame = _G[secondaryPowerBarDB.Layout[2]]
+    local anchorFrame = BCDM:ResolveAnchorParent(secondaryPowerBarDB.Layout[2])
     if not anchorFrame then return end
 
     if resizeTimer then
@@ -653,11 +646,11 @@ function BCDM:CreateSecondaryPowerBar()
     if BCDM:CanSwapSecondaryResourceToPrimary() and secondaryPowerBarDB.SwapToPowerBarPosition then
         if BCDM.PowerBar then BCDM.PowerBar:Hide() end
         secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(powerBarDB.Layout[1], _G[powerBarDB.Layout[2]], powerBarDB.Layout[3], powerBarDB.Layout[4], powerBarDB.Layout[5])
+        secondaryPowerBar:SetPoint(powerBarDB.Layout[1], BCDM:ResolveAnchorParent(powerBarDB.Layout[2]), powerBarDB.Layout[3], powerBarDB.Layout[4], powerBarDB.Layout[5])
         secondaryPowerBar:SetHeight(secondaryPowerBarDB.HeightWithoutPrimary)
     else
         secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(secondaryPowerBarDB.Layout[1], _G[secondaryPowerBarDB.Layout[2]], secondaryPowerBarDB.Layout[3], secondaryPowerBarDB.Layout[4], secondaryPowerBarDB.Layout[5])
+        secondaryPowerBar:SetPoint(secondaryPowerBarDB.Layout[1], BCDM:ResolveAnchorParent(secondaryPowerBarDB.Layout[2]), secondaryPowerBarDB.Layout[3], secondaryPowerBarDB.Layout[4], secondaryPowerBarDB.Layout[5])
         secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
         if powerBarDB.Enabled then BCDM.PowerBar:Show() end
     end
@@ -750,11 +743,11 @@ function BCDM:UpdateSecondaryPowerBar()
     if descriptor.swapToPrimaryEligible and secondaryPowerBarDB.SwapToPowerBarPosition then
         if BCDM.PowerBar then BCDM.PowerBar:Hide() end
         secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(powerBarDB.Layout[1], _G[powerBarDB.Layout[2]], powerBarDB.Layout[3], powerBarDB.Layout[4], powerBarDB.Layout[5])
+        secondaryPowerBar:SetPoint(powerBarDB.Layout[1], BCDM:ResolveAnchorParent(powerBarDB.Layout[2]), powerBarDB.Layout[3], powerBarDB.Layout[4], powerBarDB.Layout[5])
         secondaryPowerBar:SetHeight(secondaryPowerBarDB.HeightWithoutPrimary)
     else
         secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(secondaryPowerBarDB.Layout[1], _G[secondaryPowerBarDB.Layout[2]], secondaryPowerBarDB.Layout[3], secondaryPowerBarDB.Layout[4], secondaryPowerBarDB.Layout[5])
+        secondaryPowerBar:SetPoint(secondaryPowerBarDB.Layout[1], BCDM:ResolveAnchorParent(secondaryPowerBarDB.Layout[2]), secondaryPowerBarDB.Layout[3], secondaryPowerBarDB.Layout[4], secondaryPowerBarDB.Layout[5])
         secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
         if powerBarDB.Enabled then BCDM.PowerBar:Show() end
     end

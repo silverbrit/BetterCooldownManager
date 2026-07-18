@@ -14,6 +14,7 @@ Enum = { PowerType = {
     Maelstrom = 11, Chi = 12, ArcaneCharges = 16, Essence = 19,
 } }
 assert(loadfile(root .. "/Core/Visibility.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Core/Anchors.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/BarBehavior.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/ResourceCatalog.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
@@ -37,8 +38,6 @@ local auraCandidates = BCDM:BuildCustomTrackerAuraCandidateIDs(
 Check(table.concat(auraCandidates, ",") == "100,200,300,400", "aura candidates combine source, override, and explicit IDs")
 Check(#BCDM:BuildCustomTrackerAuraCandidateIDs({ Type = "item", ID = 100 }, 200) == 0,
     "non-spell entries do not receive aura candidates")
-Check(BCDM:ShouldSmoothBar({ Smoothing = "INHERIT" }, true), "bar smoothing can inherit the shared setting")
-Check(not BCDM:ShouldSmoothBar({ Smoothing = "OFF" }, true), "bar smoothing override can disable interpolation")
 Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
 Check(BCDM:FormatResourceText(25, 100, "PERCENT") == "25%", "resource text supports percentages")
 local secretValue = {}
@@ -61,6 +60,36 @@ Check(legacyColours.SecondaryPowerBar.ColourMode == "SPECIALIZATION", "secondary
 Check(legacyColours.CastBar.ColourByClass == nil and legacyColours.PowerBar.ColourByType == nil
     and legacyColours.SecondaryPowerBar.ColourBySpec == nil, "legacy colour fields are removed after migration")
 Check(not BCDM:NormalizeBarColourProfile(legacyColours), "bar colour migration is idempotent")
+
+local removedSettings = {
+    Visibility = { MacroCondition = "[combat] show" },
+    General = { Animation = { SmoothBars = true } },
+    PowerBar = { Smoothing = "ON", FrequentUpdates = false },
+    SecondaryPowerBar = { Smoothing = "OFF", Visibility = { MacroCondition = "[combat] show" } },
+}
+Check(BCDM:NormalizeRemovedSettingsProfile(removedSettings), "removed settings report migration")
+Check(removedSettings.Visibility.MacroCondition == nil, "shared macro condition is removed")
+Check(removedSettings.General.Animation == nil, "empty legacy animation settings are removed")
+Check(removedSettings.PowerBar.Smoothing == nil and removedSettings.PowerBar.FrequentUpdates == nil
+    and removedSettings.SecondaryPowerBar.Smoothing == nil, "legacy bar update controls are removed")
+Check(removedSettings.SecondaryPowerBar.Visibility.MacroCondition ~= nil,
+    "per-bar macro conditions are preserved")
+Check(not BCDM:NormalizeRemovedSettingsProfile(removedSettings), "removed settings migration is idempotent")
+
+local anchorSource = {
+    { PlayerFrame = "Player", TargetFrame = "Target", NONE = "UIParent" },
+    { "PlayerFrame", "TargetFrame", "NONE" },
+}
+local elvAnchors = BCDM:BuildAnchorParents(anchorSource, true, {
+    ElvUF_Player = "ElvUI Player", ElvUF_Target = "ElvUI Target",
+})
+Check(elvAnchors[1].PlayerFrame == nil and elvAnchors[1].TargetFrame == nil,
+    "ElvUI anchor lists omit Blizzard unit frames")
+Check(elvAnchors[1].ElvUF_Player == "ElvUI Player" and elvAnchors[1].ElvUF_Target == "ElvUI Target",
+    "ElvUI unit-frame anchors are added dynamically")
+local blizzardAnchors = BCDM:BuildAnchorParents(anchorSource, false, {})
+Check(blizzardAnchors[1].PlayerFrame == "Player" and blizzardAnchors[1].ElvUF_Player == nil,
+    "Blizzard unit-frame anchors remain without ElvUI")
 
 local implicitLegacyDefaults = { CastBar = {}, PowerBar = {}, SecondaryPowerBar = {} }
 BCDM:NormalizeBarColourProfile(implicitLegacyDefaults)
@@ -209,6 +238,9 @@ Check(not BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEnt
     "numeric specialization filters reject other specs")
 Check(BCDM:DeleteCustomTrackerEntry(newBar, timerEntry), "entry can be deleted")
 Check(BCDM:DeleteCustomTrackerBar(newBar), "bar can be deleted")
+local recycledID = BCDM:AddCustomTrackerBar()
+Check(recycledID > newBar, "recycled tracker names retain monotonic internal IDs")
+Check(store.Bars[recycledID].Name == "Tracker Bar 1", "default tracker names reuse the lowest available number")
 
 if failures > 0 then os.exit(1) end
 print("Custom tracker model tests passed")

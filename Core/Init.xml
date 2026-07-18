@@ -1,5 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlGUIS:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
     <Script file="Globals.lua"/>
+    <Script file="Anchors.lua"/>
     <Script file="Defaults.lua"/>
     <Script file="Visibility.lua"/>
     <Script file="BarBehavior.lua"/>

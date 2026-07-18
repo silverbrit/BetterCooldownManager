@@ -472,9 +472,18 @@ end
 function BCDM:AddCustomTrackerBar(name)
     local store = self:GetCustomTrackerStore()
     local id = AllocateID(store, "NextBarID", store.Bars)
+    if type(name) ~= "string" or name == "" then
+        local usedNames = {}
+        for _, bar in pairs(store.Bars) do
+            if type(bar) == "table" and type(bar.Name) == "string" then usedNames[bar.Name] = true end
+        end
+        local displayIndex = 1
+        while usedNames["Tracker Bar " .. displayIndex] do displayIndex = displayIndex + 1 end
+        name = "Tracker Bar " .. displayIndex
+    end
     store.Bars[id] = {
         ID = id,
-        Name = (type(name) == "string" and name ~= "") and name or ("Tracker Bar " .. id),
+        Name = name,
         Enabled = true,
         UseSharedVisibility = true,
         Visibility = self.NewVisibilityPolicy and self:NewVisibilityPolicy() or nil,

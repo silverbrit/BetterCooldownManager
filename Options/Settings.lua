@@ -78,7 +78,7 @@ local VISIBILITY_MODES = {
     { text = "Out of Combat", value = "OUT_OF_COMBAT" },
 }
 
-function BCDM:AddVisibilityPolicySettings(panel, controls, title, rootProvider, policyPath, useSharedPath, changed)
+function BCDM:AddVisibilityPolicySettings(panel, controls, title, rootProvider, policyPath, useSharedPath, changed, disabled)
     local section = U.Section(controls, title, true)
     local function Refresh(value)
         if changed then changed(value) end
@@ -87,10 +87,13 @@ function BCDM:AddVisibilityPolicySettings(panel, controls, title, rootProvider, 
     local hidden
     if useSharedPath then
         local getShared, setShared = U.Access(rootProvider, useSharedPath, Refresh)
-        U.Checkbox(controls, section, "Use Shared Visibility", getShared, setShared)
+        U.Checkbox(controls, section, "Use Shared Visibility", getShared, setShared, { disabled = disabled })
         hidden = function() return getShared() ~= false end
     end
-    local function Options() return hidden and { hidden = hidden } or nil end
+    local function Options()
+        if not hidden and not disabled then return nil end
+        return { hidden = hidden, disabled = disabled }
+    end
     local function ChildPath(...)
         local path = {}
         for index, key in ipairs(policyPath) do path[index] = key end
@@ -111,23 +114,27 @@ function BCDM:AddVisibilityPolicySettings(panel, controls, title, rootProvider, 
         U.Checkbox(controls, section, toggle[2], get, set, Options())
     end
 
-    local Canvas = U.Canvas
-    local row = Canvas.CreateBaseRow(section.Content, 54)
-    U.Add(controls, section, row)
-    local label = Canvas.CreateLabel(row, "Macro Condition", "GameFontHighlight")
-    label:SetPoint("TOPLEFT", 0, 0)
-    local input = Canvas.CreateInput(row)
-    input:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -5)
-    input:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-    local macroPath = ChildPath("MacroCondition")
-    input:SetScript("OnEnterPressed", function(self)
-        if rootProvider() then U.Set(rootProvider, macroPath, self:GetText()) Refresh() end
-        self:ClearFocus()
-    end)
-    function row:Refresh()
-        local isHidden = hidden and hidden()
-        self:SetShown(not isHidden)
-        if not isHidden and not input:HasFocus() then input:SetText(U.Get(rootProvider, macroPath) or "") end
+    if useSharedPath then
+        local Canvas = U.Canvas
+        local row = Canvas.CreateBaseRow(section.Content, 54)
+        U.Add(controls, section, row)
+        local label = Canvas.CreateLabel(row, "Macro Condition", "GameFontHighlight")
+        label:SetPoint("TOPLEFT", 0, 0)
+        local input = Canvas.CreateInput(row)
+        input:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -5)
+        input:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        local macroPath = ChildPath("MacroCondition")
+        input:SetScript("OnEnterPressed", function(self)
+            if not (disabled and disabled()) and rootProvider() then U.Set(rootProvider, macroPath, self:GetText()) Refresh() end
+            self:ClearFocus()
+        end)
+        function row:Refresh()
+            local isHidden = hidden and hidden()
+            self:SetShown(not isHidden)
+            Canvas.SetWidgetEnabled(input, not (disabled and disabled()))
+            Canvas.SetFontStringEnabled(label, not (disabled and disabled()))
+            if not isHidden and not input:HasFocus() then input:SetText(U.Get(rootProvider, macroPath) or "") end
+        end
     end
 end
 
@@ -192,8 +199,6 @@ local function CreateGeneralPanel()
     local barAppearance = U.Section(controls, "Shared Bar Appearance", true)
     U.Text(controls, barAppearance,
         "These settings are shared by the power bar, secondary power bar, and cast bar.")
-    PathCheckbox(controls, barAppearance, "Smooth Bar Animation", ProfileRoot,
-        { "General", "Animation", "SmoothBars" }, RefreshAll)
     PathDropdown(controls, barAppearance, "Foreground Texture", ProfileRoot,
         { "General", "Textures", "Foreground" }, RefreshAll, U.MediaValues("statusbar"), {
             maxHeight = 420, forceSingleColumn = true,
@@ -310,18 +315,18 @@ local function CreateCooldownViewersPanel()
         { hidden = GlowHidden("Pixel") })
     for _, entry in ipairs({
         { "Lines", 1, 20, 1 }, { "Frequency", -2, 2, 0.05 }, { "Length", 1, 20, 1 },
-        { "Thickness", 1, 10, 1 }, { "XOffset", -20, 20, 1 }, { "YOffset", -20, 20, 1 },
+        { "Thickness", 1, 10, 1 }, { "XOffset", -20, 20, 1, "X Offset" }, { "YOffset", -20, 20, 1, "Y Offset" },
     }) do
-        PathSlider(controls, glow, "Pixel " .. entry[1], ProfileRoot,
+        PathSlider(controls, glow, "Pixel " .. (entry[5] or entry[1]), ProfileRoot,
             { "CooldownManager", "General", "Glow", "Pixel", entry[1] }, function() BCDM:RefreshCustomGlows() end,
             { min = entry[2], max = entry[3], step = entry[4], hidden = GlowHidden("Pixel") })
     end
     AddGlowColor("Autocast")
     for _, entry in ipairs({
         { "Particles", 1, 30, 1 }, { "Frequency", -2, 2, 0.05 }, { "Scale", 0.25, 3, 0.05 },
-        { "XOffset", -20, 20, 1 }, { "YOffset", -20, 20, 1 },
+        { "XOffset", -20, 20, 1, "X Offset" }, { "YOffset", -20, 20, 1, "Y Offset" },
     }) do
-        PathSlider(controls, glow, "Autocast " .. entry[1], ProfileRoot,
+        PathSlider(controls, glow, "Autocast " .. (entry[5] or entry[1]), ProfileRoot,
             { "CooldownManager", "General", "Glow", "Autocast", entry[1] }, function() BCDM:RefreshCustomGlows() end,
             { min = entry[2], max = entry[3], step = entry[4], hidden = GlowHidden("Autocast") })
     end
@@ -329,8 +334,8 @@ local function CreateCooldownViewersPanel()
     PathCheckbox(controls, glow, "Start Proc Animation", ProfileRoot,
         { "CooldownManager", "General", "Glow", "Proc", "StartAnim" }, function() BCDM:RefreshCustomGlows() end,
         { hidden = GlowHidden("Proc") })
-    for _, entry in ipairs({ { "Duration", 0.1, 5, 0.1 }, { "XOffset", -20, 20, 1 }, { "YOffset", -20, 20, 1 } }) do
-        PathSlider(controls, glow, "Proc " .. entry[1], ProfileRoot,
+    for _, entry in ipairs({ { "Duration", 0.1, 5, 0.1 }, { "XOffset", -20, 20, 1, "X Offset" }, { "YOffset", -20, 20, 1, "Y Offset" } }) do
+        PathSlider(controls, glow, "Proc " .. (entry[5] or entry[1]), ProfileRoot,
             { "CooldownManager", "General", "Glow", "Proc", entry[1] }, function() BCDM:RefreshCustomGlows() end,
             { min = entry[2], max = entry[3], step = entry[4], hidden = GlowHidden("Proc") })
     end
@@ -344,7 +349,7 @@ end
 
 local function AnchorValues(viewerType)
     return function()
-        local anchors = BCDM.AnchorParents[viewerType]
+        local anchors = BCDM:GetAnchorParents(viewerType)
         return anchors and U.Values(anchors[1], anchors[2]) or {}
     end
 end
@@ -356,19 +361,7 @@ local function CreateViewerPanel(viewerType)
     local hasAnchorParent = viewerType ~= "Essential"
     local supportsWrap = false
 
-    if viewerType == "Essential" or viewerType == "Utility" then
-        local behavior = U.Section(controls, "Viewer Behavior", true)
-        PathCheckbox(controls, behavior, "Center Second Row Horizontally", ProfileRoot,
-            { "CooldownManager", viewerType, "CenterHorizontally" }, function() BCDM:PromptReload() end, {
-                description = L("A UI reload is required when changing this setting."),
-            })
-    elseif viewerType == "Buffs" then
-        local behavior = U.Section(controls, "Viewer Behavior", true)
-        PathCheckbox(controls, behavior, "Center Buffs", ProfileRoot,
-            { "CooldownManager", "Buffs", "CenterBuffs" }, function() BCDM:PromptReload() end, {
-                description = L("Centers buffs horizontally or vertically. A UI reload is required."),
-            })
-    elseif viewerType == "Trinket" then
+    if viewerType == "Trinket" then
         local behavior = U.Section(controls, "Trinket Viewer", true)
         PathCheckbox(controls, behavior, "Enable Trinket Viewer", ProfileRoot,
             { "CooldownManager", "Trinket", "Enabled" }, ViewerChanged)
@@ -378,6 +371,17 @@ local function CreateViewerPanel(viewerType)
     end
 
     local layout = U.Section(controls, "Layout & Positioning", true)
+    if viewerType == "Essential" or viewerType == "Utility" then
+        PathCheckbox(controls, layout, "Center Second Row Horizontally", ProfileRoot,
+            { "CooldownManager", viewerType, "CenterHorizontally" }, function() BCDM:PromptReload() end, {
+                description = L("A UI reload is required when changing this setting."),
+            })
+    elseif viewerType == "Buffs" then
+        PathCheckbox(controls, layout, "Center Buffs", ProfileRoot,
+            { "CooldownManager", "Buffs", "CenterBuffs" }, function() BCDM:PromptReload() end, {
+                description = L("Centers buffs horizontally or vertically. A UI reload is required."),
+            })
+    end
     PathDropdown(controls, layout, "Anchor From", ProfileRoot,
         { "CooldownManager", viewerType, "Layout", 1 }, ViewerChanged, function() return ANCHOR_POINTS end)
     if hasAnchorParent then
@@ -491,7 +495,7 @@ local function AddPrimaryPowerColours(panel, controls)
     })
 end
 
-local function AddSecondaryPowerColours(panel, controls)
+local function AddSecondaryPowerColours(panel, controls, disabled)
     local section = U.Section(controls, "Secondary Resource Colours", true)
     U.Text(controls, section, "Used by Power Type and Specialization modes, plus contextual resource-state colours.")
     local names = {
@@ -505,15 +509,16 @@ local function AddSecondaryPowerColours(panel, controls)
     }
     for _, entry in ipairs(names) do
         PathColor(controls, section, entry[2], ProfileRoot,
-            { "General", "Colours", "SecondaryPower", entry[1] }, RefreshAll, true)
+            { "General", "Colours", "SecondaryPower", entry[1] }, RefreshAll, true, { disabled = disabled })
     end
     for _, runeType in ipairs({ "FROST", "UNHOLY", "BLOOD" }) do
-        PathColor(controls, section, runeType .. " Rune", ProfileRoot,
-            { "General", "Colours", "SecondaryPower", "RUNES", runeType }, RefreshAll, true)
+        local label = runeType:sub(1, 1) .. runeType:sub(2):lower()
+        PathColor(controls, section, label .. " Rune", ProfileRoot,
+            { "General", "Colours", "SecondaryPower", "RUNES", runeType }, RefreshAll, true, { disabled = disabled })
     end
     for _, state in ipairs({ "LIGHT", "MODERATE", "HEAVY" }) do
         PathColor(controls, section, state .. " Stagger", ProfileRoot,
-            { "General", "Colours", "SecondaryPower", "STAGGER_COLOURS", state }, RefreshAll, true)
+            { "General", "Colours", "SecondaryPower", "STAGGER_COLOURS", state }, RefreshAll, true, { disabled = disabled })
     end
     U.Buttons(controls, section, {
         { text = L("Reset Resource Colours"), width = 210, click = function()
@@ -522,7 +527,7 @@ local function AddSecondaryPowerColours(panel, controls)
             RefreshAll()
             panel:Refresh()
         end },
-    })
+    }, { disabled = disabled })
 end
 
 local function CreateBarPanel(barType)
@@ -530,7 +535,10 @@ local function CreateBarPanel(barType)
     local update = barType == "PowerBar" and function() BCDM:UpdatePowerBar() end
         or barType == "SecondaryPowerBar" and function() BCDM:UpdateSecondaryPowerBar() end
         or function() BCDM:UpdateCastBar() end
-    local function EnabledDisabled() return BCDM.db.profile[barType].Enabled ~= true end
+    local function UnsupportedSecondary()
+        return barType == "SecondaryPowerBar" and BCDM:GetCurrentSecondaryResource() == nil
+    end
+    local function EnabledDisabled() return UnsupportedSecondary() or BCDM.db.profile[barType].Enabled ~= true end
     local function ClassColour()
         local colour = RAID_CLASS_COLORS[select(2, UnitClass("player"))]
         return colour and { colour.r, colour.g, colour.b, 1 } or { 1, 1, 1, 1 }
@@ -580,21 +588,19 @@ local function CreateBarPanel(barType)
     end
 
     local behavior = U.Section(controls, "Toggles & Colours", true)
+    if barType == "SecondaryPowerBar" then
+        U.Text(controls, behavior, "No supported secondary resource for this specialization.", {
+            hidden = function() return not UnsupportedSecondary() end,
+        })
+    end
     PathCheckbox(controls, behavior, "Enable " .. (barType == "CastBar" and "Cast Bar" or barType == "PowerBar" and "Power Bar" or "Secondary Power Bar"),
-        ProfileRoot, { barType, "Enabled" }, barType == "CastBar" and function() BCDM:PromptReload() end or update)
+        ProfileRoot, { barType, "Enabled" }, barType == "CastBar" and function() BCDM:PromptReload() end or update,
+        { disabled = UnsupportedSecondary })
     local getColourMode, setColourMode = U.Access(ProfileRoot, { barType, "ColourMode" }, update)
     U.ColorChoices(controls, behavior, "Fill Colour", getColourMode, setColourMode, ColourModeChoices, {
             disabled = EnabledDisabled,
         })
     if barType ~= "CastBar" then
-        PathDropdown(controls, behavior, "Smoothing", ProfileRoot,
-            { barType, "Smoothing" }, update, function()
-                return {
-                    { text = "Use Shared Setting", value = "INHERIT" },
-                    { text = "On", value = "ON" },
-                    { text = "Off", value = "OFF" },
-                }
-            end, { disabled = EnabledDisabled })
         PathCheckbox(controls, behavior, "Show Spark", ProfileRoot,
             { barType, "ShowSpark" }, update, { disabled = EnabledDisabled })
     end
@@ -604,10 +610,7 @@ local function CreateBarPanel(barType)
         end, { disabled = EnabledDisabled })
     PathCheckbox(controls, behavior, "Match Width Of Anchor", ProfileRoot,
         { barType, "MatchWidthOfAnchor" }, update, { disabled = EnabledDisabled })
-    if barType == "PowerBar" then
-        PathCheckbox(controls, behavior, "Frequent Updates", ProfileRoot,
-            { "PowerBar", "FrequentUpdates" }, update, { disabled = EnabledDisabled })
-    elseif barType == "SecondaryPowerBar" then
+    if barType == "SecondaryPowerBar" then
         PathCheckbox(controls, behavior, "Hide Ticks", ProfileRoot,
             { barType, "HideTicks" }, update, { disabled = EnabledDisabled })
         if BCDM.IS_MONK then
@@ -652,12 +655,12 @@ local function CreateBarPanel(barType)
     end
 
     BCDM:AddVisibilityPolicySettings(panel, controls, "Visibility", ProfileRoot,
-        { barType, "Visibility" }, { barType, "UseSharedVisibility" }, update)
+        { barType, "Visibility" }, { barType, "UseSharedVisibility" }, update, UnsupportedSecondary)
 
     if barType == "PowerBar" then
         AddPrimaryPowerColours(panel, controls)
     elseif barType == "SecondaryPowerBar" then
-        AddSecondaryPowerColours(panel, controls)
+        AddSecondaryPowerColours(panel, controls, UnsupportedSecondary)
     end
 
     local layout = U.Section(controls, "Layout & Positioning", true)

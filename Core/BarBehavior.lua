@@ -59,7 +59,43 @@ end
 function BCDM:NormalizeImportedProfile(profile)
     if type(profile) ~= "table" then return false end
     local changed = self:NormalizeBarColourProfile(profile)
+    if self:NormalizeRemovedSettingsProfile(profile) then changed = true end
     if self:MigrateCustomTrackerProfile(profile) then changed = true end
+    return changed
+end
+
+function BCDM:NormalizeRemovedSettingsProfile(profile)
+    if type(profile) ~= "table" then return false end
+    local changed = false
+    if type(profile.Visibility) == "table" and profile.Visibility.MacroCondition ~= nil then
+        profile.Visibility.MacroCondition = nil
+        changed = true
+    end
+    if type(profile.General) == "table" and type(profile.General.Animation) == "table" then
+        if profile.General.Animation.SmoothBars ~= nil then changed = true end
+        profile.General.Animation.SmoothBars = nil
+        if next(profile.General.Animation) == nil then profile.General.Animation = nil end
+    end
+    for _, barType in ipairs({ "PowerBar", "SecondaryPowerBar" }) do
+        local settings = profile[barType]
+        if type(settings) == "table" then
+            if settings.Smoothing ~= nil then settings.Smoothing = nil changed = true end
+            if barType == "PowerBar" and settings.FrequentUpdates ~= nil then
+                settings.FrequentUpdates = nil
+                changed = true
+            end
+        end
+    end
+    return changed
+end
+
+function BCDM:NormalizeRemovedSettingsProfiles(db)
+    local profiles = db and db.sv and db.sv.profiles
+    if type(profiles) ~= "table" then return false end
+    local changed = false
+    for _, profile in pairs(profiles) do
+        if self:NormalizeRemovedSettingsProfile(profile) then changed = true end
+    end
     return changed
 end
 
@@ -100,13 +136,6 @@ function BCDM:ResolveBarFillColour(barType, settings, context)
     r, g, b, a = ColourComponents(settings.ForegroundColour)
     if r ~= nil then return r, g, b, a end
     return 1, 1, 1, 1
-end
-
-function BCDM:ShouldSmoothBar(barSettings, sharedSmooth)
-    local mode = barSettings and barSettings.Smoothing or "INHERIT"
-    if mode == "ON" then return true end
-    if mode == "OFF" then return false end
-    return sharedSmooth == true
 end
 
 function BCDM:FormatResourceText(current, maximum, mode)

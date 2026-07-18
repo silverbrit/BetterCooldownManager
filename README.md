@@ -19,8 +19,8 @@
 - Track spells, items, equipment slots, and fixed-duration cast timers together.
 - Custom spells use Retail 12.1 AuraContainers for active player and target auras, with normal cooldowns underneath as the automatic fallback.
 - Per-entry ready/active visibility, inactive appearance, glow state, tooltip, class, and specialization behavior.
-- Shared visibility rules with per-bar overrides for combat, instance type, mounted/skyriding, dead, vehicle, resting, and macro-condition states.
-- Resource text modes, per-bar smoothing overrides, and optional power-bar sparks.
+- Shared visibility rules for combat, instance type, mounted/skyriding, dead, vehicle, and resting states, with per-bar overrides and optional macro conditions.
+- Resource text modes, responsive power updates, and optional power-bar sparks.
 - Class, interruptibility, or custom cast-colour modes plus configurable empowered-stage pips and Settings previews.
 - Custom Trinket Bar: This bar will automatically create trackers for equipped & usable trinkets.
 - API for AddOns to add anchors to Utility, Buff Icons, Custom Trackers, and Trinket Bars.

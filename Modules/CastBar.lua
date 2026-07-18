@@ -1,13 +1,7 @@
 local _, BCDM = ...
 
 local function SetBarValue(bar, value)
-    local GeneralDB = BCDM.db.profile.General
-    local smoothBars = GeneralDB.Animation and GeneralDB.Animation.SmoothBars
-    if smoothBars and Enum and Enum.StatusBarInterpolation then
-        bar:SetValue(value, Enum.StatusBarInterpolation.ExponentialEaseOut)
-    else
-        bar:SetValue(value)
-    end
+    bar:SetValue(value)
 end
 
 local function GetDisplayCastText(text, maxChars)
@@ -182,11 +176,11 @@ function BCDM:CreateCastBar()
     end
     CastBar:SetBackdropColor(CastBarDB.BackgroundColour[1], CastBarDB.BackgroundColour[2], CastBarDB.BackgroundColour[3], CastBarDB.BackgroundColour[4])
     CastBar:SetSize(CastBarDB.Width, CastBarDB.Height)
-    CastBar:SetPoint(CastBarDB.Layout[1], _G[CastBarDB.Layout[2]], CastBarDB.Layout[3], CastBarDB.Layout[4], CastBarDB.Layout[5])
+    CastBar:SetPoint(CastBarDB.Layout[1], BCDM:ResolveAnchorParent(CastBarDB.Layout[2]), CastBarDB.Layout[3], CastBarDB.Layout[4], CastBarDB.Layout[5])
     CastBar:SetFrameStrata(CastBarDB.FrameStrata or "LOW")
 
     if CastBarDB.MatchWidthOfAnchor then
-        local anchorFrame = _G[CastBarDB.Layout[2]]
+        local anchorFrame = BCDM:ResolveAnchorParent(CastBarDB.Layout[2])
         if anchorFrame then
             C_Timer.After(0.1, function() local anchorWidth = anchorFrame:GetWidth() CastBar:SetWidth(anchorWidth) end)
         end
@@ -281,7 +275,7 @@ function BCDM:UpdateCastBar()
     BCDM.CastBar:SetBackdropColor(CastBarDB.BackgroundColour[1], CastBarDB.BackgroundColour[2], CastBarDB.BackgroundColour[3], CastBarDB.BackgroundColour[4])
     BCDM.CastBar:SetSize(CastBarDB.Width, CastBarDB.Height)
     BCDM.CastBar:ClearAllPoints()
-    BCDM.CastBar:SetPoint(CastBarDB.Layout[1], _G[CastBarDB.Layout[2]], CastBarDB.Layout[3], CastBarDB.Layout[4], CastBarDB.Layout[5])
+    BCDM.CastBar:SetPoint(CastBarDB.Layout[1], BCDM:ResolveAnchorParent(CastBarDB.Layout[2]), CastBarDB.Layout[3], CastBarDB.Layout[4], CastBarDB.Layout[5])
     BCDM.CastBar:SetFrameStrata(CastBarDB.FrameStrata or "LOW")
     CastBar:SetBackdrop(BCDM.BACKDROP)
     if borderSize > 0 then
@@ -296,7 +290,7 @@ function BCDM:UpdateCastBar()
     BCDM:ApplyStatusBarDirection(BCDM.CastBar.Status, CastBarDB.FillDirection)
 
     if CastBarDB.MatchWidthOfAnchor then
-        local anchorFrame = _G[CastBarDB.Layout[2]]
+        local anchorFrame = BCDM:ResolveAnchorParent(CastBarDB.Layout[2])
         if anchorFrame then
             C_Timer.After(0.1, function() local anchorWidth = anchorFrame:GetWidth() CastBar:SetWidth(anchorWidth) end)
         end
@@ -416,7 +410,7 @@ function BCDM:UpdateCastBarWidth()
     local CastBarDB = BCDM.db.profile.CastBar
     local CastBar = BCDM.CastBar
     if CastBarDB.Enabled and CastBarDB.MatchWidthOfAnchor then
-        local anchorFrame = _G[CastBarDB.Layout[2]]
+        local anchorFrame = BCDM:ResolveAnchorParent(CastBarDB.Layout[2])
         if anchorFrame then
             C_Timer.After(0.5, function() local anchorWidth = anchorFrame:GetWidth() CastBar:SetWidth(anchorWidth) end)
         end

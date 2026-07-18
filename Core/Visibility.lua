@@ -59,15 +59,15 @@ end
 
 function BCDM:GetOwnedFrameVisibilityPolicy(config)
     if type(config) ~= "table" or config.UseSharedVisibility ~= false then
-        return self.db and self.db.profile and self.db.profile.Visibility
+        return self.db and self.db.profile and self.db.profile.Visibility, true
     end
-    return config.Visibility
+    return config.Visibility, false
 end
 
 function BCDM:ShouldShowOwnedFrame(config)
-    local policy = self:GetOwnedFrameVisibilityPolicy(config)
+    local policy, isShared = self:GetOwnedFrameVisibilityPolicy(config)
     local macroResult
-    if policy and type(policy.MacroCondition) == "string" and policy.MacroCondition ~= ""
+    if not isShared and policy and type(policy.MacroCondition) == "string" and policy.MacroCondition ~= ""
         and type(SecureCmdOptionParse) == "function" then
         local ok, result = pcall(SecureCmdOptionParse, policy.MacroCondition)
         if ok then macroResult = result or false end
