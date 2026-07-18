@@ -194,7 +194,8 @@ end
 local function PlayerMatchesFilters(entry)
     local classToken = select(2, UnitClass("player"))
     local specIndex = GetSpecialization()
-    local specID, specName = specIndex and GetSpecializationInfo(specIndex)
+    local specID, specName
+    if specIndex then specID, specName = GetSpecializationInfo(specIndex) end
     return BCDM:EntryMatchesSpecialization(entry, specID, classToken, specName)
 end
 

@@ -242,7 +242,7 @@ function BCDM:RefreshCustomTrackerAuraUnit(unit)
     end
 end
 
-local function ApplyTrinketCountStyle(state, settings)
+local function ApplyTrinketCountStyle(state, settings, entrySettings)
     local text = settings.Text or {}
     local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3 }
     local colour = text.Colour or { 1, 1, 1 }
@@ -251,6 +251,7 @@ local function ApplyTrinketCountStyle(state, settings)
     state.count:SetPoint(layout[1], state.button, layout[2], layout[3], layout[4])
     state.count:SetFont(BCDM.Media.Font, text.FontSize or 15, fonts.FontFlag)
     state.count:SetTextColor(colour[1], colour[2], colour[3], 1)
+    state.count:SetAlpha((not entrySettings or entrySettings.TextEnabled ~= false) and 1 or 0)
     if fonts.Shadow.Enabled then
         state.count:SetShadowColor(unpack(fonts.Shadow.Colour))
         state.count:SetShadowOffset(fonts.Shadow.OffsetX, fonts.Shadow.OffsetY)
@@ -271,7 +272,7 @@ local function BuildTrinketCandidateFilters(spellIDs)
     return { includeSpellIDs = includeSpellIDs }, table.concat(signatureParts, ","), #signatureParts > 0
 end
 
-local function CreateTrinketCountState(icon, candidateFilters, signature, settings)
+local function CreateTrinketCountState(icon, candidateFilters, signature, settings, entrySettings)
     local layer = CreateFrame("Frame", nil, icon)
     layer:SetAllPoints(icon)
     layer:SetFrameLevel((icon:GetFrameLevel() or 1) + 10)
@@ -293,7 +294,7 @@ local function CreateTrinketCountState(icon, candidateFilters, signature, settin
         initializeFrame = InitializeFrame,
     })
     if not ok or not button or not state.count or not Call(container, "SetEnabled", true) then return end
-    ApplyTrinketCountStyle(state, settings)
+    ApplyTrinketCountStyle(state, settings, entrySettings)
     layer:Show()
     return state
 end
@@ -303,7 +304,7 @@ function BCDM:HideTrinketAuraCountDisplay(icon)
     if state then state.layer:Hide() end
 end
 
-function BCDM:EnsureTrinketAuraCountDisplay(icon, spellIDs, settings)
+function BCDM:EnsureTrinketAuraCountDisplay(icon, spellIDs, settings, entrySettings)
     local candidateFilters, signature, hasCandidates = BuildTrinketCandidateFilters(spellIDs)
     if not icon or not hasCandidates then
         self:HideTrinketAuraCountDisplay(icon)
@@ -324,7 +325,7 @@ function BCDM:EnsureTrinketAuraCountDisplay(icon, spellIDs, settings)
             end
             state.signature = signature
         end
-        ApplyTrinketCountStyle(state, settings)
+        ApplyTrinketCountStyle(state, settings, entrySettings)
         state.layer:Show()
         return true
     end
@@ -333,7 +334,7 @@ function BCDM:EnsureTrinketAuraCountDisplay(icon, spellIDs, settings)
         Runtime.PendingTrinketPreparation = true
         return false
     end
-    local ok, created = pcall(CreateTrinketCountState, icon, candidateFilters, signature, settings)
+    local ok, created = pcall(CreateTrinketCountState, icon, candidateFilters, signature, settings, entrySettings)
     if not ok or not created then return false end
     Runtime.TrinketStates[icon] = created
     return true

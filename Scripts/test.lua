@@ -25,6 +25,13 @@ Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == false,
     "trinket viewer includes passive equipment by default")
 Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,
     "trinket aura stacks have configurable text defaults")
+Check(defaults.profile.CooldownManager.Trinket.EntrySettings.DisplayMode == "ALWAYS",
+    "trinket slots share entry behavior by default")
+Check(defaults.profile.CooldownManager.Trinket.Slots[13].OverrideBarSettings == false
+    and defaults.profile.CooldownManager.Trinket.Slots[14].OverrideBarSettings == false,
+    "both trinket slots use shared settings by default")
+Check(table.concat(defaults.profile.CooldownManager.Trinket.SlotOrder, ",") == "13,14",
+    "trinket slots have a stable default order")
 
 local visibility = BCDM:NewVisibilityPolicy()
 Check(BCDM:EvaluateVisibilityState(visibility, { Combat = false, Instance = "OpenWorld" }), "default visibility allows open world")

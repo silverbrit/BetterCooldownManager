@@ -22,7 +22,7 @@
 - Shared visibility rules for combat, instance type, mounted/skyriding, dead, vehicle, and resting states, with per-bar overrides.
 - Resource text modes, responsive power updates, and optional power-bar sparks.
 - Class, interruptibility, or custom cast-colour modes plus configurable empowered-stage pips and Settings previews.
-- Trinket Viewer: automatically tracks equipped trinkets, can be limited to on-use items, and displays active-aura stacks exposed by the 12.1 equipment catalog.
+- Trinket Viewer: automatically tracks equipped trinkets with shared or per-slot display, appearance, glow, text, tooltip, and specialization behavior.
 - API for AddOns to add anchors to Utility, Tracked Buffs, Custom Trackers, and Trinket Bars.
 
 ## Libraries

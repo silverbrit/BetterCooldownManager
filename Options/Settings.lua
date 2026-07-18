@@ -335,6 +335,10 @@ end
 local function CreateViewerPanel(viewerType)
     local panel, controls = U.NewPanel()
     local RefreshViewerHighlight
+    local function TrinketViewerDisabled()
+        return viewerType == "Trinket"
+            and BCDM.db.profile.CooldownManager.Trinket.Enabled ~= true
+    end
     local function ViewerChanged()
         if viewerType == "Trinket" then BCDM:UpdateTrinketBar()
         else BCDM:UpdateCooldownViewer(viewerType) end
@@ -345,13 +349,18 @@ local function CreateViewerPanel(viewerType)
     local supportsWrap = false
 
     if viewerType == "Trinket" then
-        local behavior = U.Section(controls, "Trinket Viewer", true)
-        PathCheckbox(controls, behavior, "Enable Trinket Viewer", ProfileRoot,
+        local trinkets = U.Section(controls, "Trinkets", true)
+        PathCheckbox(controls, trinkets, "Enable Trinket Viewer", ProfileRoot,
             { "CooldownManager", "Trinket", "Enabled" }, ViewerChanged)
-        PathCheckbox(controls, behavior, "Display On-Use Only", ProfileRoot,
+        PathCheckbox(controls, trinkets, "Display On-Use Only", ProfileRoot,
             { "CooldownManager", "Trinket", "DisplayOnUseOnly" }, ViewerChanged, {
                 description = L("Hide equipped trinkets that do not have an on-use spell."),
+                disabled = TrinketViewerDisabled,
             })
+        local behavior = U.Section(controls, "Trinket Viewer", true)
+        if type(BCDM.AddTrinketEntrySettings) == "function" then
+            BCDM:AddTrinketEntrySettings(panel, controls, behavior, ViewerChanged)
+        end
         BCDM:AddVisibilityPolicySettings(panel, controls, "Visibility", ProfileRoot,
             { "CooldownManager", "Trinket", "Visibility" },
             { "CooldownManager", "Trinket", "UseSharedVisibility" }, ViewerChanged)
@@ -443,6 +452,27 @@ local function CreateViewerPanel(viewerType)
         BCDM:AddViewerEntrySettings(panel, controls, viewerType)
     end
 
+    if viewerType == "Trinket" then
+        -- Keep the master section interactive while visually and functionally
+        -- disabling every viewer-specific section beneath it.
+        for index = 2, #controls.sections do
+            local section = controls.sections[index]
+            local blocker = CreateFrame("Button", nil, section)
+            blocker:SetAllPoints(section)
+            blocker:SetFrameLevel(section:GetFrameLevel() + 100)
+            blocker:EnableMouse(true)
+            blocker:Hide()
+
+            local refresher = CreateFrame("Frame", nil, section)
+            function refresher:Refresh()
+                local disabled = TrinketViewerDisabled()
+                section:SetAlpha(disabled and 0.45 or 1)
+                blocker:SetShown(disabled)
+            end
+            controls.rows[#controls.rows + 1] = refresher
+        end
+    end
+
     local overlayName = BCDM.DBViewerToCooldownManagerViewer[viewerType]
     local overlayKey = overlayName and (overlayName .. "Overlay") or "TrinketViewerOverlay"
     RefreshViewerHighlight = function()
@@ -451,6 +481,14 @@ local function CreateViewerPanel(viewerType)
             local target = BCDM.TrinketBarContainer
             local settings = BCDM.db.profile.CooldownManager.Trinket
             if not settings.Enabled then
+                BCDM:HideSettingsHighlight(overlayKey)
+                return
+            end
+            local hasVisibleIcon = false
+            for _, icon in pairs(BCDM.TrinketBarIcons or {}) do
+                if icon and icon:IsShown() then hasVisibleIcon = true break end
+            end
+            if not hasVisibleIcon then
                 BCDM:HideSettingsHighlight(overlayKey)
                 return
             end
@@ -465,10 +503,17 @@ local function CreateViewerPanel(viewerType)
     end
     panel.RefreshSettingsHighlight = RefreshViewerHighlight
     panel:HookScript("OnShow", function()
-        if viewerType == "Trinket" then BCDM:UpdateTrinketBar() end
+        if viewerType == "Trinket" then
+            BCDM.TrinketSettingsPreview = true
+            BCDM:UpdateTrinketBar()
+        end
         RefreshViewerHighlight()
     end)
     panel:HookScript("OnHide", function()
+        if viewerType == "Trinket" then
+            BCDM.TrinketSettingsPreview = nil
+            BCDM:UpdateTrinketBar()
+        end
         BCDM:HideSettingsHighlight(overlayKey)
     end)
 

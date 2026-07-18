@@ -6,7 +6,7 @@
 
 Equipment sources read the currently equipped item and its slot cooldown. Timer sources match readable player `UNIT_SPELLCAST_SUCCEEDED` spell IDs, keep expiration state only for the current session, and share one scheduled wakeup for the next expiration.
 
-`TrinketBar.lua` remains a separate automatic viewer for equipped usable trinkets.
+`TrinketBar.lua` remains a separate automatic viewer for equipped trinkets, with shared behavior and optional per-slot overrides.
 
 Legacy Custom, Additional Custom, Item, and Items & Spells profiles are converted by `Core/CustomTrackers.lua`. Migration is idempotent, merges repeated spell specialization data, remaps inter-viewer anchors, normalizes optional extra aura IDs, and removes legacy fields only after conversion succeeds.
 

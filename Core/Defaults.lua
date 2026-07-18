@@ -190,6 +190,19 @@ local Defaults = {
                 Spacing = 1,
                 GrowthDirection = "LEFT",
                 OffsetByParentHeight = true,
+                EntrySettings = {
+                    DisplayMode = "ALWAYS",
+                    VisualMode = "FULL",
+                    Alpha = 0.45,
+                    Glow = "NONE",
+                    TextEnabled = true,
+                    Tooltip = true,
+                },
+                Slots = {
+                    [13] = { Enabled = true, OverrideBarSettings = false },
+                    [14] = { Enabled = true, OverrideBarSettings = false },
+                },
+                SlotOrder = { 13, 14 },
                 Text = {
                     FontSize = 15,
                     Colour = {1, 1, 1},

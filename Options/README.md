@@ -7,6 +7,7 @@ Better Cooldown Manager hosts its LibSettingsCanvas panels in a draggable, resiz
 - `Profiles.lua` owns profile management, specialization and Edit Mode layout routing, and import/export controls.
 - `Entries.lua` owns named custom-bar management, the drag-to-reorder icon strip, focused entry editor,
   and spell, item, equipment, timer, load-condition, and optional extra aura-ID controls.
+- `Trinkets.lua` owns equipped-slot selection, shared trinket behavior, and focused per-slot overrides.
 - `Utils.lua` adapts BCDM state and callbacks to `LibSettingsCanvas-1.0` rows.
 - `Window.lua` hosts those panels in BCDM's draggable and resizable settings window.
 
