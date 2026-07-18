@@ -254,6 +254,11 @@ end
 
 BCDM.SettingsHighlights = {}
 
+function BCDM:ShouldShowSettingsHighlights()
+    local settings = self.db and self.db.global and self.db.global.SettingsWindow
+    return not settings or settings.ShowSelectedElementHighlight ~= false
+end
+
 local EMPTY_HIGHLIGHT_OFFSETS = {
     TOPLEFT = { -8, 8 }, TOP = { 0, 8 }, TOPRIGHT = { 8, 8 },
     LEFT = { -8, 0 }, CENTER = { 0, 0 }, RIGHT = { 8, 0 },
@@ -279,6 +284,7 @@ end
 
 function BCDM:ShowSettingsHighlight(key, target, options)
     local highlight = self.SettingsHighlights[key] or CreateSettingsHighlight(key)
+    if not self:ShouldShowSettingsHighlights() then highlight:Hide() return end
     if not target then highlight:Hide() return end
     options = options or {}
     local ok = pcall(function()
@@ -308,6 +314,10 @@ function BCDM:HideAllSettingsHighlights()
 end
 
 function BCDM:ShowSettingsHighlightForFrames(key, frames, fallbackTarget, options)
+    if not self:ShouldShowSettingsHighlights() then
+        self:HideSettingsHighlight(key)
+        return
+    end
     local parentScale = UIParent:GetEffectiveScale()
     local left, bottom, right, top
     for _, frame in pairs(frames or {}) do

@@ -18,6 +18,7 @@
 - Standardized profile-scoped General settings on Shared terminology and renamed the Buff Icons category to Tracked Buffs.
 - Added a dedicated Tracked Bars settings page recommending Better Tracked Bars.
 - Added location highlights for the trinket viewer and selected custom tracker bar, including empty-bar footprints.
+- Added selected-element highlights for resource and cast bars, a global highlight toggle, and consistent disabled-section treatment for their settings pages.
 - Trinket Viewer now includes passive trinkets by default, offers an on-use-only filter, and displays active-aura stacks from 12.1 equip-slot aura metadata.
 - Added an equipped-trinket selector, live Settings preview, shared entry behavior, and optional per-slot overrides matching Custom Trackers.
 - Added drag ordering for equipped trinket slots and applied the saved order to the runtime bar.

@@ -21,6 +21,8 @@ assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BC
 assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
 
 local defaults = BCDM:GetDefaultDB()
+Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,
+    "selected element highlights default to enabled")
 Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == false,
     "trinket viewer includes passive equipment by default")
 Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,

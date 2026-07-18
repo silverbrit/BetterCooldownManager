@@ -145,6 +145,12 @@ local function CreateGeneralPanel()
         { "CooldownManager", "Enable" }, function() BCDM:PromptReload() end, {
             description = L("Apply Better Cooldown Manager styling to Blizzard's Essential, Utility, and Tracked Buff viewers. A UI reload is required when changing this setting."),
         })
+    PathCheckbox(controls, general, "Show Selected Element Highlight", GlobalRoot,
+        { "SettingsWindow", "ShowSelectedElementHighlight" }, function(value)
+            if value then BCDM:RefreshSettings() else BCDM:HideAllSettingsHighlights() end
+        end, {
+            description = L("Show a blue outline around the element configured by the current settings page."),
+        })
 
     BCDM:AddVisibilityPolicySettings(panel, controls, "Shared Visibility", ProfileRoot,
         { "Visibility" }, nil, function() BCDM:RefreshOwnedFrameVisibility() end)
@@ -329,6 +335,27 @@ local function AnchorValues(viewerType)
     end
 end
 
+local function DisableSectionsWhen(controls, firstIndex, disabledProvider)
+    local function AttachDisabledState(section)
+        local blocker = CreateFrame("Button", nil, section)
+        blocker:SetAllPoints(section)
+        blocker:SetFrameLevel(section:GetFrameLevel() + 100)
+        blocker:EnableMouse(true)
+        blocker:Hide()
+
+        local refresher = CreateFrame("Frame", nil, section)
+        function refresher:Refresh()
+            local disabled = disabledProvider() == true
+            section:SetAlpha(disabled and 0.45 or 1)
+            blocker:SetShown(disabled)
+        end
+        controls.rows[#controls.rows + 1] = refresher
+    end
+    for index = firstIndex, #controls.sections do
+        AttachDisabledState(controls.sections[index])
+    end
+end
+
 local function CreateViewerPanel(viewerType)
     local panel, controls = U.NewPanel()
     local RefreshViewerHighlight
@@ -452,22 +479,7 @@ local function CreateViewerPanel(viewerType)
     if viewerType == "Trinket" then
         -- Keep the master section interactive while visually and functionally
         -- disabling every viewer-specific section beneath it.
-        for index = 2, #controls.sections do
-            local section = controls.sections[index]
-            local blocker = CreateFrame("Button", nil, section)
-            blocker:SetAllPoints(section)
-            blocker:SetFrameLevel(section:GetFrameLevel() + 100)
-            blocker:EnableMouse(true)
-            blocker:Hide()
-
-            local refresher = CreateFrame("Frame", nil, section)
-            function refresher:Refresh()
-                local disabled = TrinketViewerDisabled()
-                section:SetAlpha(disabled and 0.45 or 1)
-                blocker:SetShown(disabled)
-            end
-            controls.rows[#controls.rows + 1] = refresher
-        end
+        DisableSectionsWhen(controls, 2, TrinketViewerDisabled)
     end
 
     local overlayName = BCDM.DBViewerToCooldownManagerViewer[viewerType]
@@ -605,9 +617,13 @@ end
 
 local function CreateBarPanel(barType)
     local panel, controls = U.NewPanel()
-    local update = barType == "PowerBar" and function() BCDM:UpdatePowerBar() end
-        or barType == "SecondaryPowerBar" and function() BCDM:UpdateSecondaryPowerBar() end
-        or function() BCDM:UpdateCastBar() end
+    local RefreshBarHighlight
+    local function update()
+        if barType == "PowerBar" then BCDM:UpdatePowerBar()
+        elseif barType == "SecondaryPowerBar" then BCDM:UpdateSecondaryPowerBar()
+        else BCDM:UpdateCastBar() end
+        if RefreshBarHighlight then RefreshBarHighlight() end
+    end
     local function UnsupportedSecondary()
         return barType == "SecondaryPowerBar" and BCDM:GetCurrentSecondaryResource() == nil
     end
@@ -715,15 +731,15 @@ local function CreateBarPanel(barType)
             { "CastBar", "EmpowerPips", "Width" }, update,
             { min = 1, max = 8, step = 1, disabled = EnabledDisabled })
         U.Buttons(controls, behavior, {
-            { text = "Normal Test", width = 130, click = function()
+            { text = "Normal Test", width = 130, disabled = EnabledDisabled, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "NORMAL" BCDM:CreateTestCastBar()
             end },
             { text = "Uninterruptible Test", width = 160, disabled = function()
-                return BCDM.db.profile.CastBar.ColourMode ~= "INTERRUPTIBILITY"
+                return EnabledDisabled() or BCDM.db.profile.CastBar.ColourMode ~= "INTERRUPTIBILITY"
             end, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "NON_INTERRUPTIBLE" BCDM:CreateTestCastBar()
             end },
-            { text = "Empowered Test", width = 130, click = function()
+            { text = "Empowered Test", width = 130, disabled = EnabledDisabled, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "EMPOWERED" BCDM:CreateTestCastBar()
             end },
         })
@@ -837,6 +853,25 @@ local function CreateBarPanel(barType)
         end
         panel:HookScript("OnShow", panel.OnSettingsActivated)
         panel:HookScript("OnHide", panel.OnSettingsDeactivated)
+    end
+
+    DisableSectionsWhen(controls, 2, EnabledDisabled)
+
+    if barType == "PowerBar" or barType == "SecondaryPowerBar" or barType == "CastBar" then
+        local highlightKey = barType .. "SettingsOverlay"
+        RefreshBarHighlight = function()
+            local target = barType == "PowerBar" and BCDM.PowerBar
+                or barType == "SecondaryPowerBar" and BCDM.SecondaryPowerBar
+                or BCDM.CastBar
+            if not panel:IsShown() or EnabledDisabled() or not target then
+                BCDM:HideSettingsHighlight(highlightKey)
+                return
+            end
+            BCDM:ShowSettingsHighlight(highlightKey, target)
+        end
+        panel.RefreshSettingsHighlight = RefreshBarHighlight
+        panel:HookScript("OnShow", RefreshBarHighlight)
+        panel:HookScript("OnHide", function() BCDM:HideSettingsHighlight(highlightKey) end)
     end
 
     return panel

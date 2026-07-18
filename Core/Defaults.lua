@@ -23,6 +23,7 @@ local Defaults = {
             Y = 0,
             Width = 1180,
             Height = 760,
+            ShowSelectedElementHighlight = true,
         },
         EditModeManager = {
             SwapOnInstanceDifficulty = false,
