@@ -534,14 +534,45 @@ local function CreateViewerPanel(viewerType)
     return panel
 end
 
+local function IsBetterTrackedBarsInstalled()
+    if not (C_AddOns and C_AddOns.DoesAddOnExist) then return false end
+    local ok, installed = pcall(C_AddOns.DoesAddOnExist, "BetterTrackedBars")
+    return ok and installed == true
+end
+
+local function GetBetterTrackedBarsSettingsPanel()
+    if not (C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("BetterTrackedBars")) then return end
+    if not (SettingsPanel and type(SettingsPanel.GetAllCategories) == "function"
+        and type(SettingsPanel.GetLayout) == "function") then return end
+
+    local okCategories, categories = pcall(SettingsPanel.GetAllCategories, SettingsPanel)
+    if not okCategories or type(categories) ~= "table" then return end
+    local category
+    for _, candidate in ipairs(categories) do
+        local okName, name = pcall(candidate.GetName, candidate)
+        if okName and name == "Better Tracked Bars" then
+            category = candidate
+            break
+        end
+    end
+    if not category then return end
+    local okLayout, layout = pcall(SettingsPanel.GetLayout, SettingsPanel, category)
+    if not okLayout or not layout or type(layout.GetFrame) ~= "function" then return end
+    local okFrame, settingsPanel = pcall(layout.GetFrame, layout)
+    if okFrame and settingsPanel then return settingsPanel end
+end
+
 local function CreateTrackedBarsPanel()
     local panel, controls = U.NewPanel()
     local section = U.Section(controls, "Tracked Bars", true)
     U.Text(controls, section,
-        "Looking for tracked buff and cooldown bars? Better Tracked Bars is compatible with Better Cooldown Manager and can be used alongside it.")
+        IsBetterTrackedBarsInstalled()
+            and "Better Tracked Bars is installed but its settings are unavailable. Enable it and reload the UI to manage it here."
+            or "Looking for tracked buff and cooldown bars? Better Tracked Bars is compatible with Better Cooldown Manager and can be used alongside it.")
     U.Buttons(controls, section, {
         {
-            text = "View Better Tracked Bars",
+            text = "Install Better Tracked Bars",
             width = 220,
             click = function()
                 BCDM:OpenURL("Better Tracked Bars on CurseForge",
@@ -549,6 +580,36 @@ local function CreateTrackedBarsPanel()
             end,
         },
     })
+
+    local function DetachEmbeddedPanel()
+        local embedded = panel.EmbeddedBetterTrackedBarsPanel
+        if embedded then
+            embedded:Hide()
+            embedded:ClearAllPoints()
+            embedded:SetParent(UIParent)
+            panel.EmbeddedBetterTrackedBarsPanel = nil
+        end
+        controls.scrollFrame:Show()
+    end
+
+    function panel:OnStandaloneSettingsActivated()
+        local embedded = GetBetterTrackedBarsSettingsPanel()
+        if not embedded or embedded == self then
+            DetachEmbeddedPanel()
+            return
+        end
+
+        controls.scrollFrame:Hide()
+        self.EmbeddedBetterTrackedBarsPanel = embedded
+        embedded:SetParent(self)
+        embedded:ClearAllPoints()
+        embedded:SetAllPoints(self)
+        embedded:Show()
+        if type(embedded.OnRefresh) == "function" then embedded:OnRefresh()
+        elseif type(embedded.Refresh) == "function" then embedded:Refresh() end
+    end
+
+    panel.OnSettingsDeactivated = DetachEmbeddedPanel
     return panel
 end
 

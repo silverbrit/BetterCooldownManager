@@ -17,6 +17,7 @@
 - Removed obsolete Apply Size Changes controls and misleading Edit Mode refresh guidance.
 - Standardized profile-scoped General settings on Shared terminology and renamed the Buff Icons category to Tracked Buffs.
 - Added a dedicated Tracked Bars settings page recommending Better Tracked Bars.
+- The standalone Tracked Bars page now embeds Better Tracked Bars settings when the compatible optional addon is installed and enabled.
 - Added location highlights for the trinket viewer and selected custom tracker bar, including empty-bar footprints.
 - Added selected-element highlights for resource and cast bars, a global highlight toggle, and consistent disabled-section treatment for their settings pages.
 - Trinket Viewer now includes passive trinkets by default, offers an on-use-only filter, and displays active-aura stacks from 12.1 equip-slot aura metadata.
