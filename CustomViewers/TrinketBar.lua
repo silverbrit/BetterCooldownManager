@@ -282,6 +282,7 @@ local function AcquireCustomIcon(itemId, slotID, auraSpellIDs, entrySettings, st
         customIcon.Cooldown = CreateFrame("Cooldown", nil, customIcon, "CooldownFrameTemplate")
         customIcon.Cooldown:SetAllPoints(customIcon)
         customIcon.Cooldown:SetDrawEdge(false)
+        customIcon.Cooldown:SetDrawBling(false)
         customIcon.Cooldown:SetDrawSwipe(true)
         customIcon.Cooldown:SetSwipeColor(0, 0, 0, 0.8)
         customIcon.Cooldown:SetHideCountdownNumbers(false)

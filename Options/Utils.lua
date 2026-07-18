@@ -7,6 +7,17 @@ local LocaleTable = AceLocale and AceLocale:GetLocale("BetterCooldownManager", t
 local M = {}
 BCDM.SettingsUtils = M
 
+M.SELECTOR_ICON_SIZE = 44
+M.SELECTED_ICON_SIZE = 48
+M.SETTINGS_ICON_CROP = 0.08
+
+function M.SetSettingsIcon(texture, icon)
+    if not texture then return end
+    texture:SetTexture(icon or 134400)
+    local crop = M.SETTINGS_ICON_CROP
+    texture:SetTexCoord(crop, 1 - crop, crop, 1 - crop)
+end
+
 local unpack = unpack
 
 local function IsFontString(widget)

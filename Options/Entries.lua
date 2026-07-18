@@ -640,7 +640,7 @@ local function CreateEntries(panel, controls)
     U.Text(controls, section,
         "Drag to reorder. Click an icon to edit it, use + to add an entry, or drop a bag item or spellbook spell onto +.")
 
-    local ICON_SIZE, ICON_STEP = 44, 50
+    local ICON_SIZE, ICON_STEP = U.SELECTOR_ICON_SIZE, U.SELECTOR_ICON_SIZE + 6
     local strip = Canvas.CreateBaseRow(section.Content, 56)
     U.Add(controls, section, strip)
     strip.Buttons = {}
@@ -809,7 +809,7 @@ local function CreateEntries(panel, controls)
             local button = EnsureEntryButton(index)
             local name, icon = EntryName(entry)
             button.EntryID, button.Entry, button.EntryName = entryID, entry, name
-            button.Icon:SetTexture(icon or UNKNOWN_ICON)
+            U.SetSettingsIcon(button.Icon, icon or UNKNOWN_ICON)
             local style = BCDM:GetCustomTrackerEntrySettings(bar, entry)
             local visualMode = style.VisualMode or "FULL"
             local disabled = entry.Enabled == false
@@ -857,7 +857,7 @@ local function CreateEntries(panel, controls)
     header.Empty = Canvas.CreateLabel(header, "This bar has no entries yet. Use + above to add one.", "GameFontHighlight")
     header.Empty:SetPoint("LEFT", 0, 0)
     header.Icon = header:CreateTexture(nil, "ARTWORK")
-    header.Icon:SetSize(44, 44)
+    header.Icon:SetSize(U.SELECTED_ICON_SIZE, U.SELECTED_ICON_SIZE)
     header.Icon:SetPoint("LEFT", 0, 0)
     header.Name = Canvas.CreateLabel(header, "", "GameFontNormalLarge")
     header.Name:SetPoint("TOPLEFT", header.Icon, "TOPRIGHT", 12, -4)
@@ -897,7 +897,7 @@ local function CreateEntries(panel, controls)
         if not entry then return end
         local name, icon = EntryName(entry)
         local source = entry.Source or {}
-        self.Icon:SetTexture(icon or UNKNOWN_ICON)
+        U.SetSettingsIcon(self.Icon, icon or UNKNOWN_ICON)
         self.Name:SetText(name)
         local sourceText = (SOURCE_LABELS[source.Type] or source.Type or "Source") .. " ID: " .. tostring(source.ID)
         if source.Type == "timer" then sourceText = sourceText .. "  •  " .. tostring(source.Duration or 0) .. " seconds" end
