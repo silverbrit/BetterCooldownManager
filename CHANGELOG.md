@@ -12,6 +12,7 @@
 - Added compact, typeable numeric fields to every slider.
 - Added LibSharedMedia font previews and status-bar texture swatches.
 - Added a persistent Community & Support footer and installed version display to the addon-owned settings window.
+- Added the Better Cooldown Manager logo beside the settings-window title.
 - Removed obsolete Apply Size Changes controls and misleading Edit Mode refresh guidance.
 - Standardized profile-scoped General settings on Shared terminology and renamed the Buff Icons category to Tracked Buffs.
 - Added location highlights for the trinket viewer and selected custom tracker bar, including empty-bar footprints.

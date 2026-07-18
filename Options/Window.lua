@@ -169,8 +169,13 @@ local function CreateSettingsWindow()
         SaveWindowGeometry(frame)
     end)
 
+    frame.Logo = frame.TitleBar:CreateTexture(nil, "ARTWORK")
+    frame.Logo:SetPoint("LEFT", 16, 0)
+    frame.Logo:SetSize(30, 30)
+    frame.Logo:SetTexture("Interface\\AddOns\\BetterCooldownManager\\Media\\Logo.png")
+
     frame.Title = frame.TitleBar:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    frame.Title:SetPoint("LEFT", 18, 0)
+    frame.Title:SetPoint("LEFT", frame.Logo, "RIGHT", 8, 0)
     frame.Title:SetText("Better Cooldown Manager")
     frame.Title:SetTextColor(1, 0.82, 0)
 
