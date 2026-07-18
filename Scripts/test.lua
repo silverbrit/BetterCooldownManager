@@ -162,11 +162,18 @@ Check(custom.Name == "Custom Cooldowns", "legacy bar name is retained")
 Check(#custom.EntryOrder == 2, "duplicate spells across specs merge")
 local spell = custom.Entries[custom.EntryOrder[1]]
 Check(spell.Source.ID == 100, "spell order uses earliest legacy layout index")
-Check(spell.ClassSpecFilters["MAGE:ARCANE"] and spell.ClassSpecFilters["MAGE:FIRE"], "merged spell retains spec filters")
+Check(spell.SpecFilters[62] and spell.SpecFilters[63] and spell.ClassSpecFilters == nil,
+    "merged spell migrates spec filters to specialization IDs")
 Check(custom.Layout[2] == "BCDM_CustomTrackerBar_2", "legacy inter-viewer anchor is remapped")
 Check(profile.CooldownManager.Custom == nil and profile.CooldownManager.Item == nil, "legacy fields are removed after conversion")
 local nextBarID = store.NextBarID
 Check(not BCDM:MigrateCustomTrackerProfile(profile) and store.NextBarID == nextBarID, "migration is idempotent")
+spell.ClassSpecFilters = { ["mage:future spec"] = true }
+Check(not BCDM:MigrateCustomTrackerProfile(profile), "unresolved current-schema filters do not retrigger migration")
+Check(spell.ClassSpecFilters["mage:future spec"], "unresolved legacy filters are preserved losslessly")
+Check(BCDM:EntryMatchesSpecialization(spell, 9999, "MAGE", "Future Spec"),
+    "unresolved filters retain their English-name compatibility fallback")
+spell.ClassSpecFilters = nil
 spell.Source.AuraIDs = { 700, "800", 700, 0 }
 store.SchemaVersion = 1
 Check(BCDM:MigrateCustomTrackerProfile(profile), "schema-v2 aura IDs migrate")
@@ -190,9 +197,16 @@ local timerEntry = BCDM:AddCustomTrackerEntry(newBar, "timer", 123, { Duration =
 Check(store.Bars[newBar].Entries[timerEntry].Source.Duration == 8, "typed entry stores timer duration")
 local equipmentEntry = BCDM:AddCustomTrackerEntry(newBar, "equipment", 13)
 Check(store.Bars[newBar].Entries[equipmentEntry].Source.ID == 13, "typed entry stores equipment slot")
+Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[equipmentEntry], 62, "MAGE", "Arcane"),
+    "entries without specialization filters remain unrestricted")
 local auraEntry = BCDM:AddCustomTrackerEntry(newBar, "spell", 456, { AuraIDs = "789, 789, 987" })
 Check(table.concat(store.Bars[newBar].Entries[auraEntry].Source.AuraIDs, ",") == "789,987",
     "new spell entries normalize optional aura IDs")
+local filteredEntry = BCDM:AddCustomTrackerEntry(newBar, "spell", 654, { SpecFilters = { [62] = true } })
+Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry], 62, "MAGE", "Arcane"),
+    "numeric specialization filters match directly")
+Check(not BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry], 63, "MAGE", "Fire"),
+    "numeric specialization filters reject other specs")
 Check(BCDM:DeleteCustomTrackerEntry(newBar, timerEntry), "entry can be deleted")
 Check(BCDM:DeleteCustomTrackerBar(newBar), "bar can be deleted")
 

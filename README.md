@@ -13,7 +13,7 @@
 ## Features
 - Clean, Pixel Border Skinning. Borders can be adjusted.
 - Custom Cooldown Text & Tweaks.
-- Custom Power & Secondary Power Colours.
+- Clickable custom, power-type, class, specialization, and cast-state fill-colour swatches without conflicting toggles.
 - Power Bar, Secondary Power Bar & Cast Bar with anchoring, automatic width matching, fill direction, and display controls.
 - Named Custom Tracker Bars: create, rename, duplicate, reorder, and anchor reusable mixed-source bars.
 - Track spells, items, equipment slots, and fixed-duration cast timers together.
@@ -21,7 +21,7 @@
 - Per-entry ready/active visibility, inactive appearance, glow state, tooltip, class, and specialization behavior.
 - Shared visibility rules with per-bar overrides for combat, instance type, mounted/skyriding, dead, vehicle, resting, and macro-condition states.
 - Resource text modes, per-bar smoothing overrides, and optional power-bar sparks.
-- Interruptible cast colours plus configurable empowered-stage pips and Settings previews.
+- Class, interruptibility, or custom cast-colour modes plus configurable empowered-stage pips and Settings previews.
 - Custom Trinket Bar: This bar will automatically create trackers for equipped & usable trinkets.
 - API for AddOns to add anchors to Utility, Buff Icons, Custom Trackers, and Trinket Bars.
 
@@ -41,3 +41,5 @@ This is a passion project & this has to be maintained as much as possible in ord
 ## Development
 
 The repository targets Retail 12.1 and includes local Codex architecture guidance in `AGENTS.md`, `.context/`, and `.codex/skills/wow-addon-architect/`. Run `install-deps.sh` to refresh development-only Blizzard UI sources and libraries, then use `lua Scripts/test.lua .` for the pure-Lua model tests.
+
+Secondary-resource rules are centralized in `Core/ResourceCatalog.lua`; bar modules consume its descriptors instead of maintaining their own class/spec lookup chains. Custom tracker specialization filters are stored by numeric specialization ID, with legacy token filters retained only when they cannot be converted safely.

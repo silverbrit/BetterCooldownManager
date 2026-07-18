@@ -1,6 +1,21 @@
 local _, BCDM = ...
 
-local SCHEMA_VERSION = 2
+local SCHEMA_VERSION = 3
+local LEGACY_SPEC_IDS = {
+    ["MAGE:ARCANE"] = 62, ["MAGE:FIRE"] = 63, ["MAGE:FROST"] = 64,
+    ["PALADIN:HOLY"] = 65, ["PALADIN:PROTECTION"] = 66, ["PALADIN:RETRIBUTION"] = 70,
+    ["WARRIOR:ARMS"] = 71, ["WARRIOR:FURY"] = 72, ["WARRIOR:PROTECTION"] = 73,
+    ["DRUID:BALANCE"] = 102, ["DRUID:FERAL"] = 103, ["DRUID:GUARDIAN"] = 104, ["DRUID:RESTORATION"] = 105,
+    ["DEATHKNIGHT:BLOOD"] = 250, ["DEATHKNIGHT:FROST"] = 251, ["DEATHKNIGHT:UNHOLY"] = 252,
+    ["HUNTER:BEASTMASTERY"] = 253, ["HUNTER:MARKSMANSHIP"] = 254, ["HUNTER:SURVIVAL"] = 255,
+    ["PRIEST:DISCIPLINE"] = 256, ["PRIEST:HOLY"] = 257, ["PRIEST:SHADOW"] = 258,
+    ["ROGUE:ASSASSINATION"] = 259, ["ROGUE:OUTLAW"] = 260, ["ROGUE:SUBTLETY"] = 261,
+    ["SHAMAN:ELEMENTAL"] = 262, ["SHAMAN:ENHANCEMENT"] = 263, ["SHAMAN:RESTORATION"] = 264,
+    ["WARLOCK:AFFLICTION"] = 265, ["WARLOCK:DEMONOLOGY"] = 266, ["WARLOCK:DESTRUCTION"] = 267,
+    ["MONK:BREWMASTER"] = 268, ["MONK:WINDWALKER"] = 269, ["MONK:MISTWEAVER"] = 270,
+    ["DEMONHUNTER:HAVOC"] = 577, ["DEMONHUNTER:VENGEANCE"] = 581, ["DEMONHUNTER:DEVOURER"] = 1480,
+    ["EVOKER:DEVASTATION"] = 1467, ["EVOKER:PRESERVATION"] = 1468, ["EVOKER:AUGMENTATION"] = 1473,
+}
 local LEGACY_VIEWERS = {
     { key = "Custom", name = "Custom Cooldowns", entries = "Spells", sourceType = "spell", frame = "BCDM_CustomCooldownViewer" },
     { key = "AdditionalCustom", name = "Additional Custom", entries = "Spells", sourceType = "spell", frame = "BCDM_AdditionalCustomCooldownViewer" },
@@ -77,6 +92,156 @@ local function NormalizeStoreAuraIDs(store)
         end
     end
     return changed
+end
+
+local function NormalizeSpecFilters(filters)
+    local normalized = {}
+    for specID, enabled in pairs(type(filters) == "table" and filters or {}) do
+        specID = tonumber(specID)
+        if enabled == true and specID and specID > 0 and specID == math.floor(specID) then
+            normalized[specID] = true
+        end
+    end
+    return normalized
+end
+
+local function SameTrueMap(left, right)
+    if type(left) ~= "table" then return next(right) == nil end
+    for key, enabled in pairs(left) do
+        if enabled ~= true or right[key] ~= true then return false end
+    end
+    for key, enabled in pairs(right) do
+        if enabled == true and left[key] ~= true then return false end
+    end
+    return true
+end
+
+local function NormalizeStoreSpecFilters(store)
+    local changed = false
+    for _, bar in pairs(store.Bars or {}) do
+        for _, entry in pairs(type(bar.Entries) == "table" and bar.Entries or {}) do
+            if type(entry) == "table" then
+                local hasSpecFilters = type(entry.SpecFilters) == "table"
+                local hasLegacyFilters = type(entry.ClassSpecFilters) == "table"
+                local normalized = NormalizeSpecFilters(entry.SpecFilters)
+                local unresolved = {}
+                for legacyKey, enabled in pairs(type(entry.ClassSpecFilters) == "table" and entry.ClassSpecFilters or {}) do
+                    if enabled == true then
+                        local normalizedKey = tostring(legacyKey):upper():gsub("%s+", "")
+                        local specID = LEGACY_SPEC_IDS[normalizedKey]
+                        if specID then normalized[specID] = true else unresolved[legacyKey] = true end
+                    end
+                end
+                if hasSpecFilters or hasLegacyFilters then
+                    if not SameTrueMap(entry.SpecFilters, normalized)
+                        or not SameTrueMap(entry.ClassSpecFilters, unresolved) then changed = true end
+                    entry.SpecFilters = normalized
+                    entry.ClassSpecFilters = next(unresolved) and unresolved or nil
+                end
+            end
+        end
+    end
+    return changed
+end
+
+local function GetClassIdByToken(classToken)
+    if not classToken then return end
+    local count = (C_ClassInfo and C_ClassInfo.GetNumClasses and C_ClassInfo.GetNumClasses())
+        or (GetNumClasses and GetNumClasses()) or 0
+    for classID = 1, count do
+        local info = C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
+        local classFile = info and info.classFile
+        if not classFile and GetClassInfo then
+            local _, fallbackClassFile = GetClassInfo(classID)
+            classFile = fallbackClassFile
+        end
+        if classFile == classToken then return classID end
+    end
+end
+
+function BCDM:GetOrderedClassTokens(targetClassToken)
+    local tokens, seen = {}, {}
+    local target = targetClassToken and tostring(targetClassToken):upper()
+    local function Add(token)
+        token = token and tostring(token):upper()
+        if token and (not target or token == target) and not seen[token] then
+            tokens[#tokens + 1], seen[token] = token, true
+        end
+    end
+    for _, classID in ipairs(CLASS_SORT_ORDER or {}) do
+        local info = C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
+        Add(info and info.classFile)
+    end
+    local count = (C_ClassInfo and C_ClassInfo.GetNumClasses and C_ClassInfo.GetNumClasses())
+        or (GetNumClasses and GetNumClasses()) or 0
+    for classID = 1, count do
+        local info = C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
+        local token = info and info.classFile
+        if not token and GetClassInfo then
+            local _, fallbackToken = GetClassInfo(classID)
+            token = fallbackToken
+        end
+        Add(token)
+    end
+    Add(target)
+    table.sort(tokens, function(left, right)
+        local leftID, rightID = GetClassIdByToken(left), GetClassIdByToken(right)
+        local leftInfo = leftID and C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(leftID)
+        local rightInfo = rightID and C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(rightID)
+        local leftName = leftInfo and leftInfo.className or (leftID and GetClassInfo and GetClassInfo(leftID)) or left
+        local rightName = rightInfo and rightInfo.className or (rightID and GetClassInfo and GetClassInfo(rightID)) or right
+        return leftName == rightName and left < right or tostring(leftName) < tostring(rightName)
+    end)
+    return tokens
+end
+
+function BCDM:GetClassSpecCatalog(targetClassToken)
+    local catalog = {}
+    for _, classToken in ipairs(self:GetOrderedClassTokens(targetClassToken)) do
+        local classID = GetClassIdByToken(classToken)
+        local info = classID and C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
+        local classEntry = { classToken = classToken, classId = classID,
+            className = info and info.className or (classID and GetClassInfo and GetClassInfo(classID)), specs = {} }
+        local count = classID and C_SpecializationInfo and C_SpecializationInfo.GetNumSpecializationsForClassID
+            and C_SpecializationInfo.GetNumSpecializationsForClassID(classID) or 0
+        for index = 1, count do
+            local specID, specName, _, specIcon = GetSpecializationInfoForClassID(classID, index)
+            if type(specID) == "table" then
+                local specInfo = specID
+                specID, specName, specIcon = specInfo.specID or specInfo.id, specInfo.name, specInfo.icon
+            end
+            if specID then
+                classEntry.specs[#classEntry.specs + 1] = {
+                    specID = specID, specName = specName or tostring(specID), specIcon = specIcon, specIndex = index,
+                }
+            end
+        end
+        if #classEntry.specs > 0 then catalog[#catalog + 1] = classEntry end
+    end
+    return catalog
+end
+
+function BCDM:BuildSpecFilters(targetClassToken)
+    local filters = {}
+    for _, classEntry in ipairs(self:GetClassSpecCatalog(targetClassToken)) do
+        for _, specEntry in ipairs(classEntry.specs) do filters[specEntry.specID] = true end
+    end
+    return filters
+end
+
+function BCDM:EntryMatchesSpecialization(entry, specID, classToken, specName)
+    if type(entry) ~= "table" then return false end
+    local filters = entry.SpecFilters
+    local legacy = entry.ClassSpecFilters
+    if type(filters) ~= "table" and type(legacy) ~= "table" then return true end
+    if type(filters) == "table" and filters[tonumber(specID)] == true then return true end
+    if type(legacy) == "table" and classToken and specName then
+        local expected = tostring(classToken):upper() .. ":" .. tostring(specName):upper():gsub("%s+", "")
+        for legacyKey, enabled in pairs(legacy) do
+            if enabled == true and tostring(legacyKey):upper():gsub("%s+", "") == expected then return true end
+        end
+    end
+    return false
 end
 
 local function NewStore()
@@ -249,9 +414,12 @@ function BCDM:MigrateCustomTrackerProfile(profile)
     if type(profile) ~= "table" then return false end
     local store = GetTrackerStore(profile)
     local auraIDsChanged = NormalizeStoreAuraIDs(store)
-    if store.SchemaVersion >= SCHEMA_VERSION and store.LegacyMigrated then return auraIDsChanged end
+    local specFiltersChanged = NormalizeStoreSpecFilters(store)
+    if store.SchemaVersion >= SCHEMA_VERSION and store.LegacyMigrated then
+        return auraIDsChanged or specFiltersChanged
+    end
     local changed = store.SchemaVersion < SCHEMA_VERSION or store.LegacyMigrated ~= true
-    if auraIDsChanged then changed = true end
+    if auraIDsChanged or specFiltersChanged then changed = true end
 
     local cooldownManager = profile.CooldownManager
     local pending, frameMap = {}, {}
@@ -283,6 +451,8 @@ function BCDM:MigrateCustomTrackerProfile(profile)
             bar.Layout[2] = frameMap[bar.Layout[2]]
         end
     end
+
+    if NormalizeStoreSpecFilters(store) then changed = true end
 
     store.SchemaVersion = SCHEMA_VERSION
     store.LegacyMigrated = true
@@ -406,7 +576,7 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
         Alpha = 0.45,
         Tooltip = true,
         Glow = "NONE",
-        ClassSpecFilters = extra and Copy(extra.ClassSpecFilters),
+        SpecFilters = extra and Copy(extra.SpecFilters),
         FilterClass = extra and extra.FilterClass,
         Source = {
             Type = sourceType,

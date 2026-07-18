@@ -162,14 +162,10 @@ function BCDM:RegisterCustomTrackerSourceAdapter(sourceType, adapter)
 end
 
 local function PlayerMatchesFilters(entry)
-    local filters = entry.ClassSpecFilters
-    if type(filters) ~= "table" then return true end
-    if next(filters) == nil then return false end
     local classToken = select(2, UnitClass("player"))
     local specIndex = GetSpecialization()
     local specID, specName = specIndex and GetSpecializationInfo(specIndex)
-    local specToken = BCDM:NormalizeSpecToken(specName, specID, specIndex)
-    return filters[tostring(classToken) .. ":" .. tostring(specToken)] == true
+    return BCDM:EntryMatchesSpecialization(entry, specID, classToken, specName)
 end
 
 local function AcquireIcon(barID, entryID, container)

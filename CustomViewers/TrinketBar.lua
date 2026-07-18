@@ -304,6 +304,28 @@ function BCDM:UpdateTrinketBar()
     end
 end
 
+function BCDM:FetchEquippedTrinkets()
+    if InCombatLockdown() then return end
+    if not BCDM.db.profile.CooldownManager.Trinket.Enabled then
+        if BCDM.TrinketBarContainer then BCDM.TrinketBarContainer:Hide() end
+        return
+    end
+    BCDM:UpdateCooldownViewer("Trinket")
+end
+
+local trinketEquipmentEvents = CreateFrame("Frame")
+trinketEquipmentEvents:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+trinketEquipmentEvents:RegisterEvent("PLAYER_LOGIN")
+trinketEquipmentEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
+trinketEquipmentEvents:SetScript("OnEvent", function(_, event, slot)
+    if InCombatLockdown() then return end
+    if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+        C_Timer.After(1, function() BCDM:FetchEquippedTrinkets() end)
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" and (slot == 13 or slot == 14) then
+        BCDM:FetchEquippedTrinkets()
+    end
+end)
+
 function BCDM:AdjustTrinketLayoutIndex(direction, itemId)
     -- Legacy compatibility: trinket order is now driven by equipment slot (13, 14).
     BCDM:UpdateTrinketBar()

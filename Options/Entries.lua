@@ -224,12 +224,12 @@ local function SetupFilterMenu(button, entry, panel)
         for _, classEntry in ipairs(BCDM:GetClassSpecCatalog(entry.FilterClass)) do
             local submenu = root:CreateButton(classEntry.className or classEntry.classToken)
             for _, specEntry in ipairs(classEntry.specs or {}) do
-                local value = classEntry.classToken .. ":" .. specEntry.specToken
-                submenu:CreateCheckbox(specEntry.specName or specEntry.specToken, function()
-                    return entry.ClassSpecFilters and entry.ClassSpecFilters[value] == true
+                local value = specEntry.specID
+                submenu:CreateCheckbox(specEntry.specName or tostring(specEntry.specID), function()
+                    return entry.SpecFilters and entry.SpecFilters[value] == true
                 end, function()
-                    entry.ClassSpecFilters = entry.ClassSpecFilters or {}
-                    entry.ClassSpecFilters[value] = not entry.ClassSpecFilters[value] or nil
+                    entry.SpecFilters = entry.SpecFilters or {}
+                    entry.SpecFilters[value] = not entry.SpecFilters[value] or nil
                     Changed(panel)
                 end)
             end
@@ -259,7 +259,7 @@ local function CreateEntries(panel, controls)
         if selectedBarID and spellID then
             local class = select(2, UnitClass("player"))
             BCDM:AddCustomTrackerEntry(selectedBarID, "spell", spellID, {
-                ClassSpecFilters = BCDM:BuildClassSpecFilters(class), FilterClass = class,
+                SpecFilters = BCDM:BuildSpecFilters(class), FilterClass = class,
             })
             spellInput:SetText("")
             Changed(panel)
@@ -269,7 +269,7 @@ local function CreateEntries(panel, controls)
     addItem:SetScript("OnClick", function()
         local itemID = tonumber(itemInput:GetText())
         if selectedBarID and itemID then
-            BCDM:AddCustomTrackerEntry(selectedBarID, "item", itemID, { ClassSpecFilters = BCDM:BuildClassSpecFilters() })
+            BCDM:AddCustomTrackerEntry(selectedBarID, "item", itemID, { SpecFilters = BCDM:BuildSpecFilters() })
             itemInput:SetText("")
             Changed(panel)
         end
@@ -291,7 +291,7 @@ local function CreateEntries(panel, controls)
     addEquipment:SetWidth(125)
     addEquipment:SetScript("OnClick", function()
         if selectedBarID and selectedSlot then
-            BCDM:AddCustomTrackerEntry(selectedBarID, "equipment", selectedSlot, { ClassSpecFilters = BCDM:BuildClassSpecFilters() })
+            BCDM:AddCustomTrackerEntry(selectedBarID, "equipment", selectedSlot, { SpecFilters = BCDM:BuildSpecFilters() })
             Changed(panel)
         end
     end)
@@ -314,7 +314,7 @@ local function CreateEntries(panel, controls)
         if selectedBarID and spellID and duration and duration > 0 then
             local class = select(2, UnitClass("player"))
             BCDM:AddCustomTrackerEntry(selectedBarID, "timer", spellID, {
-                Duration = duration, ClassSpecFilters = BCDM:BuildClassSpecFilters(class), FilterClass = class,
+                Duration = duration, SpecFilters = BCDM:BuildSpecFilters(class), FilterClass = class,
             })
             timerSpell:SetText("")
             timerDuration:SetText("")
