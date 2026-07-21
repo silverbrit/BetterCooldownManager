@@ -40,6 +40,6 @@ This is a passion project & this has to be maintained as much as possible in ord
 
 ## Development
 
-The repository targets Retail 12.1 and includes local Codex architecture guidance in `AGENTS.md`, `.context/`, and `.codex/skills/wow-addon-architect/`. Run `install-deps.sh` to refresh development-only Blizzard UI sources and libraries, then use `lua Scripts/test.lua .` for the pure-Lua model tests.
+The repository targets Retail 12.1 and includes local Codex architecture guidance in `AGENTS.md`, `.context/`, and `.codex/skills/wow-addon-architect/`. Generated dependencies under `Libraries/` are not committed except for `Init.xml` and the project-owned `LibSettingsCanvas-1.0`; run `install-deps.sh` after cloning to install the remaining libraries and refresh the development-only Blizzard UI sources, then use `lua Scripts/test.lua .` for the pure-Lua model tests.
 
 Secondary-resource rules are centralized in `Core/ResourceCatalog.lua`; bar modules consume its descriptors instead of maintaining their own class/spec lookup chains. Custom tracker specialization filters are stored by numeric specialization ID, with legacy token filters retained only when they cannot be converted safely.

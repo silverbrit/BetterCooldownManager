@@ -15,9 +15,6 @@ externals:
     Libraries/LibDeflate:
         url: https://github.com/SafeteeWoW/LibDeflate.git
         tag: latest
-    Libraries/TaintLess:
-        url: https://www.townlong-yak.com/addons.git/taintless
-        commit: default
     Libraries/LibCustomGlow-1.0:
         url: https://github.com/Stanzilla/LibCustomGlow.git
         branch: master

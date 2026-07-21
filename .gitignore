@@ -1,2 +1,6 @@
 .install-deps.*
 .libraries/
+/Libraries/*
+!/Libraries/Init.xml
+!/Libraries/LibSettingsCanvas-1.0/
+!/Libraries/LibSettingsCanvas-1.0/**

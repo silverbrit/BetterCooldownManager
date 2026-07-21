@@ -1,15 +1,14 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlGUIS:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 	<Script file="LibStub/LibStub.lua"/>
-	<Include file="LibSettingsCanvas-1.0/lib.xml"/>
-	<Include file="CallbackHandler-1.0/CallbackHandler-1.0.xml"/>
+	<Script file="LibSettingsCanvas-1.0/LibSettingsCanvas-1.0.lua"/>
+	<Script file="CallbackHandler-1.0/CallbackHandler-1.0.lua"/>
 	<Script file="LibSharedMedia-3.0/LibSharedMedia-3.0.lua"/>
 	<Script file="LibDeflate/LibDeflate.lua"/>
-	<Include file="Ace3/AceAddon-3.0/AceAddon-3.0.xml"/>
-	<Include file="Ace3/AceDB-3.0/AceDB-3.0.xml"/>
-	<Include file="Ace3/AceLocale-3.0/AceLocale-3.0.xml"/>
-	<Include file="Ace3/AceSerializer-3.0/AceSerializer-3.0.xml"/>
-	<Include file="TaintLess/TaintLess.xml"/>
+	<Script file="Ace3/AceAddon-3.0/AceAddon-3.0.lua"/>
+	<Script file="Ace3/AceDB-3.0/AceDB-3.0.lua"/>
+	<Script file="Ace3/AceLocale-3.0/AceLocale-3.0.lua"/>
+	<Script file="Ace3/AceSerializer-3.0/AceSerializer-3.0.lua"/>
 	<Script file="LibCustomGlow-1.0/LibCustomGlow-1.0.lua"/>
-	<Include file="LibDualSpec-1.0/LibDualSpec-1.0.lua"/>
-	<Include file="LibEditModeOverride/LibEditModeOverride.xml"/>
+	<Script file="LibDualSpec-1.0/LibDualSpec-1.0.lua"/>
+	<Script file="LibEditModeOverride/LibEditModeOverride.lua"/>
 </Ui>

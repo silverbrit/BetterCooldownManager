@@ -56,7 +56,6 @@ svn export https://repos.curseforge.com/wow/libstub/trunk "${staged_libraries}/L
 svn export https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0 "${staged_libraries}/LibSharedMedia-3.0"
 
 git clone --depth 1 https://github.com/SafeteeWoW/LibDeflate.git "${staged_libraries}/LibDeflate"
-git clone https://www.townlong-yak.com/addons.git/taintless "${staged_libraries}/TaintLess"
 git clone --depth 1 --branch master https://github.com/Stanzilla/LibCustomGlow.git "${staged_libraries}/LibCustomGlow-1.0"
 git clone --depth 1 --branch master https://github.com/AdiAddons/LibDualSpec-1.0.git "${staged_libraries}/LibDualSpec-1.0"
 git clone --depth 1 --branch main https://github.com/plusmouse/LibEditModeOverride.git "${staged_libraries}/LibEditModeOverride"
