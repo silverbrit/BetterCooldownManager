@@ -19,6 +19,8 @@ assert(loadfile(root .. "/Core/BarBehavior.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/ResourceCatalog.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Modules/CooldownManager.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Scripts/test-cooldown-manager.lua"))(BCDM, Check)
 
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,

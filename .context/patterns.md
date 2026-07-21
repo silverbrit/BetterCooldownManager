@@ -4,6 +4,8 @@
 
 BCM may fully configure frames it creates. Blizzard Cooldown Viewer frames remain Blizzard-owned: observe and style them only through the existing guarded integration paths. Shared visibility and custom entry policies never apply to Blizzard Essential, Utility, BuffIcon, or BuffBar rows.
 
+Tracked-buff centering uses a tight BCM-owned container while the pooled icon frames remain parented to Blizzard's viewer. Enumerate the active pool and claim only real frames that are currently shown; `GetItemFrames()` includes hidden children because Blizzard's templates opt them into layout. Keep desired icon anchors in weak addon-owned tables, lay icons out from the container's top-left, and synchronize from `RefreshLayout` plus item active-state hooks; do not hook the buff viewer's `Layout` method or store centering state on Blizzard frames.
+
 ## Custom tracker model
 
 Use stable numeric bar and entry IDs. Keep presentation order in explicit arrays rather than relying on table iteration. Source adapters expose metadata, state, availability, and relevant events through one contract; layout code must not contain source-specific API branches.

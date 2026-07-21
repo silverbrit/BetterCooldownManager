@@ -1,5 +1,52 @@
 local _, BCDM = ...
 
+function BCDM.ComputeTrackedBuffLayout(count, iconWidth, iconHeight, spacing, isHorizontal)
+    count = math.max(0, count or 0)
+    iconWidth = math.max(0, iconWidth or 0)
+    iconHeight = math.max(0, iconHeight or 0)
+    spacing = spacing or 0
+
+    local positions = {}
+    if count == 0 then return 0, 0, positions end
+
+    if isHorizontal then
+        for index = 1, count do
+            positions[index] = { (index - 1) * (iconWidth + spacing), 0 }
+        end
+        return count * iconWidth + (count - 1) * spacing, iconHeight, positions
+    end
+
+    for index = 1, count do
+        positions[index] = { 0, -((index - 1) * (iconHeight + spacing)) }
+    end
+    return iconWidth, count * iconHeight + (count - 1) * spacing, positions
+end
+
+function BCDM.ScaleTrackedBuffGeometry(iconWidth, iconHeight, xOffset, yOffset, frameScale)
+    if not frameScale or frameScale < 0.01 then frameScale = 1 end
+    local inverseScale = 1 / frameScale
+    return iconWidth * inverseScale, iconHeight * inverseScale,
+        xOffset * inverseScale, yOffset * inverseScale
+end
+
+function BCDM.SortTrackedBuffFrames(frames)
+    table.sort(frames, function(left, right)
+        return (left.layoutIndex or 0) < (right.layoutIndex or 0)
+    end)
+    return frames
+end
+
+function BCDM.CollectRenderableTrackedBuffFrames(frames)
+    local renderableFrames = {}
+    for _, frame in ipairs(frames or {}) do
+        if frame and frame.Icon and frame.cooldownID ~= nil
+            and frame.IsShown and frame:IsShown() then
+            renderableFrames[#renderableFrames + 1] = frame
+        end
+    end
+    return BCDM.SortTrackedBuffFrames(renderableFrames)
+end
+
 local function ShouldSkin()
     if not BCDM.db.profile.CooldownManager.Enable then return false end
     if C_AddOns.IsAddOnLoaded("ElvUI") and ElvUI[1].private.skins.blizzard.cooldownManager then return false end
@@ -155,101 +202,214 @@ local function StyleChargeCount()
     end
 end
 
-local function CenterBuffs()
-    local visibleBuffIcons = {}
+local trackedBuffContainer
+local trackedBuffDriver
+local trackedBuffLayoutPending = false
+local trackedBuffLayoutTicks = 0
+local trackedBuffRestorePending = false
+local trackedBuffCenteringActive = false
+local trackedBuffViewerHooked = false
+local trackedBuffLastDirectLayout = 0
+local trackedBuffAnchors = setmetatable({}, { __mode = "k" })
+local trackedBuffFrameHooks = setmetatable({}, { __mode = "k" })
 
-    for _, childFrame in ipairs(BuffIconCooldownViewer:GetItemFrames()) do
-        if childFrame and childFrame.Icon then
-            table.insert(visibleBuffIcons, childFrame)
-        end
-    end
-
-    table.sort(visibleBuffIcons, function(a, b) return (a.layoutIndex or 0) < (b.layoutIndex or 0) end)
-
-    local visibleCount = #visibleBuffIcons
-    if visibleCount == 0 then return 0 end
-
-    local iconWidth = visibleBuffIcons[1]:GetWidth()
-    local iconHeight = visibleBuffIcons[1]:GetHeight()
-    local startX = 0
-    local startY = 0
-    local iconSpacing = 0
-
-    if BuffIconCooldownViewer.isHorizontal then
-        iconSpacing = BuffIconCooldownViewer.childXPadding or 0
-        local totalWidth = (visibleCount * iconWidth) + ((visibleCount - 1) * iconSpacing)
-        startX = -totalWidth / 2 + iconWidth / 2
-    else
-        iconSpacing = BuffIconCooldownViewer.childYPadding or 0
-        local totalHeight = (visibleCount * iconHeight) + ((visibleCount - 1) * iconSpacing)
-        startY = totalHeight / 2 - iconHeight / 2
-    end
-
-    for index, iconFrame in ipairs(visibleBuffIcons) do
-        pcall(function()
-            iconFrame:ClearAllPoints()
-            if BuffIconCooldownViewer.isHorizontal then
-                iconFrame:SetPoint("CENTER", BuffIconCooldownViewer, "CENTER", startX + (index - 1) * (iconWidth + iconSpacing), 0)
-            else
-                iconFrame:SetPoint("CENTER", BuffIconCooldownViewer, "CENTER", 0, startY - (index - 1) * (iconHeight + iconSpacing))
-            end
-        end)
-    end
-
-    return visibleCount
-end
-
-local centerBuffsPending = false
-local centerBuffsViewerHooked = false
-local centeredBuffIconHooks = setmetatable({}, { __mode = "k" })
-
-local function IsCenterBuffsEnabled()
+local function IsTrackedBuffCenteringEnabled()
     local profile = BCDM.db and BCDM.db.profile
     local settings = profile and profile.CooldownManager and profile.CooldownManager.Buffs
     return settings and settings.CenterBuffs == true
 end
 
-local function QueueCenterBuffs()
-    if centerBuffsPending or not IsCenterBuffsEnabled() then return end
-    centerBuffsPending = true
-    C_Timer.After(0, function()
-        centerBuffsPending = false
-        if IsCenterBuffsEnabled() and BuffIconCooldownViewer then CenterBuffs() end
-    end)
+local function ClearTrackedBuffAnchors()
+    for frame in pairs(trackedBuffAnchors) do
+        trackedBuffAnchors[frame] = nil
+    end
 end
 
-local function HookBuffIconItems()
-    if not BuffIconCooldownViewer then return end
-    for _, childFrame in ipairs({ BuffIconCooldownViewer:GetChildren() }) do
-        if childFrame and childFrame.layoutIndex and not centeredBuffIconHooks[childFrame] then
-            centeredBuffIconHooks[childFrame] = true
-            hooksecurefunc(childFrame, "SetShown", QueueCenterBuffs)
+local function ReapplyTrackedBuffPositions()
+    if not trackedBuffCenteringActive then return end
+    for frame, anchor in pairs(trackedBuffAnchors) do
+        if frame and anchor then
+            frame:ClearAllPoints()
+            frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
         end
     end
 end
 
-local function EnsureCenterBuffsHooks()
-    if centerBuffsViewerHooked or not BuffIconCooldownViewer then return end
-    centerBuffsViewerHooked = true
-    hooksecurefunc(BuffIconCooldownViewer, "Layout", function()
-        HookBuffIconItems()
-        QueueCenterBuffs()
-    end)
-    hooksecurefunc(BuffIconCooldownViewer, "RefreshLayout", function()
-        HookBuffIconItems()
-        QueueCenterBuffs()
-    end)
-    HookBuffIconItems()
+local function PositionTrackedBuffContainer()
+    if not trackedBuffContainer then return end
+    local settings = BCDM.db.profile.CooldownManager.Buffs
+    local layout = settings.Layout
+    local anchorParent = BCDM:ResolveAnchorParent(layout[2])
+    local xOffset = (layout[4] or 0) - 0.1
+    local yOffset = layout[5] or 0
+
+    trackedBuffContainer:ClearAllPoints()
+    local positioned = pcall(trackedBuffContainer.SetPoint, trackedBuffContainer,
+        layout[1], anchorParent, layout[3], xOffset, yOffset)
+    if not positioned then
+        trackedBuffContainer:SetPoint(layout[1], UIParent, layout[3], xOffset, yOffset)
+    end
 end
 
-local function SetupCenterBuffs()
-    local buffsSettings = BCDM.db.profile.CooldownManager.Buffs
-    EnsureCenterBuffsHooks()
-    if buffsSettings.CenterBuffs then
-        HookBuffIconItems()
-        QueueCenterBuffs()
-    elseif BuffIconCooldownViewer and BuffIconCooldownViewer.Layout then
-        BuffIconCooldownViewer:Layout()
+local function LayoutTrackedBuffs()
+    local viewer = BuffIconCooldownViewer
+    if not trackedBuffCenteringActive or not trackedBuffContainer or not viewer then return 0 end
+
+    local pool = viewer.itemFramePool
+    if not pool or not pool.EnumerateActive then return 0 end
+
+    local activeFrames = {}
+    for frame in pool:EnumerateActive() do
+        activeFrames[#activeFrames + 1] = frame
+    end
+    local icons = BCDM.CollectRenderableTrackedBuffFrames(activeFrames)
+    local currentIcons = {}
+    for _, frame in ipairs(icons) do
+        currentIcons[frame] = true
+    end
+
+    for frame in pairs(trackedBuffAnchors) do
+        if not currentIcons[frame] then trackedBuffAnchors[frame] = nil end
+    end
+
+    local count = #icons
+    if count == 0 then
+        trackedBuffContainer:SetSize(1, 1)
+        PositionTrackedBuffContainer()
+        return 0
+    end
+
+    local settings = BCDM.db.profile.CooldownManager.Buffs
+    local iconWidth, iconHeight = BCDM:GetIconDimensions(settings)
+    local isHorizontal = viewer.isHorizontal == true
+    local spacing = isHorizontal and (viewer.childXPadding or 0) or (viewer.childYPadding or 0)
+    local totalWidth, totalHeight, positions = BCDM.ComputeTrackedBuffLayout(
+        count, iconWidth, iconHeight, spacing, isHorizontal)
+
+    trackedBuffContainer:SetSize(totalWidth, totalHeight)
+    PositionTrackedBuffContainer()
+
+    for index, frame in ipairs(icons) do
+        local position = positions[index]
+        local frameWidth, frameHeight, xOffset, yOffset = BCDM.ScaleTrackedBuffGeometry(
+            iconWidth, iconHeight, position[1], position[2], frame:GetScale())
+        frame:SetSize(frameWidth, frameHeight)
+        local anchor = { "TOPLEFT", trackedBuffContainer, "TOPLEFT", xOffset, yOffset }
+        trackedBuffAnchors[frame] = anchor
+        frame:ClearAllPoints()
+        frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
+    end
+
+    return count
+end
+
+local function QueueTrackedBuffLayout()
+    if trackedBuffLayoutPending or not trackedBuffCenteringActive or not trackedBuffDriver then return end
+    trackedBuffLayoutPending = true
+    trackedBuffLayoutTicks = 0
+    trackedBuffDriver:Show()
+end
+
+local function HookTrackedBuffFrame(frame)
+    if not frame or trackedBuffFrameHooks[frame] then return end
+    trackedBuffFrameHooks[frame] = true
+
+    hooksecurefunc(frame, "SetPoint", function(_, _, relativeTo)
+        local anchor = trackedBuffAnchors[frame]
+        if not trackedBuffCenteringActive or not anchor or relativeTo == anchor[2] then return end
+        frame:ClearAllPoints()
+        frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
+    end)
+
+    if frame.OnActiveStateChanged then
+        hooksecurefunc(frame, "OnActiveStateChanged", function()
+            if not trackedBuffCenteringActive then return end
+            ReapplyTrackedBuffPositions()
+            QueueTrackedBuffLayout()
+        end)
+    end
+end
+
+local function HookTrackedBuffFrames()
+    local viewer = BuffIconCooldownViewer
+    local pool = viewer and viewer.itemFramePool
+    if not pool or not pool.EnumerateActive then return end
+    for frame in pool:EnumerateActive() do
+        HookTrackedBuffFrame(frame)
+    end
+end
+
+local function EnsureTrackedBuffCentering()
+    local viewer = BuffIconCooldownViewer
+    if not viewer then return end
+
+    if not trackedBuffContainer then
+        trackedBuffContainer = CreateFrame("Frame", nil, UIParent)
+        trackedBuffContainer:SetSize(1, 1)
+        trackedBuffContainer:SetFrameStrata("LOW")
+
+        trackedBuffDriver = CreateFrame("Frame")
+        trackedBuffDriver:Hide()
+        trackedBuffDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
+        trackedBuffDriver:SetScript("OnEvent", function()
+            if not trackedBuffRestorePending or trackedBuffCenteringActive then return end
+            trackedBuffRestorePending = false
+            if BuffIconCooldownViewer and BuffIconCooldownViewer.RefreshLayout then
+                BuffIconCooldownViewer:RefreshLayout()
+            end
+        end)
+        trackedBuffDriver:SetScript("OnUpdate", function(self)
+            trackedBuffLayoutTicks = trackedBuffLayoutTicks + 1
+            if trackedBuffLayoutTicks < 2 then return end
+            self:Hide()
+            trackedBuffLayoutPending = false
+            if trackedBuffCenteringActive then
+                HookTrackedBuffFrames()
+                LayoutTrackedBuffs()
+            end
+        end)
+    end
+
+    if trackedBuffViewerHooked then return end
+    trackedBuffViewerHooked = true
+
+    if viewer.itemFramePool then
+        hooksecurefunc(viewer.itemFramePool, "Acquire", HookTrackedBuffFrames)
+    end
+    hooksecurefunc(viewer, "RefreshLayout", function()
+        if not trackedBuffCenteringActive then return end
+        HookTrackedBuffFrames()
+        local now = GetTime()
+        if now - trackedBuffLastDirectLayout < 0.05 then
+            QueueTrackedBuffLayout()
+            return
+        end
+        trackedBuffLastDirectLayout = now
+        LayoutTrackedBuffs()
+    end)
+end
+
+local function SetupTrackedBuffCentering()
+    EnsureTrackedBuffCentering()
+    if not trackedBuffContainer then return end
+    local enabled = IsTrackedBuffCenteringEnabled()
+    if enabled then
+        trackedBuffCenteringActive = true
+        trackedBuffRestorePending = false
+        trackedBuffContainer:Show()
+        HookTrackedBuffFrames()
+        LayoutTrackedBuffs()
+    elseif trackedBuffCenteringActive then
+        trackedBuffCenteringActive = false
+        trackedBuffLayoutPending = false
+        if trackedBuffDriver then trackedBuffDriver:Hide() end
+        ClearTrackedBuffAnchors()
+        if trackedBuffContainer then trackedBuffContainer:Hide() end
+        if InCombatLockdown() then
+            trackedBuffRestorePending = true
+        elseif BuffIconCooldownViewer and BuffIconCooldownViewer.RefreshLayout then
+            BuffIconCooldownViewer:RefreshLayout()
+        end
     end
 end
 
@@ -323,7 +483,7 @@ function BCDM:SkinCooldownManager()
     StyleChargeCount()
     Position()
     SetHooks()
-    SetupCenterBuffs()
+    SetupTrackedBuffCentering()
     if EssentialCooldownViewer and EssentialCooldownViewer.RefreshLayout then hooksecurefunc(EssentialCooldownViewer, "RefreshLayout", function() CenterWrappedIcons() end) end
     if UtilityCooldownViewer and UtilityCooldownViewer.RefreshLayout then hooksecurefunc(UtilityCooldownViewer, "RefreshLayout", function() CenterWrappedIcons() end) end
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
@@ -343,8 +503,6 @@ function BCDM:UpdateCooldownViewer(viewerType)
     local viewerSettings = cooldownManagerSettings[viewerType]
     local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
     if viewerType == "Trinket" then BCDM:UpdateTrinketBar() return end
-    if viewerType == "Buffs" then SetupCenterBuffs() end
-
     for _, childFrame in ipairs({cooldownViewerFrame:GetChildren()}) do
         if childFrame then
             if childFrame.Icon and ShouldSkin() then
@@ -368,6 +526,8 @@ function BCDM:UpdateCooldownViewer(viewerType)
     StyleIcons()
 
     Position()
+
+    if viewerType == "Buffs" then SetupTrackedBuffCentering() end
 
     StyleChargeCount()
 
