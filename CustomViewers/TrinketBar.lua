@@ -369,7 +369,7 @@ local function LayoutTrinketBar()
         BCDM.TrinketBarContainer:SetSize(1, 1)
         BCDM:RegisterOwnedFrameVisibility(BCDM.TrinketBarContainer, function()
             return BCDM.db.profile.CooldownManager.Trinket
-        end)
+        end, function() BCDM:UpdateTrinketBar() end)
     end
 
     BCDM.TrinketBarContainer:ClearAllPoints()

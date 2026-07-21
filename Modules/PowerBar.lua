@@ -137,7 +137,8 @@ function BCDM:CreatePowerBar()
     if PowerBarDB.Text.Enabled then PowerBar.Text:Show() else PowerBar.Text:Hide() end
 
     BCDM.PowerBar = PowerBar
-    BCDM:RegisterOwnedFrameVisibility(PowerBar, function() return BCDM.db.profile.PowerBar end)
+    BCDM:RegisterOwnedFrameVisibility(PowerBar, function() return BCDM.db.profile.PowerBar end,
+        function() BCDM:UpdatePowerBar() end)
 
     if PowerBarDB.Enabled then
         RegisterPowerBarEvents(PowerBar)

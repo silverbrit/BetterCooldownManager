@@ -134,7 +134,7 @@ local function CreateDisplayState(icon, entry, bar, candidateFilters, signature)
     layer:SetAllPoints(icon)
     layer:SetFrameLevel((icon:GetFrameLevel() or 1) + 10)
 
-    local state = { layer = layer, signature = signature, containers = {}, slots = {}, visuals = {} }
+    local state = { layer = layer, signature = signature, containers = {}, slots = {}, visuals = {}, enabled = true }
     for _, definition in ipairs(DEFINITIONS) do
         local container = CreateFrame("AuraContainer", nil, layer, "CustomAuraContainerTemplate")
         container:SetAllPoints(layer)
@@ -173,9 +173,21 @@ function BCDM:HasCustomTrackerAuraDisplay(icon)
     return icon and Runtime.States[icon] ~= nil
 end
 
+local function SetDisplayEnabled(state, enabled)
+    if not state then return end
+    state.enabled = enabled == true
+    for _, containerState in ipairs(state.containers or {}) do
+        Call(containerState.container, "SetEnabled", state.enabled)
+    end
+    if state.container then Call(state.container, "SetEnabled", state.enabled) end
+end
+
 function BCDM:HideCustomTrackerAuraDisplay(icon)
     local state = icon and Runtime.States[icon]
-    if state and state.layer then state.layer:Hide() end
+    if state and state.layer then
+        SetDisplayEnabled(state, false)
+        state.layer:Hide()
+    end
 end
 
 function BCDM:EnsureCustomTrackerAuraDisplay(icon, entry, bar)
@@ -194,11 +206,12 @@ function BCDM:EnsureCustomTrackerAuraDisplay(icon, entry, bar)
     local state = Runtime.States[icon]
     if state then
         if not UpdateCandidateFilters(state, candidateFilters, signature) then
-            state.layer:Hide()
+            self:HideCustomTrackerAuraDisplay(icon)
             Runtime.PendingPreparation = true
             return false
         end
         for _, visual in ipairs(state.visuals) do ApplyVisualStyle(visual, icon, entry, bar) end
+        SetDisplayEnabled(state, true)
         state.layer:Show()
         return true
     end
@@ -234,7 +247,7 @@ end
 
 function BCDM:RefreshCustomTrackerAuraUnit(unit)
     for _, state in pairs(Runtime.States) do
-        for _, containerState in ipairs(state.containers or {}) do
+        for _, containerState in ipairs(state.enabled and state.containers or {}) do
             if unit == nil or containerState.unit == unit then
                 Call(containerState.container, "UpdateAllAuras")
             end
@@ -280,7 +293,7 @@ local function CreateTrinketCountState(icon, candidateFilters, signature, settin
     container:SetAllPoints(layer)
     container:SetUnit("player")
 
-    local state = { layer = layer, container = container, signature = signature }
+    local state = { layer = layer, container = container, signature = signature, enabled = true }
     local function InitializeFrame(auraButton)
         state.button = auraButton
         state.count = auraButton:CreateFontString(nil, "OVERLAY")
@@ -301,7 +314,10 @@ end
 
 function BCDM:HideTrinketAuraCountDisplay(icon)
     local state = icon and Runtime.TrinketStates[icon]
-    if state then state.layer:Hide() end
+    if state then
+        SetDisplayEnabled(state, false)
+        state.layer:Hide()
+    end
 end
 
 function BCDM:EnsureTrinketAuraCountDisplay(icon, spellIDs, settings, entrySettings)
@@ -315,17 +331,18 @@ function BCDM:EnsureTrinketAuraCountDisplay(icon, spellIDs, settings, entrySetti
     if state then
         if state.signature ~= signature then
             if IsInCombat() then
-                state.layer:Hide()
+                self:HideTrinketAuraCountDisplay(icon)
                 Runtime.PendingTrinketPreparation = true
                 return false
             end
             if not Call(state.container, "SetAuraSlotCandidateFilters", "active", candidateFilters) then
-                state.layer:Hide()
+                self:HideTrinketAuraCountDisplay(icon)
                 return false
             end
             state.signature = signature
         end
         ApplyTrinketCountStyle(state, settings, entrySettings)
+        SetDisplayEnabled(state, true)
         state.layer:Show()
         return true
     end

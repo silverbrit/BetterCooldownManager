@@ -360,7 +360,7 @@ local function GetContainer(barID)
     BCDM:RegisterOwnedFrameVisibility(container, function()
         local store = BCDM:GetCustomTrackerStore()
         return store.Bars[barID]
-    end)
+    end, function() BCDM:RefreshCustomTrackers() end)
     Runtime.Containers[barID] = container
     return container
 end

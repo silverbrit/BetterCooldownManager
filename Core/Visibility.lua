@@ -59,9 +59,13 @@ function BCDM:ShouldShowOwnedFrame(config)
     return self:EvaluateVisibilityState(self:GetOwnedFrameVisibilityPolicy(config), CurrentState())
 end
 
-function BCDM:RegisterOwnedFrameVisibility(frame, configProvider)
+function BCDM:RegisterOwnedFrameVisibility(frame, configProvider, refresh)
     if not frame or registrations[frame] then return end
-    registrations[frame] = { Config = configProvider }
+    registrations[frame] = {
+        Config = configProvider,
+        Refresh = refresh,
+        PolicyVisible = self:ShouldShowOwnedFrame(configProvider and configProvider()),
+    }
     frame:HookScript("OnShow", function(self)
         local registration = registrations[self]
         local config = registration and registration.Config and registration.Config()
@@ -73,9 +77,18 @@ end
 function BCDM:RefreshOwnedFrameVisibility()
     for frame, registration in pairs(registrations) do
         local config = registration.Config and registration.Config()
-        if frame:IsShown() and not self:ShouldShowOwnedFrame(config) then frame:Hide() end
+        local policyVisible = self:ShouldShowOwnedFrame(config)
+        if policyVisible ~= registration.PolicyVisible then
+            registration.PolicyVisible = policyVisible
+            if not policyVisible then
+                frame:Hide()
+            elseif registration.Refresh then
+                registration.Refresh(frame)
+            end
+        elseif frame:IsShown() and not policyVisible then
+            frame:Hide()
+        end
     end
-    self:UpdateBCDM()
 end
 
 function BCDM:SetupVisibilityEvents()
@@ -83,7 +96,7 @@ function BCDM:SetupVisibilityEvents()
     local frame = CreateFrame("Frame", "BCDMVisibilityEventFrame")
     for _, event in ipairs({
         "PLAYER_ENTERING_WORLD", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ZONE_CHANGED_NEW_AREA",
-        "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_ALIVE", "PLAYER_DEAD", "PLAYER_UNGHOST",
+        "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_IS_GLIDING_CHANGED", "PLAYER_ALIVE", "PLAYER_DEAD", "PLAYER_UNGHOST",
         "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_UPDATE_RESTING",
     }) do frame:RegisterEvent(event) end
     frame:SetScript("OnEvent", function(_, _, unit)

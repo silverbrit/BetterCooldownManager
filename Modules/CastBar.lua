@@ -240,7 +240,9 @@ function BCDM:CreateCastBar()
     CastBar.CastTimeText:SetText("")
 
     BCDM.CastBar = CastBar
-    BCDM:RegisterOwnedFrameVisibility(CastBar, function() return BCDM.db.profile.CastBar end)
+    BCDM:RegisterOwnedFrameVisibility(CastBar, function() return BCDM.db.profile.CastBar end, function(frame)
+        if frame:GetScript("OnUpdate") then frame:Show() end
+    end)
 
     if CastBarDB.Enabled then
         CastBar:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
