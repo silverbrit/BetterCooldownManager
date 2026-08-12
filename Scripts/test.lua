@@ -9,6 +9,9 @@ local function Check(condition, message)
 end
 
 local BCDM = {}
+BCDM.IsSecretValue = function(_, value)
+    return type(issecretvalue) == "function" and issecretvalue(value)
+end
 Enum = { PowerType = {
     Mana = 0, ComboPoints = 4, Runes = 5, SoulShards = 7, HolyPower = 9,
     Maelstrom = 11, Chi = 12, ArcaneCharges = 16, Essence = 19,
@@ -20,11 +23,14 @@ assert(loadfile(root .. "/Core/ResourceCatalog.lua"))("BetterCooldownManager", B
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Modules/CooldownManager.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Modules/TrackedBuffAuraViewer.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Scripts/test-cooldown-manager.lua"))(BCDM, Check)
 
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,
     "selected element highlights default to enabled")
+Check(type(defaults.global.CooldownViewer.NativeTrackedBuffVisibility) == "table",
+    "native tracked buff visibility restoration has account-wide storage")
 Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == false,
     "trinket viewer includes passive equipment by default")
 Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,
@@ -59,9 +65,10 @@ Check(#BCDM:BuildCustomTrackerAuraCandidateIDs({ Type = "item", ID = 100 }, 200)
 Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
 Check(BCDM:FormatResourceText(25, 100, "PERCENT") == "25%", "resource text supports percentages")
 local secretValue = {}
+local defaultIsSecretValue = BCDM.IsSecretValue
 BCDM.IsSecretValue = function(_, value) return value == secretValue end
 Check(BCDM:FormatResourceText(secretValue, 100, "PERCENT") == "", "resource text does not inspect secret values")
-BCDM.IsSecretValue = nil
+BCDM.IsSecretValue = defaultIsSecretValue
 local directionCalls = {}
 BCDM:ApplyStatusBarDirection({ SetReverseFill = function(_, reverse) directionCalls.reverse = reverse end }, "LEFT")
 Check(directionCalls.reverse == true, "resource bars support reverse fill")
@@ -299,6 +306,16 @@ local recycledID = BCDM:AddCustomTrackerBar()
 Check(recycledID > newBar, "recycled tracker names retain monotonic internal IDs")
 Check(store.Bars[recycledID].Name == "Tracker Bar 1", "default tracker names reuse the lowest available number")
 Check(store.BarOrder[#store.BarOrder] == recycledID, "new bars append without reordering existing bars")
+
+Check(assert(loadfile(root .. "/Scripts/test-glows.lua"))(root), "custom glow lifecycle tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-cooldown-runtime.lua"))(root),
+    "Cooldown Manager runtime safety tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-tracked-buff-aura.lua"))(root),
+    "tracked buff aura replacement tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-secondary-power.lua"))(root),
+    "secondary-resource secret-value tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-trinket-candidates.lua"))(root),
+    "trinket candidate tests pass")
 
 if failures > 0 then os.exit(1) end
 print("Custom tracker model tests passed")

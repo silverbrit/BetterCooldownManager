@@ -12,8 +12,8 @@
     "utf8": "disable"
   },
   "Lua.workspace.library": [
-    "~/.vscode-server/extensions/ketho.wow-api-0.22.3/Annotations/Core",
-    "${workspaceFolder}/.libraries/wow-ui-source/Interface"
+    "${workspaceFolder}/.libraries/wow-ui-source/Interface",
+    "~/.vscode-server/extensions/ketho.wow-api-0.22.3/Annotations/Core"
   ],
   "Lua.diagnostics.globals": [
     "CLASS_SORT_ORDER",
@@ -63,7 +63,23 @@
     "UISpecialFrames"
   ],
   "Lua.diagnostics.disable": [
-    "assign-type-mismatch"
+    "assign-type-mismatch",
+    "ambiguity-1",
+    "cast-local-type",
+    "deprecated",
+    "duplicate-set-field",
+    "inject-field",
+    "lowercase-global",
+    "missing-fields",
+    "missing-parameter",
+    "missing-return",
+    "need-check-nil",
+    "param-type-mismatch",
+    "redundant-parameter",
+    "unbalanced-assignments",
+    "undefined-field",
+    "undefined-global"
   ],
-  "Lua.type.weakUnionCheck": true
+  "Lua.type.weakUnionCheck": true,
+  "wowAPI.luals.frameXML": false
 }

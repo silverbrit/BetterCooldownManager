@@ -86,9 +86,10 @@ function BCDM:CreatePowerBar()
 
     SetHooks()
 
-    local PowerBar = CreateFrame("Frame", "BCDM_PowerBar", UIParent, "BackdropTemplate")
+    local PowerBar = _G.BCDM_PowerBar or CreateFrame("Frame", "BCDM_PowerBar", UIParent, "BackdropTemplate")
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize
 
+    PowerBar:ClearAllPoints()
     PowerBar:SetBackdrop(BCDM.BACKDROP)
     if borderSize > 0 then
         PowerBar:SetBackdropBorderColor(0, 0, 0, 1)

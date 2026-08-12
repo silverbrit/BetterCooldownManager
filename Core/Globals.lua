@@ -48,8 +48,7 @@ end
 local function SetupSlashCommands()
     SLASH_BCDM1 = "/bcdm"
     SLASH_BCDM2 = "/bettercooldownmanager"
-    SLASH_BCDM3 = "/cdm"
-    SLASH_BCDM4 = "/bcm"
+    SLASH_BCDM3 = "/bcm"
     SlashCmdList["BCDM"] = function() BCDM:CreateGUI() end
     if BCDM.db.global.DisplayLoginMessage then BCDM:PrettyPrint("'|cFF8080FF/bcdm|r' for in-game configuration.") end
 
@@ -65,14 +64,16 @@ local function PixelPerfect(value)
     return pixelSize * math.floor(value / pixelSize + 0.5333)
 end
 
+local frameBorders = setmetatable({}, { __mode = "k" })
+
 function BCDM:AddBorder(parentFrame)
     if not parentFrame then return end
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize or 1
     local borderColour = { r = 0, g = 0, b = 0, a = 1 }
     local borderInset = PixelPerfect(0)
-    parentFrame.BCDMBorders = parentFrame.BCDMBorders or {}
+    local borders = frameBorders[parentFrame]
     local borderAnchor = parentFrame.Icon or parentFrame
-    if #parentFrame.BCDMBorders == 0 then
+    if not borders then
         local function CreateBorderLine() return parentFrame:CreateTexture(nil, "OVERLAY") end
         local topBorder = CreateBorderLine()
         topBorder:SetPoint("TOPLEFT", borderAnchor, "TOPLEFT", borderInset, -borderInset)
@@ -86,9 +87,10 @@ function BCDM:AddBorder(parentFrame)
         local rightBorder = CreateBorderLine()
         rightBorder:SetPoint("TOPRIGHT", borderAnchor, "TOPRIGHT", -borderInset, -borderInset)
         rightBorder:SetPoint("BOTTOMRIGHT", borderAnchor, "BOTTOMRIGHT", -borderInset, borderInset)
-        parentFrame.BCDMBorders = { topBorder, bottomBorder, leftBorder, rightBorder }
+        borders = { topBorder, bottomBorder, leftBorder, rightBorder }
+        frameBorders[parentFrame] = borders
     end
-    local top, bottom, left, right = unpack(parentFrame.BCDMBorders)
+    local top, bottom, left, right = unpack(borders)
     if top and bottom and left and right then
         local pixelSize = PixelPerfect(borderSize)
         top:SetHeight(pixelSize)
@@ -96,7 +98,7 @@ function BCDM:AddBorder(parentFrame)
         left:SetWidth(pixelSize)
         right:SetWidth(pixelSize)
         local shouldShow = borderSize > 0
-        for _, border in ipairs(parentFrame.BCDMBorders) do
+        for _, border in ipairs(borders) do
             border:SetColorTexture(borderColour.r, borderColour.g, borderColour.b, borderColour.a)
             border:SetShown(shouldShow)
         end
@@ -186,7 +188,7 @@ function BCDM:ApplyIconTexCoord(texture, width, height, baseZoom)
 end
 
 function BCDM:IsSecretValue(value)
-    return value ~= nil and type(issecretvalue) == "function" and issecretvalue(value)
+    return type(issecretvalue) == "function" and issecretvalue(value)
 end
 
 function BCDM:GetCooldownDesaturationCurves()
@@ -250,6 +252,7 @@ function BCDM:UpdateBCDM()
     BCDM:RefreshCustomTrackers()
     BCDM:UpdateTrinketBar()
     BCDM:RefreshCustomGlows()
+    if BCDM.QueueCooldownViewerLayoutApply then BCDM:QueueCooldownViewerLayoutApply() end
 end
 
 BCDM.SettingsHighlights = {}

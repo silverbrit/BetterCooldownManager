@@ -59,7 +59,7 @@ function BCDM:GetTrinketSlotSettings(settings, slotID)
 end
 
 local function ReadNumber(value)
-    if type(value) ~= "number" or BCDM:IsSecretValue(value) then return end
+    if BCDM:IsSecretValue(value) or type(value) ~= "number" then return end
     return value
 end
 
@@ -170,6 +170,11 @@ local function GetTrinketAuraSpellIDs(slotID, itemSpellID)
             spellIDs[#spellIDs + 1] = spellID
         end
     end
+    local function ReadInfoNumber(info, key)
+        local ok, value = pcall(function() return info[key] end)
+        if not ok then return end
+        return ReadNumber(value)
+    end
     AddSpellID(itemSpellID)
 
     if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
@@ -184,16 +189,24 @@ local function GetTrinketAuraSpellIDs(slotID, itemSpellID)
         if okSet and type(cooldownIDs) == "table" then
             for _, cooldownID in ipairs(cooldownIDs) do
                 local okInfo, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cooldownID)
-                if okInfo and type(info) == "table" and ReadNumber(info.equipSlot) == slotID then
+                if okInfo and type(info) == "table" and ReadInfoNumber(info, "equipSlot") == slotID then
                     hasCatalogEntry = true
                     if category == Enum.CooldownViewerCategory.EquipSlotEssential then hasOnUseEntry = true end
-                    for _, linkedSpellID in ipairs(info.linkedSpellIDs or {}) do AddSpellID(linkedSpellID) end
+                    AddSpellID(ReadInfoNumber(info, "spellID"))
+                    AddSpellID(ReadInfoNumber(info, "overrideSpellID"))
+                    AddSpellID(ReadInfoNumber(info, "overrideTooltipSpellID"))
+                    local okLinked, linkedSpellIDs = pcall(function() return info.linkedSpellIDs end)
+                    if okLinked and type(linkedSpellIDs) == "table" then
+                        for _, linkedSpellID in ipairs(linkedSpellIDs) do AddSpellID(linkedSpellID) end
+                    end
                 end
             end
         end
     end
     return spellIDs, hasOnUseEntry, hasCatalogEntry
 end
+
+BCDM._GetTrinketAuraSpellIDs = GetTrinketAuraSpellIDs
 
 local function PlayerMatchesFilters(entrySettings)
     local classToken = select(2, UnitClass("player"))

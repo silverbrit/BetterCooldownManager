@@ -210,7 +210,11 @@ function BCDM:EnsureCustomTrackerAuraDisplay(icon, entry, bar)
             Runtime.PendingPreparation = true
             return false
         end
-        for _, visual in ipairs(state.visuals) do ApplyVisualStyle(visual, icon, entry, bar) end
+        if IsInCombat() then
+            Runtime.PendingPreparation = true
+        else
+            for _, visual in ipairs(state.visuals) do ApplyVisualStyle(visual, icon, entry, bar) end
+        end
         SetDisplayEnabled(state, true)
         state.layer:Show()
         return true
@@ -341,7 +345,11 @@ function BCDM:EnsureTrinketAuraCountDisplay(icon, spellIDs, settings, entrySetti
             end
             state.signature = signature
         end
-        ApplyTrinketCountStyle(state, settings, entrySettings)
+        if IsInCombat() then
+            Runtime.PendingTrinketPreparation = true
+        else
+            ApplyTrinketCountStyle(state, settings, entrySettings)
+        end
         SetDisplayEnabled(state, true)
         state.layer:Show()
         return true

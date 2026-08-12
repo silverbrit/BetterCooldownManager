@@ -280,6 +280,9 @@ local function CreateSettingsWindow()
             DetachPanel(frame.ActiveEntry.panel)
             frame.ActiveEntry = nil
         end
+        if BCDM.RetryPendingCooldownViewerLayoutApply then
+            BCDM:RetryPendingCooldownViewerLayoutApply()
+        end
     end)
     frame:SetScript("OnSizeChanged", function()
         if frame.ActiveEntry and type(frame.ActiveEntry.panel.Refresh) == "function" then frame.ActiveEntry.panel:Refresh() end

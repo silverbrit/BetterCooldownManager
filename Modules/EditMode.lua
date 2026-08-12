@@ -49,6 +49,7 @@ function BCDM:UpdateLayout()
             if index then
                 BCDM:PrettyPrint("Layout Set - |cFF8080FF" .. layoutName .. "|r")
                 C_EditMode.SetActiveLayout(index)
+                BCDM:QueueCooldownViewerLayoutApply()
                 return layoutName, index
             end
         end

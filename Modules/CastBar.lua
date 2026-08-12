@@ -162,12 +162,12 @@ function BCDM:CreateCastBar()
 
     SetHooks()
 
-    local CastBar = CreateFrame("Frame", "BCDM_CastBar", UIParent, "BackdropTemplate")
+    local CastBar = _G.BCDM_CastBar or CreateFrame("Frame", "BCDM_CastBar", UIParent, "BackdropTemplate")
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize
 
     CastBar.Pips = {}
 
-
+    CastBar:ClearAllPoints()
     CastBar:SetBackdrop(BCDM.BACKDROP)
     if borderSize > 0 then
         CastBar:SetBackdropBorderColor(0, 0, 0, 1)

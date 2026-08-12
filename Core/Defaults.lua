@@ -25,6 +25,9 @@ local Defaults = {
             Height = 760,
             ShowSelectedElementHighlight = true,
         },
+        CooldownViewer = {
+            NativeTrackedBuffVisibility = {},
+        },
         EditModeManager = {
             SwapOnInstanceDifficulty = false,
             RaidLayouts = {

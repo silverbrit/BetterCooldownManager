@@ -1,50 +1,44 @@
 local _, BCDM = ...
 
-function BCDM.ComputeTrackedBuffLayout(count, iconWidth, iconHeight, spacing, isHorizontal)
-    count = math.max(0, count or 0)
-    iconWidth = math.max(0, iconWidth or 0)
-    iconHeight = math.max(0, iconHeight or 0)
-    spacing = spacing or 0
+local EARLY_VIEWER_ANCHOR_NAMES = {
+    "BCDM_PowerBar",
+    "BCDM_SecondaryPowerBar",
+    "BCDM_CastBar",
+}
 
-    local positions = {}
-    if count == 0 then return 0, 0, positions end
-
-    if isHorizontal then
-        for index = 1, count do
-            positions[index] = { (index - 1) * (iconWidth + spacing), 0 }
-        end
-        return count * iconWidth + (count - 1) * spacing, iconHeight, positions
-    end
-
-    for index = 1, count do
-        positions[index] = { 0, -((index - 1) * (iconHeight + spacing)) }
-    end
-    return iconWidth, count * iconHeight + (count - 1) * spacing, positions
-end
-
-function BCDM.ScaleTrackedBuffGeometry(iconWidth, iconHeight, xOffset, yOffset, frameScale)
-    if not frameScale or frameScale < 0.01 then frameScale = 1 end
-    local inverseScale = 1 / frameScale
-    return iconWidth * inverseScale, iconHeight * inverseScale,
-        xOffset * inverseScale, yOffset * inverseScale
-end
-
-function BCDM.SortTrackedBuffFrames(frames)
-    table.sort(frames, function(left, right)
-        return (left.layoutIndex or 0) < (right.layoutIndex or 0)
-    end)
-    return frames
-end
-
-function BCDM.CollectRenderableTrackedBuffFrames(frames)
-    local renderableFrames = {}
-    for _, frame in ipairs(frames or {}) do
-        if frame and frame.Icon and frame.cooldownID ~= nil
-            and frame.IsShown and frame:IsShown() then
-            renderableFrames[#renderableFrames + 1] = frame
+function BCDM:EnsureCooldownViewerAnchorFrames()
+    if not CreateFrame or not UIParent then return end
+    for _, frameName in ipairs(EARLY_VIEWER_ANCHOR_NAMES) do
+        if not _G[frameName] then
+            CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
         end
     end
-    return BCDM.SortTrackedBuffFrames(renderableFrames)
+end
+
+-- Edit Mode can replay saved Cooldown Viewer anchors before AceAddon OnEnable.
+-- Register the BCM-owned anchor names while addon files are loading so that
+-- Blizzard can resolve legacy layouts before the queued UIParent migration.
+BCDM:EnsureCooldownViewerAnchorFrames()
+
+local function IsInCombat()
+    return InCombatLockdown and InCombatLockdown()
+end
+
+local function GetViewerItemFrames(viewer)
+    if not viewer or not viewer.GetItemFrames then return {}, false end
+    local ok, frames = pcall(viewer.GetItemFrames, viewer)
+    if not ok or BCDM:IsSecretValue(frames) or type(frames) ~= "table" then return {}, false end
+    return frames, true
+end
+
+function BCDM:IsCustomizableCooldownViewerItem(itemFrame)
+    if not itemFrame or not itemFrame.IsItem then return false end
+    if itemFrame.IsForbidden then
+        local okForbidden, forbidden = pcall(itemFrame.IsForbidden, itemFrame)
+        if not okForbidden or self:IsSecretValue(forbidden) or forbidden == true then return false end
+    end
+    local ok, isItem = pcall(itemFrame.IsItem, itemFrame)
+    return ok and not self:IsSecretValue(isItem) and isItem == false
 end
 
 local function ShouldSkin()
@@ -54,12 +48,178 @@ local function ShouldSkin()
     return true
 end
 
-local function NudgeViewer(viewerName, xOffset, yOffset)
-    local viewerFrame = _G[viewerName]
-    if not viewerFrame then return end
-    local point, relativeTo, relativePoint, currentX, currentY = viewerFrame:GetPoint(1)
-    viewerFrame:ClearAllPoints()
-    viewerFrame:SetPoint(point, relativeTo, relativePoint, currentX + xOffset, currentY + yOffset)
+local viewerLayoutPending = false
+local viewerLayoutScheduled = false
+local viewerLayoutApplying = false
+local viewerLayoutErrorReported = false
+local TryApplyViewerLayouts
+local TryApplyViewerStyles
+local CenterWrappedIcons
+local viewerLayoutEventFrame
+local nativeSettingsOpen = false
+local editModeOpen = false
+local nativeSettingsOpenPending = false
+
+local function EnsureViewerLayoutEventFrame()
+    if viewerLayoutEventFrame then return end
+    viewerLayoutEventFrame = CreateFrame("Frame")
+    viewerLayoutEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    viewerLayoutEventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+    viewerLayoutEventFrame:RegisterEvent("COOLDOWN_VIEWER_DATA_LOADED")
+    viewerLayoutEventFrame:RegisterEvent("COOLDOWN_VIEWER_TABLE_HOTFIXED")
+    viewerLayoutEventFrame:SetScript("OnEvent", function(_, event)
+        if viewerLayoutPending and TryApplyViewerLayouts then TryApplyViewerLayouts() end
+        if (event == "COOLDOWN_VIEWER_DATA_LOADED" or event == "COOLDOWN_VIEWER_TABLE_HOTFIXED")
+            and BCDM.QueueCooldownViewerStyleRefresh then
+            BCDM:QueueCooldownViewerStyleRefresh()
+        end
+        if TryApplyViewerStyles then TryApplyViewerStyles() end
+    end)
+end
+
+local POINT_FACTORS = {
+    TOPLEFT = { 0, 1 }, TOP = { 0.5, 1 }, TOPRIGHT = { 1, 1 },
+    LEFT = { 0, 0.5 }, CENTER = { 0.5, 0.5 }, RIGHT = { 1, 0.5 },
+    BOTTOMLEFT = { 0, 0 }, BOTTOM = { 0.5, 0 }, BOTTOMRIGHT = { 1, 0 },
+}
+
+function BCDM.GetUIParentAnchorPosition(frame, point)
+    local factors = POINT_FACTORS[point]
+    if not frame or not factors or not frame.GetRect or not frame.GetEffectiveScale
+        or not UIParent or not UIParent.GetEffectiveScale then
+        return nil
+    end
+
+    local okRect, left, bottom, width, height = pcall(frame.GetRect, frame)
+    local okFrameScale, frameScale = pcall(frame.GetEffectiveScale, frame)
+    local okParentScale, parentScale = pcall(UIParent.GetEffectiveScale, UIParent)
+    if not okRect or not okFrameScale or not okParentScale then return nil end
+    local function IsReadableNumber(value)
+        return not BCDM:IsSecretValue(value) and type(value) == "number"
+    end
+    if not IsReadableNumber(left) or not IsReadableNumber(bottom)
+        or not IsReadableNumber(width) or not IsReadableNumber(height)
+        or not IsReadableNumber(frameScale) or not IsReadableNumber(parentScale) then
+        return nil
+    end
+    if parentScale <= 0 then return nil end
+
+    local scale = frameScale / parentScale
+    return (left + width * factors[1]) * scale, (bottom + height * factors[2]) * scale
+end
+
+local function GetPersistentViewerAnchor(layout)
+    local anchorName = layout[2]
+    local anchorParent = BCDM:ResolveAnchorParent(anchorName)
+    if type(anchorName) ~= "string" or not anchorName:match("^BCDM_") then
+        return anchorParent, layout[3], layout[4] or 0, layout[5] or 0
+    end
+
+    if not _G[anchorName] then return nil end
+    local anchorX, anchorY = BCDM.GetUIParentAnchorPosition(anchorParent, layout[3])
+    if not anchorX then return nil end
+    return UIParent, "BOTTOMLEFT", anchorX + (layout[4] or 0), anchorY + (layout[5] or 0)
+end
+
+local function ApplyViewerLayouts()
+    local LEMO = BCDM.LEMO
+    if not LEMO or not LEMO.IsReady or not LEMO:IsReady() then return false, "not-ready" end
+    if IsInCombat() then return false, "combat" end
+
+    local ok, result = pcall(function()
+        LEMO:LoadLayouts()
+        if LEMO.CanEditActiveLayout and not LEMO:CanEditActiveLayout() then
+            return "not-editable"
+        end
+
+        local settings = BCDM.db.profile.CooldownManager
+        for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
+            local viewer = _G[viewerName]
+            local viewerSettings = settings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
+            local layout = viewerSettings and viewerSettings.Layout
+            if viewer and layout then
+                if viewerName == "EssentialCooldownViewer" then
+                    LEMO:ReanchorFrame(viewer, layout[1], UIParent, layout[2], layout[3], layout[4])
+                else
+                    local anchorParent, relativePoint, xOffset, yOffset = GetPersistentViewerAnchor(layout)
+                    if not anchorParent then return "anchor-not-ready" end
+                    LEMO:ReanchorFrame(viewer, layout[1], anchorParent, relativePoint, xOffset, yOffset)
+                end
+            end
+        end
+        if BCDM.PrepareTrackedBuffVisibilityOverride then
+            BCDM:PrepareTrackedBuffVisibilityOverride(LEMO)
+        end
+        LEMO:ApplyChanges()
+        if BCDM.CommitTrackedBuffVisibilityOverride then
+            BCDM:CommitTrackedBuffVisibilityOverride()
+        end
+        return "applied"
+    end)
+    if not ok then return false, result end
+    if result == "not-editable" or result == "anchor-not-ready" then return false, result end
+    return true, result
+end
+
+local function IsSettingsFrameShown(frame)
+    if not frame or not frame.IsShown then return false end
+    local ok, shown = pcall(frame.IsShown, frame)
+    return ok and not BCDM:IsSecretValue(shown) and shown == true
+end
+
+local function AreCooldownSettingsShown()
+    return nativeSettingsOpenPending or nativeSettingsOpen or editModeOpen
+        or IsSettingsFrameShown(CooldownViewerSettings)
+        or IsSettingsFrameShown(_G.BetterCooldownManagerSettingsWindow)
+end
+
+function BCDM:SetCooldownViewerOpenPending(pending)
+    nativeSettingsOpenPending = pending == true
+end
+
+function BCDM:IsCooldownViewerInteractionActive()
+    return AreCooldownSettingsShown()
+end
+
+function BCDM:IsApplyingCooldownViewerLayout()
+    return viewerLayoutApplying
+end
+
+TryApplyViewerLayouts = function()
+    if not viewerLayoutPending or viewerLayoutApplying or IsInCombat()
+        or AreCooldownSettingsShown() then return end
+    local LEMO = BCDM.LEMO
+    if not LEMO or not LEMO.IsReady or not LEMO:IsReady() then return end
+
+    viewerLayoutApplying = true
+    local ok, result = ApplyViewerLayouts()
+    viewerLayoutApplying = false
+    if ok then
+        viewerLayoutPending = false
+        viewerLayoutErrorReported = false
+    elseif result ~= "combat" and result ~= "not-ready" and result ~= "not-editable"
+        and result ~= "anchor-not-ready"
+        and not viewerLayoutErrorReported then
+        viewerLayoutErrorReported = true
+        if BCDM.PrettyPrint then
+            BCDM:PrettyPrint("Unable to apply Cooldown Manager positions through Edit Mode.")
+        end
+    end
+end
+
+function BCDM:QueueCooldownViewerLayoutApply()
+    viewerLayoutPending = true
+    EnsureViewerLayoutEventFrame()
+    if viewerLayoutScheduled then return end
+    viewerLayoutScheduled = true
+    C_Timer.After(0, function()
+        viewerLayoutScheduled = false
+        TryApplyViewerLayouts()
+    end)
+end
+
+function BCDM:RetryPendingCooldownViewerLayoutApply()
+    if viewerLayoutPending then self:QueueCooldownViewerLayoutApply() end
 end
 
 local function FetchCooldownTextRegion(cooldown)
@@ -72,13 +232,14 @@ local function FetchCooldownTextRegion(cooldown)
 end
 
 local function ApplyCooldownText(cooldownViewer)
+    if IsInCombat() then return end
     local CooldownManagerDB = BCDM.db.profile
     local GeneralDB = CooldownManagerDB.General
     local CooldownTextDB = CooldownManagerDB.CooldownManager.General.CooldownText
     local Viewer = _G[cooldownViewer]
     if not Viewer then return end
-    for _, icon in ipairs({ Viewer:GetChildren() }) do
-        if icon and icon.Cooldown then
+    for _, icon in ipairs(GetViewerItemFrames(Viewer)) do
+        if BCDM:IsCustomizableCooldownViewerItem(icon) and icon.Cooldown then
             local textRegion = FetchCooldownTextRegion(icon.Cooldown)
             if textRegion then
                 if CooldownTextDB.ScaleByIconSize then
@@ -103,37 +264,38 @@ local function ApplyCooldownText(cooldownViewer)
     end
 end
 
-local function Position()
-    local cooldownManagerSettings = BCDM.db.profile.CooldownManager
-    for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
-        local viewerSettings = cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
-        local viewerFrame = _G[viewerName]
-        if viewerFrame and (viewerName == "UtilityCooldownViewer" or viewerName == "BuffIconCooldownViewer") then
-            viewerFrame:ClearAllPoints()
-            local anchorParent = BCDM:ResolveAnchorParent(viewerSettings.Layout[2])
-            viewerFrame:SetPoint(viewerSettings.Layout[1], anchorParent, viewerSettings.Layout[3], viewerSettings.Layout[4], viewerSettings.Layout[5])
-            viewerFrame:SetFrameStrata("LOW")
-        elseif viewerFrame then
-            viewerFrame:ClearAllPoints()
-            viewerFrame:SetPoint(viewerSettings.Layout[1], UIParent, viewerSettings.Layout[3], viewerSettings.Layout[4], viewerSettings.Layout[5])
-            viewerFrame:SetFrameStrata("LOW")
-        end
-        NudgeViewer(viewerName, -0.1, 0)
-    end
+local function ShouldStyleNativeViewer(viewerName)
+    return viewerName ~= "BuffIconCooldownViewer"
+        or not BCDM.ShouldStyleNativeTrackedBuffViewer
+        or BCDM:ShouldStyleNativeTrackedBuffViewer()
 end
 
-local function StyleIcons()
+local function StyleIcons(onlyViewerName)
+    if IsInCombat() then return end
     if not ShouldSkin() then return end
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
+        if (not onlyViewerName or viewerName == onlyViewerName) and ShouldStyleNativeViewer(viewerName) then
         local viewerSettings = cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
         local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
-        for _, childFrame in ipairs({_G[viewerName]:GetChildren()}) do
-            if childFrame then
+        local preserveNativeSize = onlyViewerName == "BuffIconCooldownViewer"
+        for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
+            if BCDM:IsCustomizableCooldownViewerItem(childFrame) then
                 if childFrame.Icon then
                     BCDM:StripTextures(childFrame.Icon)
                     local iconZoomAmount = cooldownManagerSettings.General.IconZoom * 0.5
-                    BCDM:ApplyIconTexCoord(childFrame.Icon, iconWidth, iconHeight, iconZoomAmount)
+                    local textureWidth, textureHeight = iconWidth, iconHeight
+                    if preserveNativeSize then
+                        local okWidth, nativeWidth = pcall(childFrame.GetWidth, childFrame)
+                        local okHeight, nativeHeight = pcall(childFrame.GetHeight, childFrame)
+                        if okWidth and not BCDM:IsSecretValue(nativeWidth) and type(nativeWidth) == "number" then
+                            textureWidth = nativeWidth
+                        end
+                        if okHeight and not BCDM:IsSecretValue(nativeHeight) and type(nativeHeight) == "number" then
+                            textureHeight = nativeHeight
+                        end
+                    end
+                    BCDM:ApplyIconTexCoord(childFrame.Icon, textureWidth, textureHeight, iconZoomAmount)
                 end
                 if childFrame.Cooldown then
                     local borderSize = cooldownManagerSettings.General.BorderSize
@@ -147,26 +309,23 @@ local function StyleIcons()
                 end
                 if childFrame.CooldownFlash then childFrame.CooldownFlash:SetAlpha(0) end
                 if childFrame.DebuffBorder then childFrame.DebuffBorder:SetAlpha(0) end
-                childFrame:SetSize(iconWidth, iconHeight)
+                if not preserveNativeSize then childFrame:SetSize(iconWidth, iconHeight) end
                 BCDM:AddBorder(childFrame)
-                if not childFrame.layoutIndex then childFrame:SetShown(false) end
             end
+        end
         end
     end
 end
 
-local function SetHooks()
-    hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function() if InCombatLockdown() then return end Position() end)
-    hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() if InCombatLockdown() then return end BCDM.LEMO:LoadLayouts() Position() end)
-    hooksecurefunc(CooldownViewerSettings, "RefreshLayout", function() if InCombatLockdown() then return end BCDM:UpdateBCDM() end)
-end
-
-local function StyleChargeCount()
+local function StyleChargeCount(onlyViewerName)
+    if IsInCombat() then return end
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
     local generalSettings = BCDM.db.profile.General
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
-        for _, childFrame in ipairs({ _G[viewerName]:GetChildren() }) do
-            if childFrame and childFrame.ChargeCount and childFrame.ChargeCount.Current then
+        if (not onlyViewerName or viewerName == onlyViewerName) and ShouldStyleNativeViewer(viewerName) then
+        for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
+            if BCDM:IsCustomizableCooldownViewerItem(childFrame)
+                and childFrame.ChargeCount and childFrame.ChargeCount.Current then
                 local currentChargeText = childFrame.ChargeCount.Current
                 currentChargeText:SetFont(BCDM.Media.Font, cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]].Text.FontSize, generalSettings.Fonts.FontFlag)
                 currentChargeText:ClearAllPoints()
@@ -182,8 +341,8 @@ local function StyleChargeCount()
                 currentChargeText:SetDrawLayer("OVERLAY")
             end
         end
-        for _, childFrame in ipairs({ _G[viewerName]:GetChildren() }) do
-            if childFrame and childFrame.Applications then
+        for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
+            if BCDM:IsCustomizableCooldownViewerItem(childFrame) and childFrame.Applications then
                 local applicationsText = childFrame.Applications.Applications
                 applicationsText:SetFont(BCDM.Media.Font, cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]].Text.FontSize, generalSettings.Fonts.FontFlag)
                 applicationsText:ClearAllPoints()
@@ -199,230 +358,119 @@ local function StyleChargeCount()
                 applicationsText:SetDrawLayer("OVERLAY")
             end
         end
-    end
-end
-
-local trackedBuffContainer
-local trackedBuffDriver
-local trackedBuffLayoutPending = false
-local trackedBuffLayoutTicks = 0
-local trackedBuffRestorePending = false
-local trackedBuffCenteringActive = false
-local trackedBuffViewerHooked = false
-local trackedBuffLastDirectLayout = 0
-local trackedBuffAnchors = setmetatable({}, { __mode = "k" })
-local trackedBuffFrameHooks = setmetatable({}, { __mode = "k" })
-
-local function IsTrackedBuffCenteringEnabled()
-    local profile = BCDM.db and BCDM.db.profile
-    local settings = profile and profile.CooldownManager and profile.CooldownManager.Buffs
-    return settings and settings.CenterBuffs == true
-end
-
-local function ClearTrackedBuffAnchors()
-    for frame in pairs(trackedBuffAnchors) do
-        trackedBuffAnchors[frame] = nil
-    end
-end
-
-local function ReapplyTrackedBuffPositions()
-    if not trackedBuffCenteringActive then return end
-    for frame, anchor in pairs(trackedBuffAnchors) do
-        if frame and anchor then
-            frame:ClearAllPoints()
-            frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
         end
     end
 end
 
-local function PositionTrackedBuffContainer()
-    if not trackedBuffContainer then return end
-    local settings = BCDM.db.profile.CooldownManager.Buffs
-    local layout = settings.Layout
-    local anchorParent = BCDM:ResolveAnchorParent(layout[2])
-    local xOffset = (layout[4] or 0) - 0.1
-    local yOffset = layout[5] or 0
+local viewerStylePending = false
+local viewerStyleScheduled = false
 
-    trackedBuffContainer:ClearAllPoints()
-    local positioned = pcall(trackedBuffContainer.SetPoint, trackedBuffContainer,
-        layout[1], anchorParent, layout[3], xOffset, yOffset)
-    if not positioned then
-        trackedBuffContainer:SetPoint(layout[1], UIParent, layout[3], xOffset, yOffset)
-    end
-end
-
-local function LayoutTrackedBuffs()
-    local viewer = BuffIconCooldownViewer
-    if not trackedBuffCenteringActive or not trackedBuffContainer or not viewer then return 0 end
-
-    local pool = viewer.itemFramePool
-    if not pool or not pool.EnumerateActive then return 0 end
-
-    local activeFrames = {}
-    for frame in pool:EnumerateActive() do
-        activeFrames[#activeFrames + 1] = frame
-    end
-    local icons = BCDM.CollectRenderableTrackedBuffFrames(activeFrames)
-    local currentIcons = {}
-    for _, frame in ipairs(icons) do
-        currentIcons[frame] = true
-    end
-
-    for frame in pairs(trackedBuffAnchors) do
-        if not currentIcons[frame] then trackedBuffAnchors[frame] = nil end
-    end
-
-    local count = #icons
-    if count == 0 then
-        trackedBuffContainer:SetSize(1, 1)
-        PositionTrackedBuffContainer()
-        return 0
-    end
-
-    local settings = BCDM.db.profile.CooldownManager.Buffs
-    local iconWidth, iconHeight = BCDM:GetIconDimensions(settings)
-    local isHorizontal = viewer.isHorizontal == true
-    local spacing = isHorizontal and (viewer.childXPadding or 0) or (viewer.childYPadding or 0)
-    local totalWidth, totalHeight, positions = BCDM.ComputeTrackedBuffLayout(
-        count, iconWidth, iconHeight, spacing, isHorizontal)
-
-    trackedBuffContainer:SetSize(totalWidth, totalHeight)
-    PositionTrackedBuffContainer()
-
-    for index, frame in ipairs(icons) do
-        local position = positions[index]
-        local frameWidth, frameHeight, xOffset, yOffset = BCDM.ScaleTrackedBuffGeometry(
-            iconWidth, iconHeight, position[1], position[2], frame:GetScale())
-        frame:SetSize(frameWidth, frameHeight)
-        local anchor = { "TOPLEFT", trackedBuffContainer, "TOPLEFT", xOffset, yOffset }
-        trackedBuffAnchors[frame] = anchor
-        frame:ClearAllPoints()
-        frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
-    end
-
-    return count
-end
-
-local function QueueTrackedBuffLayout()
-    if trackedBuffLayoutPending or not trackedBuffCenteringActive or not trackedBuffDriver then return end
-    trackedBuffLayoutPending = true
-    trackedBuffLayoutTicks = 0
-    trackedBuffDriver:Show()
-end
-
-local function HookTrackedBuffFrame(frame)
-    if not frame or trackedBuffFrameHooks[frame] then return end
-    trackedBuffFrameHooks[frame] = true
-
-    hooksecurefunc(frame, "SetPoint", function(_, _, relativeTo)
-        local anchor = trackedBuffAnchors[frame]
-        if not trackedBuffCenteringActive or not anchor or relativeTo == anchor[2] then return end
-        frame:ClearAllPoints()
-        frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
-    end)
-
-    if frame.OnActiveStateChanged then
-        hooksecurefunc(frame, "OnActiveStateChanged", function()
-            if not trackedBuffCenteringActive then return end
-            ReapplyTrackedBuffPositions()
-            QueueTrackedBuffLayout()
-        end)
-    end
-end
-
-local function HookTrackedBuffFrames()
-    local viewer = BuffIconCooldownViewer
-    local pool = viewer and viewer.itemFramePool
-    if not pool or not pool.EnumerateActive then return end
-    for frame in pool:EnumerateActive() do
-        HookTrackedBuffFrame(frame)
-    end
-end
-
-local function EnsureTrackedBuffCentering()
-    local viewer = BuffIconCooldownViewer
-    if not viewer then return end
-
-    if not trackedBuffContainer then
-        trackedBuffContainer = CreateFrame("Frame", nil, UIParent)
-        trackedBuffContainer:SetSize(1, 1)
-        trackedBuffContainer:SetFrameStrata("LOW")
-
-        trackedBuffDriver = CreateFrame("Frame")
-        trackedBuffDriver:Hide()
-        trackedBuffDriver:RegisterEvent("PLAYER_REGEN_ENABLED")
-        trackedBuffDriver:SetScript("OnEvent", function()
-            if not trackedBuffRestorePending or trackedBuffCenteringActive then return end
-            trackedBuffRestorePending = false
-            if BuffIconCooldownViewer and BuffIconCooldownViewer.RefreshLayout then
-                BuffIconCooldownViewer:RefreshLayout()
-            end
-        end)
-        trackedBuffDriver:SetScript("OnUpdate", function(self)
-            trackedBuffLayoutTicks = trackedBuffLayoutTicks + 1
-            if trackedBuffLayoutTicks < 2 then return end
-            self:Hide()
-            trackedBuffLayoutPending = false
-            if trackedBuffCenteringActive then
-                HookTrackedBuffFrames()
-                LayoutTrackedBuffs()
-            end
-        end)
-    end
-
-    if trackedBuffViewerHooked then return end
-    trackedBuffViewerHooked = true
-
-    if viewer.itemFramePool then
-        hooksecurefunc(viewer.itemFramePool, "Acquire", HookTrackedBuffFrames)
-    end
-    hooksecurefunc(viewer, "RefreshLayout", function()
-        if not trackedBuffCenteringActive then return end
-        HookTrackedBuffFrames()
-        local now = GetTime()
-        if now - trackedBuffLastDirectLayout < 0.05 then
-            QueueTrackedBuffLayout()
-            return
+TryApplyViewerStyles = function()
+    if not viewerStylePending or IsInCombat() or editModeOpen then return end
+    viewerStylePending = false
+    local onlyViewerName = nativeSettingsOpen and "BuffIconCooldownViewer" or nil
+    StyleIcons(onlyViewerName)
+    StyleChargeCount(onlyViewerName)
+    for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
+        if (not onlyViewerName or viewerName == onlyViewerName) and ShouldStyleNativeViewer(viewerName) then
+            ApplyCooldownText(viewerName)
         end
-        trackedBuffLastDirectLayout = now
-        LayoutTrackedBuffs()
+    end
+    if not nativeSettingsOpen and CenterWrappedIcons then CenterWrappedIcons() end
+end
+
+function BCDM:QueueCooldownViewerStyleRefresh()
+    viewerStylePending = true
+    EnsureViewerLayoutEventFrame()
+    if viewerStyleScheduled then return end
+    viewerStyleScheduled = true
+    C_Timer.After(0, function()
+        viewerStyleScheduled = false
+        TryApplyViewerStyles()
     end)
 end
 
-local function SetupTrackedBuffCentering()
-    EnsureTrackedBuffCentering()
-    if not trackedBuffContainer then return end
-    local enabled = IsTrackedBuffCenteringEnabled()
-    if enabled then
-        trackedBuffCenteringActive = true
-        trackedBuffRestorePending = false
-        trackedBuffContainer:Show()
-        HookTrackedBuffFrames()
-        LayoutTrackedBuffs()
-    elseif trackedBuffCenteringActive then
-        trackedBuffCenteringActive = false
-        trackedBuffLayoutPending = false
-        if trackedBuffDriver then trackedBuffDriver:Hide() end
-        ClearTrackedBuffAnchors()
-        if trackedBuffContainer then trackedBuffContainer:Hide() end
-        if InCombatLockdown() then
-            trackedBuffRestorePending = true
-        elseif BuffIconCooldownViewer and BuffIconCooldownViewer.RefreshLayout then
-            BuffIconCooldownViewer:RefreshLayout()
+local hooksSet = false
+local function SetHooks()
+    if hooksSet then return end
+    hooksSet = true
+    if EventRegistry and EventRegistry.RegisterCallback then
+        EventRegistry:RegisterCallback("CooldownViewerSettings.OnShow", function()
+            nativeSettingsOpen = true
+            nativeSettingsOpenPending = false
+            if BCDM.SetTrackedBuffAuraEditorVisible then BCDM:SetTrackedBuffAuraEditorVisible(true) end
+            BCDM:QueueCooldownViewerStyleRefresh()
+        end, BCDM)
+        EventRegistry:RegisterCallback("CooldownViewerSettings.OnHide", function()
+            nativeSettingsOpen = false
+            if BCDM.SetTrackedBuffAuraEditorVisible then BCDM:SetTrackedBuffAuraEditorVisible(false) end
+            BCDM:RetryPendingCooldownViewerLayoutApply()
+            BCDM:QueueCooldownViewerStyleRefresh()
+            if BCDM.QueueTrackedBuffAuraRefresh then BCDM:QueueTrackedBuffAuraRefresh("settings-closed") end
+        end, BCDM)
+        EventRegistry:RegisterCallback("EditMode.Enter", function()
+            editModeOpen = true
+            if BCDM.SetTrackedBuffAuraEditorVisible then BCDM:SetTrackedBuffAuraEditorVisible(true) end
+        end, BCDM)
+        EventRegistry:RegisterCallback("EditMode.Exit", function()
+            editModeOpen = false
+            if BCDM.SetTrackedBuffAuraEditorVisible then
+                BCDM:SetTrackedBuffAuraEditorVisible(false, viewerLayoutApplying)
+            end
+            if not viewerLayoutApplying then BCDM:QueueCooldownViewerLayoutApply() end
+            BCDM:QueueCooldownViewerStyleRefresh()
+            if not viewerLayoutApplying and BCDM.QueueTrackedBuffAuraRefresh then
+                BCDM:QueueTrackedBuffAuraRefresh("edit-mode-exit")
+            end
+        end, BCDM)
+    end
+    hooksecurefunc(CooldownViewerSettings, "RefreshLayout", function()
+        BCDM:QueueCooldownViewerStyleRefresh()
+        if BCDM.QueueTrackedBuffAuraRefresh then BCDM:QueueTrackedBuffAuraRefresh("settings-layout") end
+    end)
+    for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
+        local viewer = _G[viewerName]
+        local hookedViewerName = viewerName
+        if viewer then
+            if viewer.RefreshData then
+                hooksecurefunc(viewer, "RefreshData", function()
+                    BCDM:QueueCooldownViewerStyleRefresh()
+                    if hookedViewerName == "BuffIconCooldownViewer" and not viewerLayoutApplying
+                        and BCDM.QueueTrackedBuffAuraRefresh then
+                        BCDM:QueueTrackedBuffAuraRefresh("native-data")
+                    end
+                end)
+            end
+            if viewer.RefreshLayout then
+                hooksecurefunc(viewer, "RefreshLayout", function()
+                    BCDM:QueueCooldownViewerStyleRefresh()
+                    if hookedViewerName == "BuffIconCooldownViewer" and not viewerLayoutApplying
+                        and BCDM.QueueTrackedBuffAuraRefresh then
+                        BCDM:QueueTrackedBuffAuraRefresh("native-layout")
+                    end
+                end)
+            end
         end
     end
 end
 
 local function CenterWrappedRows(viewerName)
     local viewer = _G[viewerName]
-    if not viewer then return end
+    if not viewer or IsInCombat() then return end
 
     local iconLimit = viewer.iconLimit
     if not iconLimit or iconLimit <= 0 then return end
 
     local visibleIcons = {}
-    for _, childFrame in ipairs({ viewer:GetChildren() }) do
-        if childFrame and childFrame:IsShown() and childFrame.layoutIndex then
+    for _, childFrame in ipairs(GetViewerItemFrames(viewer)) do
+        if childFrame and childFrame.layoutIndex
+            and not BCDM:IsCustomizableCooldownViewerItem(childFrame) then
+            return
+        end
+        local okShown, shown = false, false
+        if childFrame and childFrame.IsShown then okShown, shown = pcall(childFrame.IsShown, childFrame) end
+        if childFrame and childFrame.layoutIndex and okShown
+            and not BCDM:IsSecretValue(shown) and shown == true then
             table.insert(visibleIcons, childFrame)
         end
     end
@@ -466,7 +514,7 @@ local function CenterWrappedRows(viewerName)
     end
 end
 
-local function CenterWrappedIcons()
+CenterWrappedIcons = function()
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
     local essentialSettings = cooldownManagerSettings.Essential
     local utilitySettings = cooldownManagerSettings.Utility
@@ -476,25 +524,20 @@ local function CenterWrappedIcons()
 end
 
 function BCDM:SkinCooldownManager()
-    local LEMO = BCDM.LEMO
-    LEMO:LoadLayouts()
     C_CVar.SetCVar("cooldownViewerEnabled", 1)
     StyleIcons()
     StyleChargeCount()
-    Position()
+    BCDM:QueueCooldownViewerLayoutApply()
     SetHooks()
-    SetupTrackedBuffCentering()
-    if EssentialCooldownViewer and EssentialCooldownViewer.RefreshLayout then hooksecurefunc(EssentialCooldownViewer, "RefreshLayout", function() CenterWrappedIcons() end) end
-    if UtilityCooldownViewer and UtilityCooldownViewer.RefreshLayout then hooksecurefunc(UtilityCooldownViewer, "RefreshLayout", function() CenterWrappedIcons() end) end
+    BCDM:QueueCooldownViewerStyleRefresh()
+    if BCDM.SetupTrackedBuffAuraViewer then BCDM:SetupTrackedBuffAuraViewer() end
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
-        C_Timer.After(0.1, function() ApplyCooldownText(viewerName) end)
+        local deferredViewerName = viewerName
+        C_Timer.After(0.1, function()
+            if ShouldStyleNativeViewer(deferredViewerName) then ApplyCooldownText(deferredViewerName) end
+        end)
     end
 
-    C_Timer.After(1, function()
-        if not InCombatLockdown() then
-            LEMO:ApplyChanges()
-        end
-    end)
 end
 
 function BCDM:UpdateCooldownViewer(viewerType)
@@ -503,8 +546,9 @@ function BCDM:UpdateCooldownViewer(viewerType)
     local viewerSettings = cooldownManagerSettings[viewerType]
     local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
     if viewerType == "Trinket" then BCDM:UpdateTrinketBar() return end
-    for _, childFrame in ipairs({cooldownViewerFrame:GetChildren()}) do
-        if childFrame then
+    if not IsInCombat() and ShouldStyleNativeViewer(BCDM.DBViewerToCooldownManagerViewer[viewerType]) then
+        for _, childFrame in ipairs(GetViewerItemFrames(cooldownViewerFrame)) do
+            if BCDM:IsCustomizableCooldownViewerItem(childFrame) then
             if childFrame.Icon and ShouldSkin() then
                 BCDM:StripTextures(childFrame.Icon)
                 BCDM:ApplyIconTexCoord(childFrame.Icon, iconWidth, iconHeight, cooldownManagerSettings.General.IconZoom)
@@ -520,18 +564,22 @@ function BCDM:UpdateCooldownViewer(viewerType)
             end
             if childFrame.CooldownFlash then childFrame.CooldownFlash:SetAlpha(0) end
             childFrame:SetSize(iconWidth, iconHeight)
+            end
         end
+
+        StyleIcons()
+
+        StyleChargeCount()
+
+        ApplyCooldownText(BCDM.DBViewerToCooldownManagerViewer[viewerType])
     end
 
-    StyleIcons()
+    BCDM:QueueCooldownViewerLayoutApply()
+    BCDM:QueueCooldownViewerStyleRefresh()
 
-    Position()
-
-    if viewerType == "Buffs" then SetupTrackedBuffCentering() end
-
-    StyleChargeCount()
-
-    ApplyCooldownText(BCDM.DBViewerToCooldownManagerViewer[viewerType])
+    if viewerType == "Buffs" and BCDM.QueueTrackedBuffAuraRefresh then
+        BCDM:QueueTrackedBuffAuraRefresh("viewer-update")
+    end
 
     BCDM:UpdatePowerBarWidth()
     BCDM:UpdateSecondaryPowerBarWidth()

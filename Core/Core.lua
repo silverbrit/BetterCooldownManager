@@ -13,10 +13,14 @@ function BetterCooldownManager:OnInitialize()
         end
     end
     if BCDM.db.global.UseGlobalProfile then BCDM.db:SetProfile(BCDM.db.global.GlobalProfile or "Default") end
-    BCDM.db.RegisterCallback(BCDM, "OnProfileChanged", function()
+    local function HandleProfileLayoutChanged()
         BCDM:UpdateBCDM()
+        BCDM:QueueCooldownViewerLayoutApply()
         if BCDM.RefreshSettings then BCDM:RefreshSettings() end
-    end)
+    end
+    BCDM.db.RegisterCallback(BCDM, "OnProfileChanged", HandleProfileLayoutChanged)
+    BCDM.db.RegisterCallback(BCDM, "OnProfileCopied", HandleProfileLayoutChanged)
+    BCDM.db.RegisterCallback(BCDM, "OnProfileReset", HandleProfileLayoutChanged)
     BCDM:RegisterSettings()
 end
 

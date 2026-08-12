@@ -125,6 +125,7 @@ local function RegisterPanel(parentCategory, name, panel, isRoot)
         category = Settings.RegisterCanvasLayoutSubcategory(parentCategory, panel, displayName)
     end
     Settings.RegisterAddOnCategory(category)
+    panel:Hide()
     panels[#panels + 1] = panel
     panelEntries[#panelEntries + 1] = {
         name = isRoot and L("General") or displayName,
@@ -218,24 +219,30 @@ local function CreateGeneralPanel()
     return panel
 end
 
-local function OpenBlizzardCooldownManager(displayMode)
+local function OpenBlizzardCooldownManager()
     if InCombatLockdown() then
         BCDM:PrettyPrint("Blizzard's Cooldown Manager cannot be opened during combat.")
         return
     end
 
+    if BCDM.SetCooldownViewerOpenPending then BCDM:SetCooldownViewerOpenPending(true) end
+
     local function OpenNativeSettings()
-        if CooldownViewerSettings and type(CooldownViewerSettings.ShowUIPanel) == "function" then
-            CooldownViewerSettings:ShowUIPanel()
+        local opened = false
+        local shown = false
+        if CooldownViewerSettings and type(CooldownViewerSettings.ShowUIPanel) == "function"
+            and type(securecallfunction) == "function" then
+            opened = pcall(securecallfunction, CooldownViewerSettings.ShowUIPanel, CooldownViewerSettings)
         elseif CooldownViewerSettings and type(ShowUIPanel) == "function" then
-            ShowUIPanel(CooldownViewerSettings)
-        else
-            BCDM:PrettyPrint("Blizzard's Cooldown Manager is not available.")
-            return
+            opened = pcall(ShowUIPanel, CooldownViewerSettings)
         end
-        if displayMode and CooldownViewerSettings
-            and type(CooldownViewerSettings.SetDisplayMode) == "function" then
-            CooldownViewerSettings:SetDisplayMode(displayMode)
+        if opened and CooldownViewerSettings and CooldownViewerSettings.IsShown then
+            local okShown, isShown = pcall(CooldownViewerSettings.IsShown, CooldownViewerSettings)
+            shown = okShown and isShown == true
+        end
+        if BCDM.SetCooldownViewerOpenPending then BCDM:SetCooldownViewerOpenPending(false) end
+        if not opened or not shown then
+            BCDM:PrettyPrint("Blizzard's Cooldown Manager is not available.")
         end
     end
 
@@ -399,7 +406,7 @@ local function CreateViewerPanel(viewerType)
     elseif viewerType == "Buffs" then
         PathCheckbox(controls, layout, "Center Buffs", ProfileRoot,
             { "CooldownManager", "Buffs", "CenterBuffs" }, function() BCDM:PromptReload() end, {
-                description = L("Centers buffs horizontally or vertically. A UI reload is required."),
+                description = L("Uses an aura-only BCM viewer that stays centered in combat. Item-, totem-, and cooldown-only entries are omitted. A UI reload is required."),
             })
     end
     PathDropdown(controls, layout, "Anchor From", ProfileRoot,
@@ -513,7 +520,7 @@ local function CreateViewerPanel(viewerType)
     panel.RefreshSettingsHighlight = RefreshViewerHighlight
     if viewerType == "Essential" or viewerType == "Utility" or viewerType == "Buffs" then
         panel.OnStandaloneSettingsActivated = function()
-            OpenBlizzardCooldownManager(viewerType == "Buffs" and "auras" or "spells")
+            OpenBlizzardCooldownManager()
         end
     end
     panel:HookScript("OnShow", function()

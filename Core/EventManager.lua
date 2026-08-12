@@ -1,5 +1,4 @@
 local _, BCDM = ...
-local LEMO = LibStub("LibEditModeOverride-1.0")
 
 local function IsInPetBattle()
     return C_PetBattles and C_PetBattles.IsInBattle and C_PetBattles.IsInBattle()
@@ -53,8 +52,8 @@ function BCDM:SetupEventManager()
         if event == "PLAYER_SPECIALIZATION_CHANGED" then
             local unit = ...
             if unit ~= "player" then return end
-            LEMO:ApplyChanges()
             BCDM:UpdateBCDM()
+            BCDM:QueueCooldownViewerLayoutApply()
             if BCDM.RefreshSettings then BCDM:RefreshSettings() end
         else
             BCDM:UpdateBCDM()

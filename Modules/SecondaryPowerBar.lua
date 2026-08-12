@@ -351,22 +351,49 @@ local function UpdateEssenceDisplay(descriptor)
     end
 end
 
+local function ReadResourceNumber(value)
+    if BCDM:IsSecretValue(value) or type(value) ~= "number" then return nil end
+    return value
+end
+
+local function GetPlayerAuraBySpellID(spellId)
+    if not C_UnitAuras or not C_UnitAuras.GetPlayerAuraBySpellID then return nil, false end
+    local ok, auraData = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
+    if not ok or BCDM:IsSecretValue(auraData) then return nil, false end
+    return auraData, true
+end
+
 local function GetAuraStacks(spellId)
-    local auraData = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
-    if auraData then
-        return auraData.applications or 0
-    end
-    return 0
+    local auraData, readable = GetPlayerAuraBySpellID(spellId)
+    if not readable then return nil, false end
+    if auraData == nil then return 0, true end
+    if type(auraData) ~= "table" then return nil, false end
+    local ok, applications = pcall(function() return auraData.applications end)
+    if not ok or BCDM:IsSecretValue(applications) then return nil, false end
+    if applications == nil then return 0, true end
+    applications = ReadResourceNumber(applications)
+    return applications, applications ~= nil
 end
 
 local function IsInMetamorphosis(spellId)
-    local auraData = C_UnitAuras.GetPlayerAuraBySpellID(spellId)
-    return auraData ~= nil
+    local auraData, readable = GetPlayerAuraBySpellID(spellId)
+    if not readable then return nil, false end
+    return auraData ~= nil, true
 end
 
 local function GetSpellCharges(spellId)
-    return C_Spell.GetSpellCastCount(spellId)
+    if not C_Spell or not C_Spell.GetSpellCastCount then return nil, false end
+    local ok, charges = pcall(C_Spell.GetSpellCastCount, spellId)
+    if not ok then return nil, false end
+    charges = ReadResourceNumber(charges)
+    return charges, charges ~= nil
 end
+
+BCDM._SecondaryResourceReaders = {
+    GetAuraStacks = GetAuraStacks,
+    IsInMetamorphosis = IsInMetamorphosis,
+    GetSpellCharges = GetSpellCharges,
+}
 
 local RESOURCE_HANDLERS = {}
 
@@ -381,14 +408,16 @@ end
 
 RESOURCE_HANDLERS.STANDARD = SetStandardValue
 RESOURCE_HANDLERS.AURA_STACKS = function(descriptor, bar)
-    local current = GetAuraStacks(descriptor.sourceSpellID)
+    local current, readable = GetAuraStacks(descriptor.sourceSpellID)
+    if not readable then return nil end
     bar.Status:SetMinMaxValues(0, descriptor.maximum)
     SetBarValue(bar.Status, current)
     bar.Status:Show()
     return current, descriptor.maximum, tostring(current)
 end
 RESOURCE_HANDLERS.SPELL_CHARGES = function(descriptor, bar)
-    local current = GetSpellCharges(descriptor.sourceSpellID) or 0
+    local current, readable = GetSpellCharges(descriptor.sourceSpellID)
+    if not readable then return nil end
     bar.Status:SetMinMaxValues(0, descriptor.maximum)
     SetBarValue(bar.Status, current)
     bar.Status:Show()
@@ -396,8 +425,9 @@ RESOURCE_HANDLERS.SPELL_CHARGES = function(descriptor, bar)
 end
 RESOURCE_HANDLERS.DEVOURER_SOUL = function(descriptor, bar)
     local hasSoulGlutton = C_SpellBook.IsSpellKnown(descriptor.soulGluttonSpellID)
-    local inMetamorphosis = IsInMetamorphosis(descriptor.metamorphosisAuraID)
-    local current = GetSpellCharges(descriptor.sourceSpellID) or 0
+    local inMetamorphosis, auraReadable = IsInMetamorphosis(descriptor.metamorphosisAuraID)
+    local current, chargesReadable = GetSpellCharges(descriptor.sourceSpellID)
+    if not auraReadable or not chargesReadable then return nil end
     local maximum = inMetamorphosis and 40 or (hasSoulGlutton and 35 or 50)
     bar.Status:SetMinMaxValues(0, maximum)
     SetBarValue(bar.Status, current)
@@ -492,6 +522,12 @@ local function UpdatePowerValues()
     if not handler then bar:Hide() return end
     HideInactiveResourceDisplays(descriptor.kind)
     local current, maximum, text, colourApplied = handler(descriptor, bar, settings)
+    if current == nil then
+        bar.Status:Hide()
+        bar.Text:SetText("")
+        bar:Hide()
+        return
+    end
     if not colourApplied then bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor)) end
     if settings.Text.Mode and settings.Text.Mode ~= "AUTO" then
         text = BCDM:FormatResourceText(current, maximum, settings.Text.Mode)
@@ -581,12 +617,14 @@ local function OnSecondaryPowerBarEvent(self, event, ...)
         return
     end
 
-    if event == "PLAYER_SPECIALIZATION_CHANGED" then
+    if event == "UNIT_AURA" then
+        UpdatePowerValues()
+        return
+    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
         local unit = ...
         if unit and unit ~= "player" then return end
     elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER" or event == "UNIT_HEALTH"
-        or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED"
-        or event == "UNIT_AURA" then
+        or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
         local unit = ...
         if unit and unit ~= "player" then return end
     end
@@ -602,6 +640,8 @@ local function OnSecondaryPowerBarEvent(self, event, ...)
     UpdatePowerValues()
 end
 
+BCDM._SecondaryPowerBarOnEvent = OnSecondaryPowerBarEvent
+
 local function RegisterSecondaryPowerBarEvents(secondaryPowerBar)
     secondaryPowerBar:RegisterEvent("UNIT_POWER_UPDATE")
     secondaryPowerBar:RegisterEvent("UNIT_MAXPOWER")
@@ -613,7 +653,7 @@ local function RegisterSecondaryPowerBarEvents(secondaryPowerBar)
     secondaryPowerBar:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
     secondaryPowerBar:RegisterEvent("RUNE_POWER_UPDATE")
     secondaryPowerBar:RegisterEvent("RUNE_TYPE_UPDATE")
-    secondaryPowerBar:RegisterEvent("UNIT_AURA")
+    secondaryPowerBar:RegisterUnitEvent("UNIT_AURA", "player")
     secondaryPowerBar:SetScript("OnEvent", OnSecondaryPowerBarEvent)
     secondaryPowerBar.Status:SetScript("OnSizeChanged", OnSecondaryPowerBarSizeChanged)
 end
@@ -631,7 +671,8 @@ function BCDM:CreateSecondaryPowerBar()
 
     SetHooks()
 
-    local secondaryPowerBar = CreateFrame("Frame", "BCDM_SecondaryPowerBar", UIParent, "BackdropTemplate")
+    local secondaryPowerBar = _G.BCDM_SecondaryPowerBar
+        or CreateFrame("Frame", "BCDM_SecondaryPowerBar", UIParent, "BackdropTemplate")
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize
 
     secondaryPowerBar:SetBackdrop(BCDM.BACKDROP)
