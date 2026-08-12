@@ -31,18 +31,6 @@ local LEGACY_VIEWERS = {
     { key = "ItemSpell", name = "Items & Spells", entries = "ItemsSpells", frame = "BCDM_CustomItemSpellBar" },
 }
 
-local function Copy(value, seen)
-    if type(value) ~= "table" then return value end
-    seen = seen or {}
-    if seen[value] then return seen[value] end
-    local result = {}
-    seen[value] = result
-    for key, child in pairs(value) do
-        result[Copy(key, seen)] = Copy(child, seen)
-    end
-    return result
-end
-
 local function NormalizeAuraIDs(value)
     local normalized, seen = {}, {}
     local function Add(candidate)
@@ -319,13 +307,13 @@ local function CopyAppearance(legacy)
     local bar = {}
     for key, value in pairs(legacy) do
         if key ~= "Spells" and key ~= "Items" and key ~= "ItemsSpells" then
-            bar[key] = Copy(value)
+            bar[key] = BCDM:CopyTable(value)
         end
     end
     bar.Enabled = legacy.Enabled ~= false
     bar.UseSharedVisibility = legacy.UseSharedVisibility ~= false
-    bar.Visibility = Copy(legacy.Visibility or (BCDM.NewVisibilityPolicy and BCDM:NewVisibilityPolicy()))
-    bar.EntrySettings = Copy(legacy.EntrySettings or DEFAULT_ENTRY_SETTINGS)
+    bar.Visibility = BCDM:CopyTable(legacy.Visibility or (BCDM.NewVisibilityPolicy and BCDM:NewVisibilityPolicy()))
+    bar.EntrySettings = BCDM:CopyTable(legacy.EntrySettings or DEFAULT_ENTRY_SETTINGS)
     bar.EntryOrder = {}
     bar.Entries = {}
     return bar
@@ -350,7 +338,7 @@ local function CollectSpellEntries(legacy)
                 if spellID then
                     local entry = merged[spellID]
                     if not entry then
-                        entry = { sourceType = "spell", sourceID = spellID, data = Copy(type(data) == "table" and data or {}) }
+                        entry = { sourceType = "spell", sourceID = spellID, data = BCDM:CopyTable(type(data) == "table" and data or {}) }
                         entry.data.classSpecFilters = {}
                         merged[spellID] = entry
                     end
@@ -374,7 +362,7 @@ local function CollectFlatEntries(legacy, field, fallbackType)
     for sourceID, data in pairs(type(legacy[field]) == "table" and legacy[field] or {}) do
         sourceID = tonumber(sourceID)
         if sourceID then
-            data = Copy(type(data) == "table" and data or {})
+            data = BCDM:CopyTable(type(data) == "table" and data or {})
             entries[#entries + 1] = {
                 sourceType = data.entryType or fallbackType,
                 sourceID = sourceID,
@@ -399,7 +387,7 @@ local function AddMigratedEntry(store, bar, legacyEntry)
         Tooltip = true,
         TextEnabled = true,
         Glow = "NONE",
-        ClassSpecFilters = Copy(data.classSpecFilters),
+        ClassSpecFilters = BCDM:CopyTable(data.classSpecFilters),
         FilterClass = data.filterClass,
         Source = {
             Type = legacyEntry.sourceType,
@@ -411,10 +399,6 @@ end
 
 local function HasEntries(entries)
     return type(entries) == "table" and #entries > 0
-end
-
-function BCDM:NewCustomTrackerStore()
-    return NewStore()
 end
 
 function BCDM:GetCustomTrackerStore(profile)
@@ -492,7 +476,7 @@ function BCDM:AddCustomTrackerBar(name)
         while usedNames["Tracker Bar " .. displayIndex] do displayIndex = displayIndex + 1 end
         name = "Tracker Bar " .. displayIndex
     end
-    local entrySettings = Copy(DEFAULT_ENTRY_SETTINGS)
+    local entrySettings = BCDM:CopyTable(DEFAULT_ENTRY_SETTINGS)
     entrySettings.SpecFilters = self:BuildSpecFilters()
     store.Bars[id] = {
         ID = id,
@@ -530,13 +514,13 @@ function BCDM:DuplicateCustomTrackerBar(barID)
     local source = store.Bars[barID]
     if not source then return end
     local copyID = self:AddCustomTrackerBar((source.Name or "Tracker Bar") .. " Copy")
-    local duplicate = Copy(source)
+    local duplicate = BCDM:CopyTable(source)
     duplicate.ID, duplicate.Name, duplicate.Entries, duplicate.EntryOrder = copyID, store.Bars[copyID].Name, {}, {}
     for _, entryID in ipairs(source.EntryOrder or {}) do
         local entry = source.Entries and source.Entries[entryID]
         if entry then
             local newEntryID = AllocateEntryID(store)
-            duplicate.Entries[newEntryID] = Copy(entry)
+            duplicate.Entries[newEntryID] = BCDM:CopyTable(entry)
             duplicate.Entries[newEntryID].ID = newEntryID
             duplicate.EntryOrder[#duplicate.EntryOrder + 1] = newEntryID
         end
@@ -588,7 +572,7 @@ function BCDM:AddCustomTrackerEntry(barID, sourceType, sourceID, extra)
         Tooltip = true,
         TextEnabled = true,
         Glow = "NONE",
-        SpecFilters = extra and Copy(extra.SpecFilters),
+        SpecFilters = extra and BCDM:CopyTable(extra.SpecFilters),
         FilterClass = extra and extra.FilterClass,
         Source = {
             Type = sourceType,

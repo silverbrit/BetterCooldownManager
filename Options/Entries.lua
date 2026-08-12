@@ -370,18 +370,9 @@ local function EntryItemCount(entry)
     return tostring(count)
 end
 
-local DISPLAY_MODES = {
-    { text = "Always", value = "ALWAYS" }, { text = "Ready Only", value = "READY" },
-    { text = "Active Only", value = "ACTIVE" },
-}
-local VISUAL_MODES = {
-    { text = "Full", value = "FULL" }, { text = "Desaturate", value = "DESATURATE" },
-    { text = "Lower Alpha", value = "LOW_ALPHA" },
-}
-local GLOW_MODES = {
-    { text = "No Glow", value = "NONE" }, { text = "Glow Ready", value = "READY" },
-    { text = "Glow Active", value = "ACTIVE" },
-}
+local DISPLAY_MODES = U.DISPLAY_MODES
+local VISUAL_MODES = U.VISUAL_MODES
+local GLOW_MODES = U.GLOW_MODES
 
 local EQUIPMENT_SLOTS = {
     { text = "Head", value = 1 }, { text = "Neck", value = 2 }, { text = "Shoulder", value = 3 },

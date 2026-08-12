@@ -37,4 +37,3 @@ ignore:
     - AGENTS.md
     - .pkgmeta
     - install-deps.sh
-    - release.sh

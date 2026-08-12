@@ -5,10 +5,6 @@ local comboPoints = {}
 local essenceTicks = {}
 local resizeTimer = nil
 
-local function SetBarValue(bar, value)
-    bar:SetValue(value)
-end
-
 local function NudgeSecondaryPowerBar(secondaryPowerBar, xOffset, yOffset)
     local powerBarFrame = _G[secondaryPowerBar]
     if not powerBarFrame then return end
@@ -401,7 +397,7 @@ local function SetStandardValue(descriptor, bar)
     local current = UnitPower("player", descriptor.powerType) or 0
     local maximum = UnitPowerMax("player", descriptor.powerType) or 0
     bar.Status:SetMinMaxValues(0, maximum)
-    SetBarValue(bar.Status, current)
+    bar.Status:SetValue(current)
     bar.Status:Show()
     return current, maximum, tostring(current)
 end
@@ -411,7 +407,7 @@ RESOURCE_HANDLERS.AURA_STACKS = function(descriptor, bar)
     local current, readable = GetAuraStacks(descriptor.sourceSpellID)
     if not readable then return nil end
     bar.Status:SetMinMaxValues(0, descriptor.maximum)
-    SetBarValue(bar.Status, current)
+    bar.Status:SetValue(current)
     bar.Status:Show()
     return current, descriptor.maximum, tostring(current)
 end
@@ -419,7 +415,7 @@ RESOURCE_HANDLERS.SPELL_CHARGES = function(descriptor, bar)
     local current, readable = GetSpellCharges(descriptor.sourceSpellID)
     if not readable then return nil end
     bar.Status:SetMinMaxValues(0, descriptor.maximum)
-    SetBarValue(bar.Status, current)
+    bar.Status:SetValue(current)
     bar.Status:Show()
     return current, descriptor.maximum, tostring(current)
 end
@@ -430,7 +426,7 @@ RESOURCE_HANDLERS.DEVOURER_SOUL = function(descriptor, bar)
     if not auraReadable or not chargesReadable then return nil end
     local maximum = inMetamorphosis and 40 or (hasSoulGlutton and 35 or 50)
     bar.Status:SetMinMaxValues(0, maximum)
-    SetBarValue(bar.Status, current)
+    bar.Status:SetValue(current)
     bar.Status:Show()
     return current, maximum, tostring(current)
 end
@@ -445,7 +441,7 @@ RESOURCE_HANDLERS.SOUL_SHARDS = function(descriptor, bar)
         text = tostring(current)
     end
     bar.Status:SetMinMaxValues(0, maximum)
-    SetBarValue(bar.Status, current)
+    bar.Status:SetValue(current)
     bar.Status:Show()
     return current, maximum, text
 end
@@ -478,7 +474,7 @@ RESOURCE_HANDLERS.STAGGER = function(descriptor, bar, settings)
     local maximum = UnitHealthMax("player") or 0
     local percentage = maximum > 0 and (current / maximum) * 100 or 0
     bar.Status:SetMinMaxValues(0, maximum)
-    SetBarValue(bar.Status, current)
+    bar.Status:SetValue(current)
     if settings.ColourByState then
         local colours = BCDM.db.profile.General.Colours.SecondaryPower.STAGGER_COLOURS
         local stateColour = percentage < 30 and colours.LIGHT or percentage < 60 and colours.MODERATE or colours.HEAVY

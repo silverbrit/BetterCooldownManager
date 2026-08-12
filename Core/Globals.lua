@@ -22,13 +22,8 @@ BCDM.LSM = LibStub("LibSharedMedia-3.0")
 BCDM.LDS = LibStub("LibDualSpec-1.0")
 BCDM.LEMO = LibStub("LibEditModeOverride-1.0")
 
-BCDM.INFOBUTTON = "|TInterface\\AddOns\\BetterCooldownManager\\Media\\InfoButton.png:16:16|t "
 BCDM.ADDON_NAME = C_AddOns.GetAddOnMetadata("BetterCooldownManager", "Title")
 BCDM.ADDON_VERSION = C_AddOns.GetAddOnMetadata("BetterCooldownManager", "Version")
-BCDM.ADDON_AUTHOR = C_AddOns.GetAddOnMetadata("BetterCooldownManager", "Author")
-BCDM.ADDON_LOGO = "|TInterface\\AddOns\\BetterCooldownManager\\Media\\Logo.png:16:16|t"
-BCDM.PRETTY_ADDON_NAME = BCDM.ADDON_LOGO .. " " .. BCDM.ADDON_NAME
-
 BCDM.CAST_BAR_TEST_MODE = false
 
 if BCDM.LSM then BCDM.LSM:Register("statusbar", "Better Blizzard", [[Interface\AddOns\BetterCooldownManager\Media\BetterBlizzard.blp]]) end
@@ -192,54 +187,22 @@ function BCDM:IsSecretValue(value)
     return type(issecretvalue) == "function" and issecretvalue(value)
 end
 
-function BCDM:GetCooldownDesaturationCurves()
-    if self.CooldownDesaturationCurve and self.CooldownGCDFilterCurve then
-        return self.CooldownDesaturationCurve, self.CooldownGCDFilterCurve
-    end
-
-    if not (C_CurveUtil and C_CurveUtil.CreateCurve and Enum and Enum.LuaCurveType and Enum.LuaCurveType.Step) then
-        return nil, nil
-    end
-
-    if not self.CooldownDesaturationCurve then
-        self.CooldownDesaturationCurve = C_CurveUtil.CreateCurve()
-        if self.CooldownDesaturationCurve then
-            self.CooldownDesaturationCurve:SetType(Enum.LuaCurveType.Step)
-            self.CooldownDesaturationCurve:AddPoint(0, 0)
-            self.CooldownDesaturationCurve:AddPoint(0.001, 1)
-        end
-    end
-
-    if not self.CooldownGCDFilterCurve then
-        self.CooldownGCDFilterCurve = C_CurveUtil.CreateCurve()
-        if self.CooldownGCDFilterCurve then
-            self.CooldownGCDFilterCurve:SetType(Enum.LuaCurveType.Step)
-            self.CooldownGCDFilterCurve:AddPoint(0, 0)
-            self.CooldownGCDFilterCurve:AddPoint(1.6, 0)
-            self.CooldownGCDFilterCurve:AddPoint(1.601, 1)
-        end
-    end
-
-    return self.CooldownDesaturationCurve, self.CooldownGCDFilterCurve
-end
-
 function BCDM:Init()
     SetupSlashCommands()
     BCDM:ResolveLSM()
     if not C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer") then C_AddOns.LoadAddOn("Blizzard_CooldownViewer") end
 end
 
-function BCDM:CopyTable(defaultTable)
-    if type(defaultTable) ~= "table" then return defaultTable end
-    local newTable = {}
-    for k, v in pairs(defaultTable) do
-        if type(v) == "table" then
-            newTable[k] = BCDM:CopyTable(v)
-        else
-            newTable[k] = v
-        end
+function BCDM:CopyTable(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local copy = {}
+    seen[value] = copy
+    for key, child in pairs(value) do
+        copy[self:CopyTable(key, seen)] = self:CopyTable(child, seen)
     end
-    return newTable
+    return copy
 end
 
 function BCDM:UpdateBCDM()

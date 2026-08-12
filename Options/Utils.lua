@@ -10,6 +10,18 @@ BCDM.SettingsUtils = M
 M.SELECTOR_ICON_SIZE = 44
 M.SELECTED_ICON_SIZE = 48
 M.SETTINGS_ICON_CROP = 0.08
+M.DISPLAY_MODES = {
+    { text = "Always", value = "ALWAYS" }, { text = "Ready Only", value = "READY" },
+    { text = "Active Only", value = "ACTIVE" },
+}
+M.VISUAL_MODES = {
+    { text = "Full", value = "FULL" }, { text = "Desaturate", value = "DESATURATE" },
+    { text = "Lower Alpha", value = "LOW_ALPHA" },
+}
+M.GLOW_MODES = {
+    { text = "No Glow", value = "NONE" }, { text = "Glow Ready", value = "READY" },
+    { text = "Glow Active", value = "ACTIVE" },
+}
 
 function M.SetSettingsIcon(texture, icon)
     if not texture then return end

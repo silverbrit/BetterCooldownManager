@@ -5,18 +5,9 @@ local Canvas = U.Canvas
 local UNKNOWN_ICON = 134400
 local selectedSlot = 13
 
-local DISPLAY_MODES = {
-    { text = "Always", value = "ALWAYS" }, { text = "Ready Only", value = "READY" },
-    { text = "Active Only", value = "ACTIVE" },
-}
-local VISUAL_MODES = {
-    { text = "Full", value = "FULL" }, { text = "Desaturate", value = "DESATURATE" },
-    { text = "Lower Alpha", value = "LOW_ALPHA" },
-}
-local GLOW_MODES = {
-    { text = "No Glow", value = "NONE" }, { text = "Glow Ready", value = "READY" },
-    { text = "Glow Active", value = "ACTIVE" },
-}
+local DISPLAY_MODES = U.DISPLAY_MODES
+local VISUAL_MODES = U.VISUAL_MODES
+local GLOW_MODES = U.GLOW_MODES
 
 local function Settings()
     return BCDM.db.profile.CooldownManager.Trinket

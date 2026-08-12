@@ -1,9 +1,5 @@
 local _, BCDM = ...
 
-local function SetBarValue(bar, value)
-    bar:SetValue(value)
-end
-
 local function GetDisplayCastText(text, maxChars)
     if not text then return "" end
     if BCDM:IsSecretValue(text) then
@@ -102,7 +98,7 @@ local function UpdateCastBarValues(self, event, unit)
             else
                 BCDM.CastBar.CastTimeText:SetText(string.format("%.0f", remainingDuration))
             end
-            SetBarValue(BCDM.CastBar.Status, remainingDuration)
+            BCDM.CastBar.Status:SetValue(remainingDuration)
         end)
         BCDM.CastBar:Show()
     elseif EMPOWERED_CAST_START[event] then
@@ -122,7 +118,7 @@ local function UpdateCastBarValues(self, event, unit)
                 else
                     BCDM.CastBar.CastTimeText:SetText(string.format("%.0f", remainingDuration))
                 end
-                SetBarValue(BCDM.CastBar.Status, remainingDuration)
+                BCDM.CastBar.Status:SetValue(remainingDuration)
             end)
             BCDM.CastBar:Show()
         end
@@ -136,7 +132,7 @@ local function UpdateCastBarValues(self, event, unit)
         BCDM.CastBar.Icon:SetTexture(select(3, UnitChannelInfo("player")) or nil)
         BCDM.CastBar:SetScript("OnUpdate", function()
             local remainingDuration = channelDuration:GetRemainingDuration()
-            SetBarValue(BCDM.CastBar.Status, remainingDuration)
+            BCDM.CastBar.Status:SetValue(remainingDuration)
             if remainingDuration < 5 then
                 BCDM.CastBar.CastTimeText:SetText(string.format("%.1f", remainingDuration))
             else

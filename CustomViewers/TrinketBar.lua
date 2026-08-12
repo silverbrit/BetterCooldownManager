@@ -548,13 +548,3 @@ trinketEquipmentEvents:SetScript("OnEvent", function(_, event, arg1, arg2)
         if refreshAfterCombat then RefreshEquippedTrinkets() end
     end
 end)
-
-function BCDM:AdjustTrinketLayoutIndex(direction, itemId)
-    -- Legacy compatibility: trinket order is now driven by equipment slot (13, 14).
-    BCDM:UpdateTrinketBar()
-end
-
-function BCDM:AdjustTrinketList(itemId, adjustingHow)
-    -- Legacy compatibility: trinket list is now driven by equipped trinkets.
-    BCDM:UpdateTrinketBar()
-end

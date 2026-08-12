@@ -314,6 +314,18 @@ local Defaults = {
     },
 }
 
+function BCDM:CopyTable(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local copy = {}
+    seen[value] = copy
+    for key, child in pairs(value) do
+        copy[self:CopyTable(key, seen)] = self:CopyTable(child, seen)
+    end
+    return copy
+end
+
 function BCDM:GetDefaultDB()
     return Defaults
 end
