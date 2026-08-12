@@ -157,7 +157,7 @@ local Defaults = {
                 Text = {
                     FontSize = 15,
                     Colour = {1, 1, 1},
-                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3}
+                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0}
                 },
             },
             Utility = {
@@ -170,7 +170,7 @@ local Defaults = {
                 Text = {
                     FontSize = 15,
                     Colour = {1, 1, 1},
-                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3}
+                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0}
                 },
             },
             Buffs = {
@@ -183,7 +183,7 @@ local Defaults = {
                 Text = {
                     FontSize = 15,
                     Colour = {1, 1, 1},
-                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3}
+                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0}
                 },
             },
             Trinket = {
@@ -216,7 +216,7 @@ local Defaults = {
                 Text = {
                     FontSize = 15,
                     Colour = {1, 1, 1},
-                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3},
+                    Layout = {"BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0},
                 },
             },
             CustomTrackers = {
@@ -247,7 +247,7 @@ local Defaults = {
                 Mode = "AUTO",
                 FontSize = 18,
                 Colour = {1, 1, 1},
-                Layout = {"BOTTOM", "BOTTOM", 0, 1}
+                Layout = {"BOTTOM", "BOTTOM", 0, 0}
             },
         },
         SecondaryPowerBar = {

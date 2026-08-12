@@ -43,4 +43,60 @@ Check(table.concat(spellIDs, ",") == "50,100,200,300,400,500",
     "trinket aura candidates include every readable 12.1 spell field")
 Check(hasOnUse and hasCatalog, "matching equip-slot catalog records preserve their category state")
 
+assert(loadfile(root .. "/CustomViewers/AuraSourceDisplay.lua"))("BetterCooldownManager", BCDM)
+CustomAuraContainerSlotDefaultOptions = {}
+InCombatLockdown = function() return false end
+BCDM.Media = { Font = "font" }
+BCDM.db = { profile = { General = { Fonts = {
+    FontFlag = "", Shadow = { Enabled = false },
+} } } }
+
+local boundCount
+local count = {}
+function count:ClearAllPoints() self.anchored = false end
+function count:SetPoint() self.anchored = true end
+function count:SetFont() end
+function count:SetTextColor() end
+function count:SetAlpha() end
+function count:SetShadowColor() end
+function count:SetShadowOffset() end
+
+local auraButton = {}
+function auraButton:CreateFontString() return count end
+function auraButton:SetAllPoints() end
+function auraButton:SetFrameLevel() end
+function auraButton:SetMouseMotionEnabled() end
+function auraButton:SetApplicationCount(region)
+    if not region.anchored then error("application count must be anchored before binding") end
+    boundCount = region
+end
+
+local container = {}
+function container:SetAllPoints() end
+function container:SetUnit() end
+function container:SetEnabled() end
+function container:AddAuraSlot(_, _, options)
+    options.initializeFrame(auraButton)
+    return auraButton
+end
+
+local function NewLayer()
+    local layer = {}
+    function layer:SetAllPoints() end
+    function layer:SetFrameLevel() end
+    function layer:GetFrameLevel() return 11 end
+    function layer:Show() end
+    return layer
+end
+CreateFrame = function(frameType)
+    return frameType == "AuraContainer" and container or NewLayer()
+end
+
+local icon = { GetFrameLevel = function() return 1 end }
+local prepared = BCDM:EnsureTrinketAuraCountDisplay(icon, { 100 }, {
+    Text = { Layout = { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }, FontSize = 15, Colour = { 1, 1, 1 } },
+}, { TextEnabled = true })
+Check(prepared and boundCount == count and count.anchored,
+    "trinket aura counts are anchored before Blizzard validates their binding")
+
 return failures == 0

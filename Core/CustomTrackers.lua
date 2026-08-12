@@ -494,7 +494,7 @@ function BCDM:AddCustomTrackerBar(name)
         GrowthDirection = "RIGHT",
         Columns = 0,
         EntrySettings = entrySettings,
-        Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 } },
+        Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 } },
         EntryOrder = {},
         Entries = {},
     }

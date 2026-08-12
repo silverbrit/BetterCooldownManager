@@ -332,7 +332,7 @@ local function AddTextSettings(panel, controls)
     U.Dropdown(controls, section, "Anchor To", get, set, function() return ANCHOR_POINTS end, { disabled = Disabled })
     get, set = AccessBarPath({ "Text", "Layout", 3 }, panel, 0)
     U.Slider(controls, section, "X Offset", get, set, { min = -500, max = 500, step = 0.1, disabled = Disabled })
-    get, set = AccessBarPath({ "Text", "Layout", 4 }, panel, 2)
+    get, set = AccessBarPath({ "Text", "Layout", 4 }, panel, 0)
     U.Slider(controls, section, "Y Offset", get, set, { min = -500, max = 500, step = 0.1, disabled = Disabled })
     get, set = AccessBarPath({ "Text", "FontSize" }, panel, 12)
     U.Slider(controls, section, "Font Size", get, set, { min = 6, max = 72, step = 1, disabled = Disabled })
@@ -810,7 +810,7 @@ local function CreateEntries(panel, controls)
             local alpha = disabled and 0.45 or visualMode == "LOW_ALPHA" and (tonumber(style.Alpha) or 0.45) or 1
             button.Icon:SetAlpha(alpha)
             local text = bar.Text or {}
-            local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 }
+            local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }
             button.Count:ClearAllPoints()
             button.Count:SetPoint(layout[1], button, layout[2], layout[3], layout[4])
             button.Count:SetFont((BCDM.Media and BCDM.Media.Font) or STANDARD_TEXT_FONT,

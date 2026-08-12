@@ -75,7 +75,7 @@ local function ApplyVisualStyleUnsafe(visual, icon, entry, bar)
     local border = cooldownGeneral.BorderSize or 0
     local width, height = BCDM:GetIconDimensions(bar)
     local text = bar.Text or {}
-    local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 }
+    local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }
     local colour = text.Colour or { 1, 1, 1 }
     local style = BCDM:GetCustomTrackerEntrySettings(bar, entry)
 
@@ -119,10 +119,10 @@ local function InitializeAuraButton(icon, entry, bar, auraButton, container, lay
     if not Call(auraButton, "ClearAllPoints")
         or not Call(auraButton, "SetAllPoints", container)
         or not Call(auraButton, "SetFrameLevel", (layer:GetFrameLevel() or 1) + priority)
+        or not ApplyVisualStyle(visual, icon, entry, bar)
         or not Call(auraButton, "SetDurationCooldown", visual.cooldown)
         or not Call(auraButton, "SetIcon", visual.icon)
         or not Call(auraButton, "SetApplicationCount", visual.count, {})
-        or not ApplyVisualStyle(visual, icon, entry, bar)
     then
         return nil
     end
@@ -261,7 +261,7 @@ end
 
 local function ApplyTrinketCountStyle(state, settings, entrySettings)
     local text = settings.Text or {}
-    local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 3 }
+    local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }
     local colour = text.Colour or { 1, 1, 1 }
     local fonts = BCDM.db.profile.General.Fonts
     state.count:ClearAllPoints()
@@ -298,20 +298,21 @@ local function CreateTrinketCountState(icon, candidateFilters, signature, settin
     container:SetUnit("player")
 
     local state = { layer = layer, container = container, signature = signature, enabled = true }
+    local initialized
     local function InitializeFrame(auraButton)
         state.button = auraButton
         state.count = auraButton:CreateFontString(nil, "OVERLAY")
-        Call(auraButton, "SetAllPoints", container)
-        Call(auraButton, "SetFrameLevel", (layer:GetFrameLevel() or 1) + 1)
-        Call(auraButton, "SetMouseMotionEnabled", false)
-        Call(auraButton, "SetApplicationCount", state.count, {})
+        if not Call(auraButton, "SetAllPoints", container)
+            or not Call(auraButton, "SetFrameLevel", (layer:GetFrameLevel() or 1) + 1)
+            or not Call(auraButton, "SetMouseMotionEnabled", false) then return end
+        ApplyTrinketCountStyle(state, settings, entrySettings)
+        initialized = Call(auraButton, "SetApplicationCount", state.count, {})
     end
     local ok, button = Call(container, "AddAuraSlot", "active", "HELPFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY", {
         candidateFilters = candidateFilters,
         initializeFrame = InitializeFrame,
     })
-    if not ok or not button or not state.count or not Call(container, "SetEnabled", true) then return end
-    ApplyTrinketCountStyle(state, settings, entrySettings)
+    if not ok or not button or not initialized or not Call(container, "SetEnabled", true) then return end
     layer:Show()
     return state
 end

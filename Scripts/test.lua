@@ -32,6 +32,16 @@ Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == true,
     "trinket viewer shows on-use equipment by default")
 Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,
     "trinket aura stacks have configurable text defaults")
+Check(defaults.profile.CooldownManager.General.CooldownText.Layout[4] == 0
+    and defaults.profile.CooldownManager.Essential.Text.Layout[4] == 0
+    and defaults.profile.CooldownManager.Utility.Text.Layout[4] == 0
+    and defaults.profile.CooldownManager.Buffs.Text.Layout[4] == 0
+    and defaults.profile.CooldownManager.Trinket.Text.Layout[4] == 0
+    and defaults.profile.PowerBar.Text.Layout[4] == 0
+    and defaults.profile.SecondaryPowerBar.Text.Layout[4] == 0
+    and defaults.profile.CastBar.Text.SpellName.Layout[4] == 0
+    and defaults.profile.CastBar.Text.CastTime.Layout[4] == 0,
+    "all built-in text defaults use zero Y offset")
 Check(defaults.profile.General.Fonts.Font == "Friz Quadrata TT",
     "missing Expressway media falls back to Friz Quadrata TT")
 Check(defaults.profile.General.Textures.Foreground == "Solid"
@@ -268,6 +278,7 @@ Check(table.concat(spell.Source.AuraIDs, ",") == "900,901", "current-schema aura
 
 BCDM.db = { profile = profile }
 local newBar = BCDM:AddCustomTrackerBar("Timers")
+Check(store.Bars[newBar].Text.Layout[4] == 0, "new tracker text defaults to zero Y offset")
 Check(store.Bars[newBar].EntrySettings.TextEnabled == true, "new bars enable shared entry text by default")
 Check(store.Bars[newBar].EntrySettings.Tooltip == true, "new bars enable shared entry tooltips by default")
 Check(store.Bars[newBar].EntrySettings.DisplayMode == "ALWAYS", "new bars share display mode by default")

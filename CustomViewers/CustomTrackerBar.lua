@@ -265,7 +265,7 @@ local function ConfigureIcon(icon, bar, entry, adapter, width, height)
     icon.Icon:SetTexture(texture or UNKNOWN_ICON)
     BCDM:ApplyIconTexCoord(icon.Icon, width, height, (cooldownGeneral.IconZoom or 0) * 0.5)
     local text = bar.Text or {}
-    local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 }
+    local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }
     icon.Count:ClearAllPoints()
     icon.Count:SetPoint(layout[1], icon, layout[2], layout[3], layout[4])
     icon.Count:SetFont(BCDM.Media.Font, text.FontSize or 12, general.Fonts.FontFlag)
