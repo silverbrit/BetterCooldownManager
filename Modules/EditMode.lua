@@ -48,7 +48,9 @@ function BCDM:UpdateLayout()
             local index = GetIndexForName(layoutName)
             if index then
                 BCDM:PrettyPrint("Layout Set - |cFF8080FF" .. layoutName .. "|r")
-                C_EditMode.SetActiveLayout(index)
+                if type(securecallfunction) ~= "function" then return end
+                local changed = pcall(securecallfunction, C_EditMode.SetActiveLayout, index)
+                if not changed then return end
                 BCDM:QueueCooldownViewerLayoutApply()
                 return layoutName, index
             end

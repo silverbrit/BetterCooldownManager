@@ -23,18 +23,37 @@ assert(loadfile(root .. "/Core/ResourceCatalog.lua"))("BetterCooldownManager", B
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Modules/CooldownManager.lua"))("BetterCooldownManager", BCDM)
-assert(loadfile(root .. "/Modules/TrackedBuffAuraViewer.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Scripts/test-cooldown-manager.lua"))(BCDM, Check)
 
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,
     "selected element highlights default to enabled")
-Check(type(defaults.global.CooldownViewer.NativeTrackedBuffVisibility) == "table",
-    "native tracked buff visibility restoration has account-wide storage")
-Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == false,
-    "trinket viewer includes passive equipment by default")
+Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == true,
+    "trinket viewer shows on-use equipment by default")
 Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,
     "trinket aura stacks have configurable text defaults")
+Check(defaults.profile.General.Fonts.Font == "Friz Quadrata TT",
+    "missing Expressway media falls back to Friz Quadrata TT")
+Check(defaults.profile.General.Textures.Foreground == "Solid"
+    and defaults.profile.General.Textures.Background == "Solid",
+    "default bar textures use Solid")
+Check(defaults.profile.CooldownManager.Buffs.CenterBuffs == true
+    and defaults.profile.CooldownManager.Buffs.Layout[2] == "BCDM_PowerBar"
+    and defaults.profile.CooldownManager.Trinket.Enabled == true,
+    "tracked buffs center on the power bar and trinkets are enabled by default")
+Check(defaults.profile.CooldownManager.Trinket.IconSize == 32
+    and defaults.profile.CooldownManager.Trinket.IconWidth == 32
+    and defaults.profile.CooldownManager.Trinket.IconHeight == 32
+    and defaults.profile.CooldownManager.Trinket.Layout[1] == "TOPRIGHT"
+    and defaults.profile.CooldownManager.Trinket.Layout[2] == "ElvUF_Player"
+    and defaults.profile.CooldownManager.Trinket.Layout[3] == "BOTTOMRIGHT",
+    "trinkets default to 32px icons anchored to the ElvUI player frame")
+Check(defaults.profile.CastBar.Layout[2] == "BCDM_PowerBar",
+    "cast bar defaults to the BCM power bar anchor")
+Check(defaults.profile.PowerBar.BackgroundColour[1] == 62 / 255
+    and defaults.profile.SecondaryPowerBar.BackgroundColour[1] == 62 / 255
+    and defaults.profile.CastBar.BackgroundColour[1] == 62 / 255,
+    "bar backgrounds default to #3e3e3e")
 Check(defaults.profile.CooldownManager.Trinket.EntrySettings.DisplayMode == "ALWAYS",
     "trinket slots share entry behavior by default")
 Check(defaults.profile.CooldownManager.Trinket.Slots[13].OverrideBarSettings == false
@@ -310,8 +329,6 @@ Check(store.BarOrder[#store.BarOrder] == recycledID, "new bars append without re
 Check(assert(loadfile(root .. "/Scripts/test-glows.lua"))(root), "custom glow lifecycle tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-cooldown-runtime.lua"))(root),
     "Cooldown Manager runtime safety tests pass")
-Check(assert(loadfile(root .. "/Scripts/test-tracked-buff-aura.lua"))(root),
-    "tracked buff aura replacement tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-secondary-power.lua"))(root),
     "secondary-resource secret-value tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-trinket-candidates.lua"))(root),

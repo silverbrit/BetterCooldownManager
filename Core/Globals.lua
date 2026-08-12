@@ -39,7 +39,8 @@ function BCDM:ResolveLSM()
     local LSM = BCDM.LSM
     local General = BCDM.db.profile.General
     BCDM.Media = BCDM.Media or {}
-    BCDM.Media.Font = LSM:Fetch("font", General.Fonts.Font) or STANDARD_TEXT_FONT
+    BCDM.Media.Font = LSM:Fetch("font", General.Fonts.Font)
+        or LSM:Fetch("font", "Friz Quadrata TT") or STANDARD_TEXT_FONT
     BCDM.Media.Foreground = LSM:Fetch("statusbar", General.Textures.Foreground) or "Interface\\RaidFrame\\Raid-Bar-Hp-Fill"
     BCDM.Media.Background = LSM:Fetch("statusbar", General.Textures.Background) or "Interface\\Buttons\\WHITE8X8"
     BCDM.BACKDROP = { bgFile = BCDM.Media.Background, edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = BCDM.db.profile.CooldownManager.General.BorderSize, insets = {left = 0, right = 0, top = 0, bottom = 0} }

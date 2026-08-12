@@ -121,6 +121,61 @@ local function GetPersistentViewerAnchor(layout)
     return UIParent, "BOTTOMLEFT", anchorX + (layout[4] or 0), anchorY + (layout[5] or 0)
 end
 
+local function GetSavedActiveLayout(layouts)
+    if type(layouts) ~= "table" or type(layouts.layouts) ~= "table"
+        or type(layouts.activeLayout) ~= "number"
+        or BCDM:IsSecretValue(layouts.activeLayout) then return nil end
+    local presetManager = EditModePresetLayoutManager
+    if not presetManager or type(presetManager.GetCopyOfPresetLayouts) ~= "function"
+        or type(securecallfunction) ~= "function" then return nil end
+    local ok, presets = pcall(securecallfunction,
+        presetManager.GetCopyOfPresetLayouts, presetManager)
+    if not ok or type(presets) ~= "table" then return nil end
+    return layouts.layouts[layouts.activeLayout - #presets]
+end
+
+local function GetLayoutSystem(layout, viewer)
+    if type(layout) ~= "table" or type(layout.systems) ~= "table" then return nil end
+    for _, systemInfo in ipairs(layout.systems) do
+        if systemInfo.system == viewer.system and systemInfo.systemIndex == viewer.systemIndex then
+            return systemInfo
+        end
+    end
+end
+
+local function RefreshCooldownViewerLayouts(editMode, layouts)
+    if not editMode or editMode.overrideLayoutInfo
+        or type(editMode.GetActiveLayoutSystemInfo) ~= "function"
+        or type(editMode.UpdateSystemAnchorInfo) ~= "function"
+        or type(securecallfunction) ~= "function" then
+        return editMode and editMode.overrideLayoutInfo ~= nil
+    end
+
+    local activeLayout = GetSavedActiveLayout(layouts)
+    if not activeLayout then return false end
+    local updated = false
+    for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
+        local viewer = _G[viewerName]
+        local savedSystemInfo = viewer and GetLayoutSystem(activeLayout, viewer)
+        if savedSystemInfo and type(viewer.UpdateSystem) == "function" then
+            local gotManagerInfo, managerSystemInfo = pcall(securecallfunction,
+                editMode.GetActiveLayoutSystemInfo, editMode, viewer.system, viewer.systemIndex)
+            if not gotManagerInfo or type(managerSystemInfo) ~= "table" then return false end
+
+            -- Apply only this native Cooldown Viewer, copy its clean resulting
+            -- anchor into Blizzard's existing layout, then restore the shared
+            -- system-info reference. Never assign Edit Mode manager fields.
+            if not pcall(securecallfunction, viewer.UpdateSystem, viewer, savedSystemInfo)
+                or not pcall(securecallfunction, editMode.UpdateSystemAnchorInfo, editMode, viewer)
+                or not pcall(securecallfunction, viewer.UpdateSystem, viewer, managerSystemInfo) then
+                return false
+            end
+            updated = true
+        end
+    end
+    return updated
+end
+
 local function ApplyViewerLayouts()
     local LEMO = BCDM.LEMO
     if not LEMO or not LEMO.IsReady or not LEMO:IsReady() then return false, "not-ready" end
@@ -147,17 +202,24 @@ local function ApplyViewerLayouts()
                 end
             end
         end
-        if BCDM.PrepareTrackedBuffVisibilityOverride then
-            BCDM:PrepareTrackedBuffVisibilityOverride(LEMO)
-        end
-        LEMO:ApplyChanges()
-        if BCDM.CommitTrackedBuffVisibilityOverride then
-            BCDM:CommitTrackedBuffVisibilityOverride()
-        end
-        return "applied"
+        -- Save, then securely update only native Cooldown Viewer systems. Never
+        -- call LibEditModeOverride:ApplyChanges: it opens Edit Mode from addon
+        -- code and taints protected target/focus and party-frame refreshes.
+        local saved = pcall(LEMO.SaveOnly, LEMO)
+        if not saved then return "settings-open" end
+        local editMode = EditModeManagerFrame
+        local editModeAPI = C_EditMode
+        if not editMode or not editModeAPI or type(editModeAPI.GetLayouts) ~= "function"
+            or type(securecallfunction) ~= "function" then return "settings-open" end
+        local gotLayouts, layouts = pcall(securecallfunction, editModeAPI.GetLayouts)
+        if not gotLayouts or type(layouts) ~= "table" then return "settings-open" end
+        local refreshed, updated = pcall(RefreshCooldownViewerLayouts, editMode, layouts)
+        return refreshed and updated and "applied" or "settings-open"
     end)
     if not ok then return false, result end
-    if result == "not-editable" or result == "anchor-not-ready" then return false, result end
+    if result == "not-editable" or result == "anchor-not-ready" or result == "settings-open" then
+        return false, result
+    end
     return true, result
 end
 
@@ -181,13 +243,10 @@ function BCDM:IsCooldownViewerInteractionActive()
     return AreCooldownSettingsShown()
 end
 
-function BCDM:IsApplyingCooldownViewerLayout()
-    return viewerLayoutApplying
-end
-
 TryApplyViewerLayouts = function()
     if not viewerLayoutPending or viewerLayoutApplying or IsInCombat()
-        or AreCooldownSettingsShown() then return end
+        or nativeSettingsOpenPending or editModeOpen
+        or IsSettingsFrameShown(EditModeManagerFrame) then return end
     local LEMO = BCDM.LEMO
     if not LEMO or not LEMO.IsReady or not LEMO:IsReady() then return end
 
@@ -198,7 +257,7 @@ TryApplyViewerLayouts = function()
         viewerLayoutPending = false
         viewerLayoutErrorReported = false
     elseif result ~= "combat" and result ~= "not-ready" and result ~= "not-editable"
-        and result ~= "anchor-not-ready"
+        and result ~= "anchor-not-ready" and result ~= "settings-open"
         and not viewerLayoutErrorReported then
         viewerLayoutErrorReported = true
         if BCDM.PrettyPrint then
@@ -264,18 +323,12 @@ local function ApplyCooldownText(cooldownViewer)
     end
 end
 
-local function ShouldStyleNativeViewer(viewerName)
-    return viewerName ~= "BuffIconCooldownViewer"
-        or not BCDM.ShouldStyleNativeTrackedBuffViewer
-        or BCDM:ShouldStyleNativeTrackedBuffViewer()
-end
-
 local function StyleIcons(onlyViewerName)
     if IsInCombat() then return end
     if not ShouldSkin() then return end
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
-        if (not onlyViewerName or viewerName == onlyViewerName) and ShouldStyleNativeViewer(viewerName) then
+        if not onlyViewerName or viewerName == onlyViewerName then
         local viewerSettings = cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
         local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
         local preserveNativeSize = onlyViewerName == "BuffIconCooldownViewer"
@@ -322,7 +375,7 @@ local function StyleChargeCount(onlyViewerName)
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
     local generalSettings = BCDM.db.profile.General
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
-        if (not onlyViewerName or viewerName == onlyViewerName) and ShouldStyleNativeViewer(viewerName) then
+        if not onlyViewerName or viewerName == onlyViewerName then
         for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
             if BCDM:IsCustomizableCooldownViewerItem(childFrame)
                 and childFrame.ChargeCount and childFrame.ChargeCount.Current then
@@ -362,6 +415,371 @@ local function StyleChargeCount(onlyViewerName)
     end
 end
 
+-- Native tracked-buff centering follows EUIStandaloneCooldownManager's path:
+-- enumerate Blizzard's active pool, sort by layoutIndex, and reapply addon-owned
+-- anchors after Blizzard changes active state or lays the viewer out again.
+function BCDM.ComputeCenteredTrackedBuffLayout(sizes, spacing, isHorizontal, growsForward)
+    sizes = sizes or {}
+    spacing = type(spacing) == "number" and not BCDM:IsSecretValue(spacing) and spacing or 0
+    local function Dimension(size, key)
+        local value = size and size[key]
+        if type(value) ~= "number" or BCDM:IsSecretValue(value) or value < 0 then return 0 end
+        return value
+    end
+
+    local total, width, height = 0, 0, 0
+    for index, size in ipairs(sizes) do
+        local itemWidth, itemHeight = Dimension(size, "width"), Dimension(size, "height")
+        width, height = math.max(width, itemWidth), math.max(height, itemHeight)
+        total = total + (isHorizontal and itemWidth or itemHeight) + (index > 1 and spacing or 0)
+    end
+
+    local positions = {}
+    local cursor = growsForward and -total / 2 or total / 2
+    for index, size in ipairs(sizes) do
+        local itemWidth, itemHeight = Dimension(size, "width"), Dimension(size, "height")
+        local extent = isHorizontal and itemWidth or itemHeight
+        local center
+        if growsForward then
+            center = cursor + extent / 2
+            cursor = cursor + extent + spacing
+        else
+            center = cursor - extent / 2
+            cursor = cursor - extent - spacing
+        end
+        positions[index] = isHorizontal and { center, 0 } or { 0, center }
+    end
+    return math.max(1, isHorizontal and total or width), math.max(1, isHorizontal and height or total), positions
+end
+
+function BCDM.SortTrackedBuffFrames(frames)
+    local function Index(entry)
+        local value = entry and entry.layoutIndex
+        return type(value) == "number" and not BCDM:IsSecretValue(value) and value or 99999
+    end
+    table.sort(frames, function(left, right)
+        local leftIndex, rightIndex = Index(left), Index(right)
+        if leftIndex == rightIndex then return (left.order or 0) < (right.order or 0) end
+        return leftIndex < rightIndex
+    end)
+    return frames
+end
+
+local centeredTrackedBuffOwner
+local centeredTrackedBuffDriver
+local centeredTrackedBuffActive = false
+local centeredTrackedBuffPending = false
+local centeredTrackedBuffTicks = 0
+local centeredTrackedBuffHooksInstalled = false
+local centeredTrackedBuffFrameHooks = setmetatable({}, { __mode = "k" })
+local centeredTrackedBuffAnchors = setmetatable({}, { __mode = "k" })
+local centeredTrackedBuffOriginalPoints = setmetatable({}, { __mode = "k" })
+local QueueCenteredTrackedBuffs
+
+local function IsTrackedBuffCenteringEnabled()
+    local profile = BCDM.db and BCDM.db.profile
+    local cooldownManager = profile and profile.CooldownManager
+    local settings = cooldownManager and cooldownManager.Buffs
+    return cooldownManager and cooldownManager.Enable == true and settings and settings.CenterBuffs == true
+end
+
+local function ReadTrackedBuffNumber(frame, methodName, fallback)
+    local okMethod, method = pcall(function() return frame and frame[methodName] end)
+    if not okMethod or type(method) ~= "function" then return fallback end
+    local ok, value = pcall(method, frame)
+    if ok and type(value) == "number" and not BCDM:IsSecretValue(value) and value > 0 then
+        return value
+    end
+    return fallback
+end
+
+local function ReadTrackedBuffScale(frame)
+    local scale = ReadTrackedBuffNumber(frame, "GetScale", 1)
+    return scale >= 0.01 and scale or 1
+end
+
+local function IsReadableTrackedBuffPointValue(value)
+    return value == nil or (type(value) == "number" and not BCDM:IsSecretValue(value))
+end
+
+local function CaptureTrackedBuffPoints(frame)
+    if centeredTrackedBuffOriginalPoints[frame] then return end
+    local points = {}
+    local okCount, count = pcall(function() return frame:GetNumPoints() end)
+    if okCount and type(count) == "number" and not BCDM:IsSecretValue(count) then
+        for index = 1, count do
+            local ok, point, relativeTo, relativePoint, x, y = pcall(function()
+                return frame:GetPoint(index)
+            end)
+            if ok and type(point) == "string" and IsReadableTrackedBuffPointValue(x)
+                and IsReadableTrackedBuffPointValue(y) then
+                points[#points + 1] = { point, relativeTo, relativePoint, x, y }
+            end
+        end
+    end
+    if #points > 0 then centeredTrackedBuffOriginalPoints[frame] = points end
+end
+
+local function RestoreTrackedBuffPoints()
+    for frame in pairs(centeredTrackedBuffAnchors) do centeredTrackedBuffAnchors[frame] = nil end
+    for frame, points in pairs(centeredTrackedBuffOriginalPoints) do
+        pcall(function() frame:ClearAllPoints() end)
+        for _, point in ipairs(points) do
+            pcall(function()
+                frame:SetPoint(point[1], point[2], point[3], point[4], point[5])
+            end)
+        end
+        centeredTrackedBuffOriginalPoints[frame] = nil
+    end
+end
+
+local function ReapplyCenteredTrackedBuffPositions()
+    for frame, anchor in pairs(centeredTrackedBuffAnchors) do
+        pcall(function() frame:ClearAllPoints() end)
+        pcall(function()
+            frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
+        end)
+    end
+end
+
+local function GetTrackedBuffViewerSettings(viewer)
+    local isHorizontal = true
+    if type(viewer.IsHorizontal) == "function" then
+        local ok, value = pcall(viewer.IsHorizontal, viewer)
+        if ok and type(value) == "boolean" and not BCDM:IsSecretValue(value) then isHorizontal = value end
+    else
+        local ok, value = pcall(function() return viewer.isHorizontal end)
+        if ok and type(value) == "boolean" and not BCDM:IsSecretValue(value) then isHorizontal = value end
+    end
+
+    local directionField = isHorizontal and "layoutFramesGoingRight" or "layoutFramesGoingUp"
+    local okDirection, direction = pcall(function() return viewer[directionField] end)
+    local growsForward = true
+    if okDirection and type(direction) == "boolean" and not BCDM:IsSecretValue(direction) then
+        growsForward = direction
+    end
+
+    local spacingField = isHorizontal and "childXPadding" or "childYPadding"
+    local okSpacing, spacing = pcall(function() return viewer[spacingField] end)
+    if not okSpacing or type(spacing) ~= "number" or BCDM:IsSecretValue(spacing) then spacing = 0 end
+    return isHorizontal, growsForward, spacing
+end
+
+local function GetCenteredTrackedBuffEntries()
+    local viewer = BuffIconCooldownViewer
+    local pool = viewer and viewer.itemFramePool
+    if not pool or type(pool.EnumerateActive) ~= "function" then return {} end
+
+    local settings = BCDM.db and BCDM.db.profile and BCDM.db.profile.CooldownManager
+        and BCDM.db.profile.CooldownManager.Buffs
+    local fallbackWidth, fallbackHeight = 32, 32
+    if settings and BCDM.GetIconDimensions then
+        local ok, width, height = pcall(BCDM.GetIconDimensions, BCDM, settings)
+        if ok and type(width) == "number" and type(height) == "number"
+            and not BCDM:IsSecretValue(width) and not BCDM:IsSecretValue(height)
+            and width > 0 and height > 0 then
+            fallbackWidth, fallbackHeight = width, height
+        end
+    end
+
+    local entries = {}
+    for frame in pool:EnumerateActive() do
+        local okIcon, icon = pcall(function() return frame.Icon end)
+        local okShown, shown = false, false
+        local okShownMethod, isShown = pcall(function() return frame and frame.IsShown end)
+        if okShownMethod and type(isShown) == "function" then
+            okShown, shown = pcall(isShown, frame)
+        end
+        if okShown and not BCDM:IsSecretValue(shown) and shown == true and okIcon and icon then
+            local okIndex, layoutIndex = pcall(function() return frame.layoutIndex end)
+            if not okIndex or type(layoutIndex) ~= "number" or BCDM:IsSecretValue(layoutIndex) then
+                layoutIndex = 99999
+            end
+            local scale = ReadTrackedBuffScale(frame)
+            entries[#entries + 1] = {
+                frame = frame,
+                layoutIndex = layoutIndex,
+                order = #entries + 1,
+                width = ReadTrackedBuffNumber(frame, "GetWidth", fallbackWidth) * scale,
+                height = ReadTrackedBuffNumber(frame, "GetHeight", fallbackHeight) * scale,
+                scale = scale,
+            }
+        end
+    end
+    return BCDM.SortTrackedBuffFrames(entries)
+end
+
+local function PositionCenteredTrackedBuffOwner(width, height)
+    if not centeredTrackedBuffOwner then return end
+    local settings = BCDM.db and BCDM.db.profile and BCDM.db.profile.CooldownManager
+        and BCDM.db.profile.CooldownManager.Buffs
+    local layout = settings and settings.Layout or { "CENTER", "NONE", "CENTER", 0, 0 }
+    local anchorParent, relativePoint, xOffset, yOffset = GetPersistentViewerAnchor(layout)
+    if not anchorParent then
+        anchorParent = BCDM.ResolveAnchorParent
+            and BCDM:ResolveAnchorParent(layout[2]) or UIParent
+        relativePoint, xOffset, yOffset = layout[3], layout[4], layout[5]
+    end
+    anchorParent = anchorParent or UIParent
+    relativePoint = relativePoint or "CENTER"
+    xOffset, yOffset = xOffset or 0, yOffset or 0
+    centeredTrackedBuffOwner:ClearAllPoints()
+    local ok = pcall(centeredTrackedBuffOwner.SetPoint, centeredTrackedBuffOwner,
+        layout[1] or "CENTER", anchorParent, relativePoint, xOffset, yOffset)
+    if not ok then
+        pcall(centeredTrackedBuffOwner.SetPoint, centeredTrackedBuffOwner,
+            layout[1] or "CENTER", UIParent, relativePoint, xOffset, yOffset)
+    end
+    centeredTrackedBuffOwner:SetSize(width, height)
+end
+
+local function LayoutCenteredTrackedBuffs()
+    if not centeredTrackedBuffActive or not centeredTrackedBuffOwner
+        or nativeSettingsOpen or editModeOpen then return end
+
+    local viewer = BuffIconCooldownViewer
+    if not viewer then return end
+    local entries = GetCenteredTrackedBuffEntries()
+    local currentFrames = {}
+    for _, entry in ipairs(entries) do currentFrames[entry.frame] = true end
+    for frame in pairs(centeredTrackedBuffAnchors) do
+        if not currentFrames[frame] then centeredTrackedBuffAnchors[frame] = nil end
+    end
+
+    local isHorizontal, growsForward, spacing = GetTrackedBuffViewerSettings(viewer)
+    local width, height, positions = BCDM.ComputeCenteredTrackedBuffLayout(
+        entries, spacing, isHorizontal, growsForward)
+    centeredTrackedBuffOwner:SetSize(width, height)
+    PositionCenteredTrackedBuffOwner(width, height)
+    centeredTrackedBuffOwner:Show()
+
+    for index, entry in ipairs(entries) do
+        local position = positions[index]
+        CaptureTrackedBuffPoints(entry.frame)
+        local scale = entry.scale
+        local x = (position[1] + width / 2 - entry.width / 2) / scale
+        local y = (position[2] - height / 2 + entry.height / 2) / scale
+        local anchor = { "TOPLEFT", centeredTrackedBuffOwner, "TOPLEFT", x, y }
+        centeredTrackedBuffAnchors[entry.frame] = anchor
+        pcall(function() entry.frame:ClearAllPoints() end)
+        pcall(function()
+            entry.frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
+        end)
+    end
+end
+
+local function HookCenteredTrackedBuffFrame(frame)
+    if not frame or centeredTrackedBuffFrameHooks[frame] then return end
+    centeredTrackedBuffFrameHooks[frame] = true
+    local okSetPoint, setPoint = pcall(function() return frame.SetPoint end)
+    if okSetPoint and type(setPoint) == "function" then
+        hooksecurefunc(frame, "SetPoint", function(_, point, relativeTo, relativePoint, x, y)
+            local anchor = centeredTrackedBuffAnchors[frame]
+            if not centeredTrackedBuffActive or nativeSettingsOpen or editModeOpen
+                or not anchor or relativeTo == anchor[2] then return end
+            if type(point) == "string" and IsReadableTrackedBuffPointValue(x)
+                and IsReadableTrackedBuffPointValue(y) then
+                centeredTrackedBuffOriginalPoints[frame] = {
+                    { point, relativeTo, relativePoint, x, y },
+                }
+            end
+            pcall(function() frame:ClearAllPoints() end)
+            pcall(function()
+                frame:SetPoint(anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
+            end)
+        end)
+    end
+    local okActiveState, activeStateChanged = pcall(function() return frame.OnActiveStateChanged end)
+    if okActiveState and type(activeStateChanged) == "function" then
+        hooksecurefunc(frame, "OnActiveStateChanged", function()
+            if centeredTrackedBuffActive and not nativeSettingsOpen and not editModeOpen then
+                ReapplyCenteredTrackedBuffPositions()
+                QueueCenteredTrackedBuffs()
+            end
+        end)
+    end
+end
+
+local function HookCenteredTrackedBuffFrames()
+    local viewer = BuffIconCooldownViewer
+    local pool = viewer and viewer.itemFramePool
+    if not pool or type(pool.EnumerateActive) ~= "function" then return end
+    for frame in pool:EnumerateActive() do HookCenteredTrackedBuffFrame(frame) end
+end
+
+QueueCenteredTrackedBuffs = function()
+    if not centeredTrackedBuffActive or nativeSettingsOpen or editModeOpen
+        or centeredTrackedBuffPending or not centeredTrackedBuffDriver then return end
+    centeredTrackedBuffPending = true
+    centeredTrackedBuffTicks = 0
+    centeredTrackedBuffDriver:Show()
+end
+
+local function SetCenteredTrackedBuffsActive(enabled)
+    enabled = enabled == true and not nativeSettingsOpen and not editModeOpen
+    if enabled == centeredTrackedBuffActive then
+        if enabled then HookCenteredTrackedBuffFrames(); QueueCenteredTrackedBuffs() end
+        return
+    end
+    if enabled and not centeredTrackedBuffOwner then return end
+    centeredTrackedBuffActive = enabled
+    centeredTrackedBuffPending = false
+    if centeredTrackedBuffDriver then centeredTrackedBuffDriver:Hide() end
+    if enabled then
+        centeredTrackedBuffOwner:Show()
+        HookCenteredTrackedBuffFrames()
+        QueueCenteredTrackedBuffs()
+    else
+        RestoreTrackedBuffPoints()
+        if centeredTrackedBuffOwner then centeredTrackedBuffOwner:Hide() end
+    end
+end
+
+local function EnsureCenteredTrackedBuffs()
+    local viewer = BuffIconCooldownViewer
+    local pool = viewer and viewer.itemFramePool
+    if not viewer or not pool or type(pool.EnumerateActive) ~= "function" then return false end
+    if not centeredTrackedBuffOwner then
+        centeredTrackedBuffOwner = CreateFrame("Frame", nil, UIParent)
+        centeredTrackedBuffOwner:SetSize(1, 1)
+        centeredTrackedBuffOwner:SetFrameStrata("LOW")
+        centeredTrackedBuffOwner:Hide()
+        centeredTrackedBuffDriver = CreateFrame("Frame")
+        centeredTrackedBuffDriver:Hide()
+        centeredTrackedBuffDriver:SetScript("OnUpdate", function(self)
+            centeredTrackedBuffTicks = centeredTrackedBuffTicks + 1
+            if centeredTrackedBuffTicks < 2 then return end
+            self:Hide()
+            centeredTrackedBuffPending = false
+            if centeredTrackedBuffActive then LayoutCenteredTrackedBuffs() end
+        end)
+    end
+    if centeredTrackedBuffHooksInstalled then return true end
+    centeredTrackedBuffHooksInstalled = true
+    if type(pool.Acquire) == "function" then
+        hooksecurefunc(pool, "Acquire", function()
+            HookCenteredTrackedBuffFrames()
+            QueueCenteredTrackedBuffs()
+        end)
+    end
+    if CooldownViewerBuffIconItemMixin and CooldownViewerBuffIconItemMixin.OnCooldownIDSet then
+        hooksecurefunc(CooldownViewerBuffIconItemMixin, "OnCooldownIDSet", function(frame)
+            HookCenteredTrackedBuffFrame(frame)
+            QueueCenteredTrackedBuffs()
+        end)
+    end
+    return true
+end
+
+local function SetupCenteredTrackedBuffs()
+    local enabled = IsTrackedBuffCenteringEnabled()
+    if not enabled then
+        if centeredTrackedBuffOwner then SetCenteredTrackedBuffsActive(false) end
+        return
+    end
+    if EnsureCenteredTrackedBuffs() then SetCenteredTrackedBuffsActive(true) end
+end
+
 local viewerStylePending = false
 local viewerStyleScheduled = false
 
@@ -372,11 +790,14 @@ TryApplyViewerStyles = function()
     StyleIcons(onlyViewerName)
     StyleChargeCount(onlyViewerName)
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
-        if (not onlyViewerName or viewerName == onlyViewerName) and ShouldStyleNativeViewer(viewerName) then
+        if not onlyViewerName or viewerName == onlyViewerName then
             ApplyCooldownText(viewerName)
         end
     end
-    if not nativeSettingsOpen and CenterWrappedIcons then CenterWrappedIcons() end
+    if not nativeSettingsOpen then
+        if CenterWrappedIcons then CenterWrappedIcons() end
+        QueueCenteredTrackedBuffs()
+    end
 end
 
 function BCDM:QueueCooldownViewerStyleRefresh()
@@ -398,35 +819,29 @@ local function SetHooks()
         EventRegistry:RegisterCallback("CooldownViewerSettings.OnShow", function()
             nativeSettingsOpen = true
             nativeSettingsOpenPending = false
-            if BCDM.SetTrackedBuffAuraEditorVisible then BCDM:SetTrackedBuffAuraEditorVisible(true) end
+            SetCenteredTrackedBuffsActive(false)
             BCDM:QueueCooldownViewerStyleRefresh()
         end, BCDM)
         EventRegistry:RegisterCallback("CooldownViewerSettings.OnHide", function()
             nativeSettingsOpen = false
-            if BCDM.SetTrackedBuffAuraEditorVisible then BCDM:SetTrackedBuffAuraEditorVisible(false) end
+            SetCenteredTrackedBuffsActive(IsTrackedBuffCenteringEnabled())
             BCDM:RetryPendingCooldownViewerLayoutApply()
             BCDM:QueueCooldownViewerStyleRefresh()
-            if BCDM.QueueTrackedBuffAuraRefresh then BCDM:QueueTrackedBuffAuraRefresh("settings-closed") end
         end, BCDM)
         EventRegistry:RegisterCallback("EditMode.Enter", function()
             editModeOpen = true
-            if BCDM.SetTrackedBuffAuraEditorVisible then BCDM:SetTrackedBuffAuraEditorVisible(true) end
+            SetCenteredTrackedBuffsActive(false)
         end, BCDM)
         EventRegistry:RegisterCallback("EditMode.Exit", function()
             editModeOpen = false
-            if BCDM.SetTrackedBuffAuraEditorVisible then
-                BCDM:SetTrackedBuffAuraEditorVisible(false, viewerLayoutApplying)
-            end
+            SetCenteredTrackedBuffsActive(IsTrackedBuffCenteringEnabled())
             if not viewerLayoutApplying then BCDM:QueueCooldownViewerLayoutApply() end
             BCDM:QueueCooldownViewerStyleRefresh()
-            if not viewerLayoutApplying and BCDM.QueueTrackedBuffAuraRefresh then
-                BCDM:QueueTrackedBuffAuraRefresh("edit-mode-exit")
-            end
         end, BCDM)
     end
     hooksecurefunc(CooldownViewerSettings, "RefreshLayout", function()
         BCDM:QueueCooldownViewerStyleRefresh()
-        if BCDM.QueueTrackedBuffAuraRefresh then BCDM:QueueTrackedBuffAuraRefresh("settings-layout") end
+        QueueCenteredTrackedBuffs()
     end)
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
         local viewer = _G[viewerName]
@@ -435,19 +850,13 @@ local function SetHooks()
             if viewer.RefreshData then
                 hooksecurefunc(viewer, "RefreshData", function()
                     BCDM:QueueCooldownViewerStyleRefresh()
-                    if hookedViewerName == "BuffIconCooldownViewer" and not viewerLayoutApplying
-                        and BCDM.QueueTrackedBuffAuraRefresh then
-                        BCDM:QueueTrackedBuffAuraRefresh("native-data")
-                    end
+                    if hookedViewerName == "BuffIconCooldownViewer" then QueueCenteredTrackedBuffs() end
                 end)
             end
             if viewer.RefreshLayout then
                 hooksecurefunc(viewer, "RefreshLayout", function()
                     BCDM:QueueCooldownViewerStyleRefresh()
-                    if hookedViewerName == "BuffIconCooldownViewer" and not viewerLayoutApplying
-                        and BCDM.QueueTrackedBuffAuraRefresh then
-                        BCDM:QueueTrackedBuffAuraRefresh("native-layout")
-                    end
+                    if hookedViewerName == "BuffIconCooldownViewer" then QueueCenteredTrackedBuffs() end
                 end)
             end
         end
@@ -530,11 +939,11 @@ function BCDM:SkinCooldownManager()
     BCDM:QueueCooldownViewerLayoutApply()
     SetHooks()
     BCDM:QueueCooldownViewerStyleRefresh()
-    if BCDM.SetupTrackedBuffAuraViewer then BCDM:SetupTrackedBuffAuraViewer() end
+    SetupCenteredTrackedBuffs()
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
         local deferredViewerName = viewerName
         C_Timer.After(0.1, function()
-            if ShouldStyleNativeViewer(deferredViewerName) then ApplyCooldownText(deferredViewerName) end
+            ApplyCooldownText(deferredViewerName)
         end)
     end
 
@@ -546,7 +955,7 @@ function BCDM:UpdateCooldownViewer(viewerType)
     local viewerSettings = cooldownManagerSettings[viewerType]
     local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
     if viewerType == "Trinket" then BCDM:UpdateTrinketBar() return end
-    if not IsInCombat() and ShouldStyleNativeViewer(BCDM.DBViewerToCooldownManagerViewer[viewerType]) then
+    if not IsInCombat() then
         for _, childFrame in ipairs(GetViewerItemFrames(cooldownViewerFrame)) do
             if BCDM:IsCustomizableCooldownViewerItem(childFrame) then
             if childFrame.Icon and ShouldSkin() then
@@ -577,8 +986,9 @@ function BCDM:UpdateCooldownViewer(viewerType)
     BCDM:QueueCooldownViewerLayoutApply()
     BCDM:QueueCooldownViewerStyleRefresh()
 
-    if viewerType == "Buffs" and BCDM.QueueTrackedBuffAuraRefresh then
-        BCDM:QueueTrackedBuffAuraRefresh("viewer-update")
+    if viewerType == "Buffs" then
+        SetupCenteredTrackedBuffs()
+        QueueCenteredTrackedBuffs()
     end
 
     BCDM:UpdatePowerBarWidth()

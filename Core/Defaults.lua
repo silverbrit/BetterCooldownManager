@@ -1,5 +1,14 @@
 local _, BCDM = ...
 
+local function DefaultFont()
+    local media = type(LibStub) == "table" and type(LibStub.GetLibrary) == "function"
+        and LibStub:GetLibrary("LibSharedMedia-3.0", true)
+    if media and type(media.IsValid) == "function" and media:IsValid("font", "Expressway") then
+        return "Expressway"
+    end
+    return "Friz Quadrata TT"
+end
+
 local function VisibilityDefaults()
     return {
         Mode = "ALWAYS",
@@ -25,9 +34,6 @@ local Defaults = {
             Height = 760,
             ShowSelectedElementHighlight = true,
         },
-        CooldownViewer = {
-            NativeTrackedBuffVisibility = {},
-        },
         EditModeManager = {
             SwapOnInstanceDifficulty = false,
             RaidLayouts = {
@@ -42,7 +48,7 @@ local Defaults = {
         Visibility = VisibilityDefaults(),
         General = {
             Fonts = {
-                Font = "Friz Quadrata TT",
+                Font = DefaultFont(),
                 FontFlag = "OUTLINE",
                 Shadow = {
                     Enabled = false,
@@ -52,8 +58,8 @@ local Defaults = {
                 }
             },
             Textures = {
-                Foreground = "Better Blizzard",
-                Background = "Better Blizzard",
+                Foreground = "Solid",
+                Background = "Solid",
             },
             Colours = {
                 PrimaryPower = {
@@ -172,8 +178,8 @@ local Defaults = {
                 IconWidth = 32,
                 IconHeight = 32,
                 KeepAspectRatio = true,
-                CenterBuffs = false,
-                Layout = {"BOTTOM", "BCDM_SecondaryPowerBar", "TOP", 0, 1.1},
+                CenterBuffs = true,
+                Layout = {"BOTTOM", "BCDM_PowerBar", "TOP", 0, 1.1},
                 Text = {
                     FontSize = 15,
                     Colour = {1, 1, 1},
@@ -182,15 +188,15 @@ local Defaults = {
             },
             Trinket = {
                 Enabled = true,
-                DisplayOnUseOnly = false,
+                DisplayOnUseOnly = true,
                 UseSharedVisibility = true,
                 Visibility = VisibilityDefaults(),
-                IconSize = 38,
-                IconWidth = 38,
-                IconHeight = 38,
+                IconSize = 32,
+                IconWidth = 32,
+                IconHeight = 32,
                 KeepAspectRatio = true,
                 FrameStrata = "LOW",
-                Layout = {"CENTER", "NONE", "CENTER", 0, 0},
+                Layout = {"TOPRIGHT", "ElvUF_Player", "BOTTOMRIGHT", 0, 0},
                 Spacing = 1,
                 GrowthDirection = "LEFT",
                 OffsetByParentHeight = true,
@@ -233,7 +239,7 @@ local Defaults = {
             ShowSpark = false,
             FillDirection = "RIGHT",
             FrameStrata = "LOW",
-            BackgroundColour = {34/255, 34/255, 34/255, 1},
+            BackgroundColour = {62/255, 62/255, 62/255, 1},
             ForegroundColour = {34/255, 34/255, 34/255, 1},
             Layout = {"BOTTOM", "EssentialCooldownViewer", "TOP", 0, 1},
             Text = {
@@ -259,7 +265,7 @@ local Defaults = {
             ShowSpark = false,
             FillDirection = "RIGHT",
             SwapToPowerBarPosition = false,
-            BackgroundColour = {34/255, 34/255, 34/255, 1},
+            BackgroundColour = {62/255, 62/255, 62/255, 1},
             ForegroundColour = {34/255, 34/255, 34/255, 1},
             Layout = {"BOTTOM", "BCDM_PowerBar", "TOP", 0, 1},
             Text = {
@@ -284,9 +290,9 @@ local Defaults = {
             FillDirection = "RIGHT",
             EmpowerPips = { Colour = {1, 1, 1, 1}, Width = 1 },
             FrameStrata = "LOW",
-            BackgroundColour = {34/255, 34/255, 34/255, 1},
+            BackgroundColour = {62/255, 62/255, 62/255, 1},
             ForegroundColour = {34/255, 34/255, 34/255, 1},
-            Layout = {"TOP", "UtilityCooldownViewer", "BOTTOM", 0, -1},
+            Layout = {"TOP", "BCDM_PowerBar", "BOTTOM", 0, -1},
             Text = {
                 SpellName = {
                     FontSize = 12,

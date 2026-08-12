@@ -11,7 +11,7 @@ Better Cooldown Manager hosts its LibSettingsCanvas panels in a draggable, resiz
 - The Tracked Bars page embeds Better Tracked Bars' registered settings canvas in the standalone window when that optional addon is loaded, with the recommendation page as a fallback.
 - `Utils.lua` adapts BCDM state and callbacks to `LibSettingsCanvas-1.0` rows.
 - `Window.lua` hosts those panels in BCDM's draggable and resizable settings window.
-- Essential, Utility, and Tracked Buff pages continue to open Blizzard's native Cooldown Manager automatically without forcing its selected tab. The native panel and BCDM window may remain open together, and Edit Mode writes stay deferred until both are closed so applying them cannot dismiss either window.
+- Essential, Utility, and Tracked Buff pages continue to open Blizzard's native Cooldown Manager automatically without forcing its selected tab. Viewer anchor changes save through LibEditModeOverride and securely update only the native Cooldown Viewer systems without opening Edit Mode, replacing Edit Mode manager state, or refreshing CompactUnitFrames, so both windows remain usable; changes are still deferred during combat, Edit Mode, or a pending native-panel open.
 
 Reusable panel layout, collapsible sections, standard controls, tooltips, and profile layouts belong to
 `Libraries/LibSettingsCanvas-1.0`. BCDM-specific state and update behavior remain in this directory.

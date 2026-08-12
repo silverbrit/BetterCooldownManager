@@ -377,8 +377,6 @@ local function CreateViewerPanel(viewerType)
     end
     local isCustom = viewerType == "Trinket"
     local hasAnchorParent = viewerType ~= "Essential"
-    local supportsWrap = false
-
     if viewerType == "Trinket" then
         local trinkets = U.Section(controls, "Trinkets", true)
         PathCheckbox(controls, trinkets, "Enable Trinket Viewer", ProfileRoot,
@@ -406,7 +404,7 @@ local function CreateViewerPanel(viewerType)
     elseif viewerType == "Buffs" then
         PathCheckbox(controls, layout, "Center Buffs", ProfileRoot,
             { "CooldownManager", "Buffs", "CenterBuffs" }, function() BCDM:PromptReload() end, {
-                description = L("Uses an aura-only BCM viewer that stays centered in combat. Item-, totem-, and cooldown-only entries are omitted. A UI reload is required."),
+                description = L("Keeps Blizzard's active Tracked Buff icons centered using the native pool and layout order. A UI reload is required."),
             })
     end
     PathDropdown(controls, layout, "Anchor From", ProfileRoot,
@@ -427,10 +425,6 @@ local function CreateViewerPanel(viewerType)
             { "CooldownManager", viewerType, "GrowthDirection" }, ViewerChanged, function() return GROWTH_DIRECTIONS end)
         PathSlider(controls, layout, "Icon Spacing", ProfileRoot,
             { "CooldownManager", viewerType, "Spacing" }, ViewerChanged, { min = -1, max = 32, step = 0.1 })
-        if supportsWrap then
-            PathSlider(controls, layout, "Wrap After", ProfileRoot,
-                { "CooldownManager", viewerType, "Columns" }, ViewerChanged, { min = 0, max = 24, step = 1 })
-        end
         PathDropdown(controls, layout, "Frame Strata", ProfileRoot,
             { "CooldownManager", viewerType, "FrameStrata" }, ViewerChanged, function() return FRAME_STRATA end)
     end
