@@ -27,7 +27,7 @@
 
 ## Libraries
 - [Ace3](https://www.curseforge.com/wow/addons/ace3): Provides the addon lifecycle, profiles, localization, and serialization.
-- **LibSettingsCanvas-1.0:** Provides the shared settings canvas, collapsible sections, controls, and profile layouts used by BetterCooldownManager's draggable options window and Blizzard AddOns Settings.
+- [LibSharedCanvas-1.0](https://github.com/silverbrit/LibSharedCanvas): Provides the shared settings canvas, collapsible sections, controls, and profile layouts used by BetterCooldownManager's draggable options window and Blizzard AddOns Settings.
 - [LibDeflate](https://github.com/SafeteeWoW/LibDeflate.git): Handles importing/exporting of profiles.
 - [LibDualSpec](https://github.com/AdiAddons/LibDualSpec-1.0.git): Handles specialization profiles.
 - [LibSharedMedia](https://www.curseforge.com/wow/addons/libsharedmedia-3-0): Handles all additional media for the AddOn.
@@ -40,7 +40,7 @@ This is a passion project & this has to be maintained as much as possible in ord
 
 ## Development
 
-The repository targets Retail 12.1 and includes local Codex architecture guidance in `AGENTS.md`, `.context/`, and `.codex/skills/wow-addon-architect/`. Generated dependencies under `Libraries/` are not committed except for `Init.xml` and the project-owned `LibSettingsCanvas-1.0`; run `install-deps.sh` after cloning to install the remaining libraries and refresh the development-only Blizzard UI sources, then use `lua Scripts/test.lua .` for the pure-Lua model tests.
+The repository targets Retail 12.1 and includes local Codex architecture guidance in `AGENTS.md`, `.context/`, and `.codex/skills/wow-addon-architect/`. Generated dependencies under `Libraries/` are not committed except for `Init.xml`; run `install-deps.sh` after cloning to install LibSharedCanvas and the remaining libraries and refresh the development-only Blizzard UI sources, then use `lua Scripts/test.lua .` for the pure-Lua model tests.
 
 Secondary-resource rules are centralized in `Core/ResourceCatalog.lua`; bar modules consume its descriptors instead of maintaining their own class/spec lookup chains. Custom tracker specialization filters are stored by numeric specialization ID, with legacy token filters retained only when they cannot be converted safely.
 

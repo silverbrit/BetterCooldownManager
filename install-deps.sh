@@ -26,11 +26,6 @@ if [[ ! -f "${libraries_dir}/Init.xml" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${libraries_dir}/LibSettingsCanvas-1.0/LibSettingsCanvas-1.0.lua" ]]; then
-  echo "Error: the local LibSettingsCanvas-1.0 source is missing." >&2
-  exit 1
-fi
-
 for command in git svn; do
   if ! command -v "${command}" >/dev/null 2>&1; then
     echo "Error: ${command} is required but was not found in PATH." >&2
@@ -45,7 +40,7 @@ staging_dir="$(mktemp -d "${script_dir}/.install-deps.XXXXXX")"
 staged_libraries="${staging_dir}/Libraries"
 mkdir -p "${staged_libraries}/Ace3"
 cp "${libraries_dir}/Init.xml" "${staged_libraries}/Init.xml"
-cp -R "${libraries_dir}/LibSettingsCanvas-1.0" "${staged_libraries}/LibSettingsCanvas-1.0"
+git clone --depth 1 --branch main https://github.com/Silverbrit/LibSharedCanvas.git "${staged_libraries}/LibSharedCanvas-1.0"
 
 svn export https://repos.curseforge.com/wow/ace3/trunk/AceAddon-3.0 "${staged_libraries}/Ace3/AceAddon-3.0"
 svn export https://repos.curseforge.com/wow/ace3/trunk/AceDB-3.0 "${staged_libraries}/Ace3/AceDB-3.0"

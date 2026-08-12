@@ -1,6 +1,6 @@
 local _, BCDM = ...
 
-local Canvas = LibStub("LibSettingsCanvas-1.0")
+local Canvas = LibStub("LibSharedCanvas-1.0")
 local U = BCDM.SettingsUtils
 local profilesPanel
 

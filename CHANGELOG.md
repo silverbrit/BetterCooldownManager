@@ -4,7 +4,7 @@
 
 ### Settings
 
-- Replaced the AceGUI configuration window with a draggable, resizable Better Cooldown Manager window powered by LibSettingsCanvas-1.0, while retaining access through Blizzard's AddOns Settings.
+- Replaced the AceGUI configuration window with a draggable, resizable Better Cooldown Manager window powered by LibSharedCanvas-1.0, while retaining access through Blizzard's AddOns Settings.
 - Added dedicated categories for individual cooldown viewers, power bars, the cast bar, and profiles, with all sections expanded by default.
 - Reorganized settings by scope: shared appearance options remain on the main page, viewer-specific options live with their viewer, resource colours live with their respective power bars, and Edit Mode layout routing now lives under Profiles.
 - Removed the redundant Cooldown Viewers category and moved native viewer skinning, icon zoom, cooldown text, and custom glow settings to General according to their actual scope.
@@ -56,7 +56,7 @@
 
 ### Development
 
-- Added a modular Options implementation built around LibSettingsCanvas-1.0.
+- Added a modular Options implementation built around the externally maintained LibSharedCanvas-1.0.
 - Removed the AceGUI, AceDBOptions, and unused SharedMedia widget dependencies.
 - Added `install-deps.sh` for refreshing vendored libraries.
 - Updated packaging configuration to include only the required libraries.

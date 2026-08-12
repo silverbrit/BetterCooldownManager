@@ -1,6 +1,6 @@
 local _, BCDM = ...
 
-local SettingsCanvas = LibStub("LibSettingsCanvas-1.0")
+local SettingsCanvas = LibStub("LibSharedCanvas-1.0")
 local AceLocale = LibStub("AceLocale-3.0", true)
 local LocaleTable = AceLocale and AceLocale:GetLocale("BetterCooldownManager", true) or nil
 

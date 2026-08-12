@@ -9,7 +9,7 @@ BetterCooldownManager is a Retail World of Warcraft addon that styles Blizzard C
 - `Core/` owns lifecycle, defaults, migrations, shared data, public APIs, and event coordination.
 - `Modules/` owns Blizzard Cooldown Manager styling and BCM-owned cast/resource bars.
 - `CustomViewers/` owns BCM-created cooldown tracker frames.
-- `Options/` owns LibSettingsCanvas pages, profile controls, and entry editors.
+- `Options/` owns LibSharedCanvas pages, profile controls, and entry editors.
 - `Libraries/` contains bundled dependencies; edit them only for an explicit dependency fix.
 
 ## First reads
