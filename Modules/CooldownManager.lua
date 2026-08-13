@@ -529,6 +529,19 @@ local function RestoreTrackedBuffPoints()
     end
 end
 
+local function RestoreTrackedBuffFramePoints(frame)
+    local points = centeredTrackedBuffOriginalPoints[frame]
+    centeredTrackedBuffAnchors[frame] = nil
+    if not points then return end
+    pcall(function() frame:ClearAllPoints() end)
+    for _, point in ipairs(points) do
+        pcall(function()
+            frame:SetPoint(point[1], point[2], point[3], point[4], point[5])
+        end)
+    end
+    centeredTrackedBuffOriginalPoints[frame] = nil
+end
+
 local function ReapplyCenteredTrackedBuffPositions()
     for frame, anchor in pairs(centeredTrackedBuffAnchors) do
         pcall(function() frame:ClearAllPoints() end)
@@ -581,12 +594,18 @@ local function GetCenteredTrackedBuffEntries()
     local entries = {}
     for frame in pool:EnumerateActive() do
         local okIcon, icon = pcall(function() return frame.Icon end)
+        local active = true
+        local okActiveMethod, isActive = pcall(function() return frame and frame.IsActive end)
+        if okActiveMethod and type(isActive) == "function" then
+            local okActive, value = pcall(isActive, frame)
+            active = okActive and not BCDM:IsSecretValue(value) and value == true
+        end
         local okShown, shown = false, false
         local okShownMethod, isShown = pcall(function() return frame and frame.IsShown end)
         if okShownMethod and type(isShown) == "function" then
             okShown, shown = pcall(isShown, frame)
         end
-        if okShown and not BCDM:IsSecretValue(shown) and shown == true and okIcon and icon then
+        if active and okShown and not BCDM:IsSecretValue(shown) and shown == true and okIcon and icon then
             local okIndex, layoutIndex = pcall(function() return frame.layoutIndex end)
             if not okIndex or type(layoutIndex) ~= "number" or BCDM:IsSecretValue(layoutIndex) then
                 layoutIndex = 99999
@@ -630,8 +649,7 @@ local function PositionCenteredTrackedBuffOwner(width, height)
 end
 
 local function LayoutCenteredTrackedBuffs()
-    if not centeredTrackedBuffActive or not centeredTrackedBuffOwner
-        or nativeSettingsOpen or editModeOpen then return end
+    if not centeredTrackedBuffActive or not centeredTrackedBuffOwner then return end
 
     local viewer = BuffIconCooldownViewer
     if not viewer then return end
@@ -639,7 +657,7 @@ local function LayoutCenteredTrackedBuffs()
     local currentFrames = {}
     for _, entry in ipairs(entries) do currentFrames[entry.frame] = true end
     for frame in pairs(centeredTrackedBuffAnchors) do
-        if not currentFrames[frame] then centeredTrackedBuffAnchors[frame] = nil end
+        if not currentFrames[frame] then RestoreTrackedBuffFramePoints(frame) end
     end
 
     local isHorizontal, growsForward, spacing = GetTrackedBuffViewerSettings(viewer)
@@ -671,8 +689,7 @@ local function HookCenteredTrackedBuffFrame(frame)
     if okSetPoint and type(setPoint) == "function" then
         hooksecurefunc(frame, "SetPoint", function(_, point, relativeTo, relativePoint, x, y)
             local anchor = centeredTrackedBuffAnchors[frame]
-            if not centeredTrackedBuffActive or nativeSettingsOpen or editModeOpen
-                or not anchor or relativeTo == anchor[2] then return end
+            if not centeredTrackedBuffActive or not anchor or relativeTo == anchor[2] then return end
             if type(point) == "string" and IsReadableTrackedBuffPointValue(x)
                 and IsReadableTrackedBuffPointValue(y) then
                 centeredTrackedBuffOriginalPoints[frame] = {
@@ -688,7 +705,7 @@ local function HookCenteredTrackedBuffFrame(frame)
     local okActiveState, activeStateChanged = pcall(function() return frame.OnActiveStateChanged end)
     if okActiveState and type(activeStateChanged) == "function" then
         hooksecurefunc(frame, "OnActiveStateChanged", function()
-            if centeredTrackedBuffActive and not nativeSettingsOpen and not editModeOpen then
+            if centeredTrackedBuffActive then
                 ReapplyCenteredTrackedBuffPositions()
                 QueueCenteredTrackedBuffs()
             end
@@ -704,15 +721,15 @@ local function HookCenteredTrackedBuffFrames()
 end
 
 QueueCenteredTrackedBuffs = function()
-    if not centeredTrackedBuffActive or nativeSettingsOpen or editModeOpen
-        or centeredTrackedBuffPending or not centeredTrackedBuffDriver then return end
+    if not centeredTrackedBuffActive or centeredTrackedBuffPending
+        or not centeredTrackedBuffDriver then return end
     centeredTrackedBuffPending = true
     centeredTrackedBuffTicks = 0
     centeredTrackedBuffDriver:Show()
 end
 
 local function SetCenteredTrackedBuffsActive(enabled)
-    enabled = enabled == true and not nativeSettingsOpen and not editModeOpen
+    enabled = enabled == true
     if enabled == centeredTrackedBuffActive then
         if enabled then HookCenteredTrackedBuffFrames(); QueueCenteredTrackedBuffs() end
         return
@@ -815,7 +832,7 @@ local function SetHooks()
         EventRegistry:RegisterCallback("CooldownViewerSettings.OnShow", function()
             nativeSettingsOpen = true
             nativeSettingsOpenPending = false
-            SetCenteredTrackedBuffsActive(false)
+            SetCenteredTrackedBuffsActive(IsTrackedBuffCenteringEnabled())
             BCDM:QueueCooldownViewerStyleRefresh()
         end, BCDM)
         EventRegistry:RegisterCallback("CooldownViewerSettings.OnHide", function()
@@ -826,7 +843,7 @@ local function SetHooks()
         end, BCDM)
         EventRegistry:RegisterCallback("EditMode.Enter", function()
             editModeOpen = true
-            SetCenteredTrackedBuffsActive(false)
+            SetCenteredTrackedBuffsActive(IsTrackedBuffCenteringEnabled())
         end, BCDM)
         EventRegistry:RegisterCallback("EditMode.Exit", function()
             editModeOpen = false

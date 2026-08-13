@@ -81,10 +81,12 @@ local function NewItem(index, width, height, itemBacked)
     item.cooldownID = index
     item.Icon = {}
     item.width, item.height = width, height
+    item.active = true
     function item:IsShown() return self.shown end
     function item:GetWidth() return self.width end
     function item:GetHeight() return self.height end
     function item:GetScale() return 1 end
+    function item:IsActive() return self.active end
     function item:OnActiveStateChanged() end
     function item:IsItem() return itemBacked == true end
     return item
@@ -332,14 +334,38 @@ Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
 
 CooldownViewerSettings:Show()
 EventRegistry:TriggerEvent("CooldownViewerSettings.OnShow", CooldownViewerSettings)
-Check(first.point[2] == viewer and second.point[2] == viewer,
-    "native rows return to Blizzard ownership while settings are open")
+viewer:RefreshLayout()
+RunFrameUpdates()
+RunFrameUpdates()
+Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
+    "active Tracked Buff rows stay centered while settings are open")
 CooldownViewerSettings:Hide()
 EventRegistry:TriggerEvent("CooldownViewerSettings.OnHide", CooldownViewerSettings)
 RunFrameUpdates()
 RunFrameUpdates()
 Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
     "native rows are re-centered after settings close")
+
+local inactiveEditorBuff = NewItem(8, 30, 20, false)
+viewer.items = { second, inactiveEditorBuff, first }
+viewer:RefreshLayout()
+RunFrameUpdates()
+RunFrameUpdates()
+inactiveEditorBuff.active = false
+inactiveEditorBuff:OnActiveStateChanged()
+EventRegistry:TriggerEvent("EditMode.Enter")
+viewer:RefreshLayout()
+RunFrameUpdates()
+RunFrameUpdates()
+Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
+    "active Tracked Buff rows stay compact in Edit Mode")
+Check(inactiveEditorBuff.point[2] == viewer,
+    "inactive Edit Mode placeholders remain under Blizzard layout ownership")
+EventRegistry:TriggerEvent("EditMode.Exit")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+viewer.items = { second, first }
 
 BCDM.db.profile.CooldownManager.Enable = true
 local editorSpell = NewItem(7, 44, 40, false)
