@@ -301,6 +301,50 @@ function M.Slider(controls, section, title, getValue, setValue, config)
     ))
 end
 
+function M.Input(controls, section, title, getValue, setValue, options)
+    options = options or {}
+    local Canvas = M.Canvas
+    local row = Canvas.CreateBaseRow(section.Content, 28)
+    row.Label = Canvas.CreateLabel(row, M.L(title), "GameFontHighlight")
+    row.Label:SetPoint("LEFT", 0, 0)
+    row.Label:SetWidth(options.labelWidth or 170)
+    row.Input = Canvas.CreateInput(row)
+    row.Input:SetPoint("LEFT", row.Label, "RIGHT", 10, 0)
+    row.Input:SetPoint("RIGHT", row, "RIGHT", -(options.rightInset or 0), 0)
+    row.Input:SetAutoFocus(false)
+    if options.maxLetters then row.Input:SetMaxLetters(options.maxLetters) end
+
+    local function Restore()
+        row.Input:SetText(tostring(getValue() or ""))
+    end
+    local function Commit()
+        if type(options.disabled) == "function" and options.disabled() then Restore() return end
+        local value = row.Input:GetText() or ""
+        if options.trim ~= false then value = value:match("^%s*(.-)%s*$") end
+        setValue(value)
+        if row.lscRefreshPanel then row.lscRefreshPanel() else Restore() end
+    end
+    row.Input:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    row.Input:SetScript("OnEscapePressed", function(self)
+        self.lscCancelEdit = true
+        self:ClearFocus()
+    end)
+    row.Input:SetScript("OnEditFocusLost", function(self)
+        if self.lscCancelEdit then self.lscCancelEdit = nil Restore() else Commit() end
+    end)
+    function row:Refresh()
+        local hidden = type(options.hidden) == "function" and options.hidden() == true
+        self:SetShown(not hidden)
+        if hidden then return end
+        local disabled = type(options.disabled) == "function" and options.disabled() == true
+        Canvas.SetFontStringEnabled(self.Label, not disabled)
+        Canvas.SetWidgetEnabled(self.Input, not disabled)
+        if not self.Input:HasFocus() then Restore() end
+    end
+    Restore()
+    return M.Add(controls, section, row)
+end
+
 function M.Color(controls, section, title, getValue, setValue, options)
     return M.Add(controls, section, SettingsCanvas.CreateColorRow(
         section.Content, M.L(title), getValue, setValue, options

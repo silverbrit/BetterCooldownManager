@@ -3,6 +3,7 @@
     <Script file="Entries.lua"/>
     <Script file="Trinkets.lua"/>
     <Script file="Profiles.lua"/>
+    <Script file="LafeeDamageTracker.lua"/>
     <Script file="Settings.lua"/>
     <Script file="Window.lua"/>
 </Ui>

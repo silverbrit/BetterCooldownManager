@@ -974,6 +974,9 @@ function BCDM:RegisterSettings()
     RegisterPanel(rootCategory, "Power Bar", CreateBarPanel("PowerBar"))
     RegisterPanel(rootCategory, "Secondary Power Bar", CreateBarPanel("SecondaryPowerBar"))
     RegisterPanel(rootCategory, "Cast Bar", CreateBarPanel("CastBar"))
+    if type(BCDM.CreateLafeeDamageTrackerPanel) == "function" then
+        RegisterPanel(rootCategory, "Damage Type Tracker", BCDM:CreateLafeeDamageTrackerPanel())
+    end
     if type(BCDM.RegisterProfilesSettings) == "function" then
         local profilesPanel = BCDM:RegisterProfilesSettings(rootCategory)
         if profilesPanel then
