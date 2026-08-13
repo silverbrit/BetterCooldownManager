@@ -59,6 +59,7 @@ end
 function BCDM:NormalizeImportedProfile(profile)
     if type(profile) ~= "table" then return false end
     local changed = self:NormalizeBarColourProfile(profile)
+    if self:NormalizeEssentialAnchorProfile(profile) then changed = true end
     if self:NormalizeRemovedSettingsProfile(profile) then changed = true end
     if self:MigrateCustomTrackerProfile(profile) then changed = true end
     return changed

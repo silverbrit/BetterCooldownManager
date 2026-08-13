@@ -245,7 +245,7 @@ local BCDM = {
         CooldownManager = {
             Enable = false,
             General = { IconZoom = 0, BorderSize = 1, CooldownText = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
-            Essential = { Layout = { "CENTER", "CENTER", 0, 0 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
+            Essential = { Layout = { "CENTER", "NONE", "CENTER", 0, 0 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
             Utility = { Layout = { "TOP", "EssentialCooldownViewer", "BOTTOM", 0, -1 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
             Buffs = { CenterBuffs = true, Layout = { "BOTTOM", "UIParent", "TOP", 0, 1 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
         },
@@ -277,9 +277,15 @@ Check(layoutCalls.load == 1 and layoutCalls.reanchor == 3 and layoutCalls.save =
     "the layout queue securely refreshes only Cooldown Viewer systems")
 
 function BCDM_PowerBar:GetRect() return 100, 200, 300, 20 end
+BCDM.db.profile.CooldownManager.Essential.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 2, 3 }
 BCDM.db.profile.CooldownManager.Buffs.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 4, 5 }
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
+local persistedEssentialAnchor = layoutCalls.anchors[EssentialCooldownViewer]
+Check(persistedEssentialAnchor[2] == UIParent and persistedEssentialAnchor[3] == "BOTTOMLEFT",
+    "Essential Cooldowns support persistent addon-owned anchor parents")
+Check(persistedEssentialAnchor[4] == 252 and persistedEssentialAnchor[5] == 223,
+    "Essential Cooldowns preserve their visual position relative to addon anchors")
 local persistedBuffAnchor = layoutCalls.anchors[BuffIconCooldownViewer]
 Check(persistedBuffAnchor[2] == UIParent and persistedBuffAnchor[3] == "BOTTOMLEFT",
     "addon-owned anchors are persisted relative to UIParent for safe login replay")

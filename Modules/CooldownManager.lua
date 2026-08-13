@@ -193,13 +193,9 @@ local function ApplyViewerLayouts()
             local viewerSettings = settings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
             local layout = viewerSettings and viewerSettings.Layout
             if viewer and layout then
-                if viewerName == "EssentialCooldownViewer" then
-                    LEMO:ReanchorFrame(viewer, layout[1], UIParent, layout[2], layout[3], layout[4])
-                else
-                    local anchorParent, relativePoint, xOffset, yOffset = GetPersistentViewerAnchor(layout)
-                    if not anchorParent then return "anchor-not-ready" end
-                    LEMO:ReanchorFrame(viewer, layout[1], anchorParent, relativePoint, xOffset, yOffset)
-                end
+                local anchorParent, relativePoint, xOffset, yOffset = GetPersistentViewerAnchor(layout)
+                if not anchorParent then return "anchor-not-ready" end
+                LEMO:ReanchorFrame(viewer, layout[1], anchorParent, relativePoint, xOffset, yOffset)
             end
         end
         -- Save, then securely update only native Cooldown Viewer systems. Never

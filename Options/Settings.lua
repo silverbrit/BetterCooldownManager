@@ -376,7 +376,7 @@ local function CreateViewerPanel(viewerType)
         if RefreshViewerHighlight then RefreshViewerHighlight() end
     end
     local isCustom = viewerType == "Trinket"
-    local hasAnchorParent = viewerType ~= "Essential"
+    local hasAnchorParent = true
     if viewerType == "Trinket" then
         local trinkets = U.Section(controls, "Trinkets", true)
         PathCheckbox(controls, trinkets, "Enable Trinket Viewer", ProfileRoot,
