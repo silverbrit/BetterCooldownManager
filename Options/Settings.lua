@@ -372,7 +372,15 @@ local function CreateViewerPanel(viewerType)
     end
     local function ViewerChanged()
         if viewerType == "Trinket" then BCDM:UpdateTrinketBar()
-        else BCDM:UpdateCooldownViewer(viewerType) end
+        else
+            BCDM:UpdateCooldownViewer(viewerType)
+            -- A typed slider value emits only one change event. Give native
+            -- Edit Mode anchors one frame to settle, then resolve dependent
+            -- viewers such as Tracked Buffs from the final parent position.
+            if BCDM.QueueCooldownViewerLayoutSettle then
+                BCDM:QueueCooldownViewerLayoutSettle()
+            end
+        end
         if RefreshViewerHighlight then RefreshViewerHighlight() end
     end
     local isCustom = viewerType == "Trinket"

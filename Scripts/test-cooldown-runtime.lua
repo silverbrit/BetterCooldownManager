@@ -278,6 +278,15 @@ Check(layoutCalls.load == 1 and layoutCalls.reanchor == 3 and layoutCalls.save =
     and managerAnchorSyncs == 3 and compactFrameRefreshes == 0,
     "the layout queue securely refreshes only Cooldown Viewer systems")
 
+local savesBeforeSettle = layoutCalls.save
+BCDM:QueueCooldownViewerLayoutSettle()
+BCDM:QueueCooldownViewerLayoutSettle()
+RunTimers()
+RunTimers()
+RunTimers()
+Check(layoutCalls.save == savesBeforeSettle + 2 and #timers == 0,
+    "a single typed viewer change gets one bounded dependent-layout settle pass")
+
 function BCDM_PowerBar:GetRect() return 100, 200, 300, 20 end
 BCDM.db.profile.CooldownManager.Essential.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 2, 3 }
 BCDM.db.profile.CooldownManager.Buffs.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 4, 5 }
@@ -294,22 +303,33 @@ Check(persistedBuffAnchor[2] == UIParent and persistedBuffAnchor[3] == "BOTTOMLE
 Check(persistedBuffAnchor[4] == 254 and persistedBuffAnchor[5] == 225,
     "the UIParent anchor preserves the addon frame's visual position")
 
+ElvUF_Player = NewFrame(UIParent)
+function ElvUF_Player:GetRect() return 400, 300, 200, 80 end
+BCDM.db.profile.CooldownManager.Utility.Layout = { "TOP", "ElvUF_Player", "BOTTOM", 6, 7 }
+BCDM:QueueCooldownViewerLayoutApply()
+RunTimers()
+local persistedUtilityAnchor = layoutCalls.anchors[UtilityCooldownViewer]
+Check(persistedUtilityAnchor[2] == UIParent and persistedUtilityAnchor[3] == "BOTTOMLEFT",
+    "late-bound ElvUI anchors are persisted relative to UIParent")
+Check(persistedUtilityAnchor[4] == 506 and persistedUtilityAnchor[5] == 307,
+    "ElvUI anchors preserve the viewer's visual position")
+
 combat = true
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
-Check(layoutCalls.apply == 0 and layoutCalls.save == 2,
+Check(layoutCalls.apply == 0 and layoutCalls.save == 5,
     "viewer layouts are not applied during combat")
 combat = false
 viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "PLAYER_REGEN_ENABLED")
-Check(layoutCalls.save == 3, "a combat-deferred viewer layout applies after combat")
+Check(layoutCalls.save == 6, "a combat-deferred viewer layout applies after combat")
 
 editable = false
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
-Check(layoutCalls.save == 3, "preset Edit Mode layouts are left unchanged")
+Check(layoutCalls.save == 6, "preset Edit Mode layouts are left unchanged")
 editable = true
 viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "EDIT_MODE_LAYOUTS_UPDATED")
-Check(layoutCalls.save == 4, "a pending viewer layout retries after leaving a preset layout")
+Check(layoutCalls.save == 7, "a pending viewer layout retries after leaving a preset layout")
 
 viewer:RefreshLayout()
 nativeRefreshLayoutCalls = 0
@@ -325,6 +345,8 @@ Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
     "native Tracked Buff rows use the BCM-owned centering anchor")
 Check(first.point[4] == 0 and second.point[4] == 34,
     "native Tracked Buff rows preserve sorted layout order and spacing")
+Check(centeredOwner.point[2] == BCDM_PowerBar and centeredOwner.point[3] == "TOP",
+    "the Tracked Buff owner keeps a live relative anchor to its selected parent")
 
 viewer:RefreshLayout()
 RunFrameUpdates()
@@ -369,6 +391,7 @@ viewer.items = { second, first }
 
 BCDM.db.profile.CooldownManager.Enable = true
 local editorSpell = NewItem(7, 44, 40, false)
+editorSpell.active = false
 viewer.items = { editorSpell }
 CooldownViewerSettings:Show()
 EventRegistry:TriggerEvent("CooldownViewerSettings.OnShow", CooldownViewerSettings)
@@ -376,6 +399,22 @@ viewer:RefreshData()
 RunTimers()
 Check(editorSpell.bcdmStyleCount == 1 and editorSpell.width == 44 and editorSpell.height == 40,
     "native Tracked Buff editor rows are skinned without changing Blizzard's layout dimensions")
+
+local activeEditorSpell = NewItem(9, 64, 64, false)
+local secondActiveEditorSpell = NewItem(10, 64, 64, false)
+function secondActiveEditorSpell:GetWidth() return 91 end
+function secondActiveEditorSpell:GetHeight() return 73 end
+viewer.items = { activeEditorSpell, secondActiveEditorSpell }
+viewer:RefreshData()
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+Check(activeEditorSpell.width == 30 and activeEditorSpell.height == 20
+    and secondActiveEditorSpell.width == 30 and secondActiveEditorSpell.height == 20,
+    "active Tracked Buff rows keep their BCDM size while native settings are open")
+Check(activeEditorSpell.point[2] == centeredOwner and secondActiveEditorSpell.point[2] == centeredOwner
+    and math.abs(activeEditorSpell.point[4] - secondActiveEditorSpell.point[4]) == 34,
+    "resized active Tracked Buff rows remain centered without overlap")
 CooldownViewerSettings:Hide()
 EventRegistry:TriggerEvent("CooldownViewerSettings.OnHide", CooldownViewerSettings)
 RunTimers()
@@ -426,6 +465,29 @@ viewer:RefreshData()
 RunTimers()
 Check(lateSpell.bcdmStyleCount == 1 and lateSpell.width == 30 and lateSpell.height == 20,
     "spell rows acquired after login are styled after viewer data refreshes")
+
+local essentialFirst = NewItem(11, 64, 64, false)
+local essentialSecond = NewItem(12, 91, 73, false)
+EssentialCooldownViewer.items = { essentialFirst, essentialSecond }
+function EssentialCooldownViewer:GetItemFrames() return self.items end
+local essentialLayoutCalls = 0
+function EssentialCooldownViewer:Layout()
+    essentialLayoutCalls = essentialLayoutCalls + 1
+    local x = 0
+    for _, item in ipairs(self.items) do
+        item:ClearAllPoints()
+        item:SetPoint("TOPLEFT", self, "TOPLEFT", x, 0)
+        x = x + item.width + 4
+    end
+end
+essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
+essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 10, 0)
+BCDM:UpdateCooldownViewer("Essential")
+RunTimers()
+Check(essentialLayoutCalls > 0 and essentialFirst.width == 30 and essentialSecond.width == 30,
+    "BCM icon-size changes immediately rerun the existing native grid")
+Check(essentialFirst.point[4] == 0 and essentialSecond.point[4] == 34,
+    "BCM icon-size changes update positions without opening Edit Mode")
 
 combat = true
 viewer:RefreshLayout()

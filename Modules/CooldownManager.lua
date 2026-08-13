@@ -31,6 +31,13 @@ local function GetViewerItemFrames(viewer)
     return frames, true
 end
 
+local function IsCooldownViewerItemActive(itemFrame)
+    local okMethod, isActive = pcall(function() return itemFrame and itemFrame.IsActive end)
+    if not okMethod or type(isActive) ~= "function" then return true end
+    local ok, active = pcall(isActive, itemFrame)
+    return ok and not BCDM:IsSecretValue(active) and active == true
+end
+
 function BCDM:IsCustomizableCooldownViewerItem(itemFrame)
     if not itemFrame or not itemFrame.IsItem then return false end
     if itemFrame.IsForbidden then
@@ -52,6 +59,7 @@ local viewerLayoutPending = false
 local viewerLayoutScheduled = false
 local viewerLayoutApplying = false
 local viewerLayoutErrorReported = false
+local viewerLayoutSettleGeneration = 0
 local TryApplyViewerLayouts
 local TryApplyViewerStyles
 local CenterWrappedIcons
@@ -111,10 +119,16 @@ end
 local function GetPersistentViewerAnchor(layout)
     local anchorName = layout[2]
     local anchorParent = BCDM:ResolveAnchorParent(anchorName)
-    if type(anchorName) ~= "string" or not anchorName:match("^BCDM_") then
+    local requiresStableAnchor = type(anchorName) == "string"
+        and (anchorName:match("^BCDM_") or anchorName:match("^ElvUF_"))
+    if not requiresStableAnchor then
         return anchorParent, layout[3], layout[4] or 0, layout[5] or 0
     end
 
+    -- Addon-owned frames may not exist yet when Blizzard replays Edit Mode
+    -- layouts during login. Persist their current screen position against
+    -- UIParent so the saved native viewer layout never contains a late-bound
+    -- frame name such as ElvUF_Player.
     if not _G[anchorName] then return nil end
     local anchorX, anchorY = BCDM.GetUIParentAnchorPosition(anchorParent, layout[3])
     if not anchorX then return nil end
@@ -319,18 +333,48 @@ local function ApplyCooldownText(cooldownViewer)
     end
 end
 
+function BCDM:QueueCooldownViewerLayoutSettle()
+    self:QueueCooldownViewerLayoutApply()
+    viewerLayoutSettleGeneration = viewerLayoutSettleGeneration + 1
+    local generation = viewerLayoutSettleGeneration
+    C_Timer.After(0.05, function()
+        if generation == viewerLayoutSettleGeneration then
+            BCDM:QueueCooldownViewerLayoutApply()
+            BCDM:QueueCooldownViewerStyleRefresh()
+        end
+    end)
+end
+
+local function RelayoutCooldownViewerItems(viewer)
+    if not viewer or editModeOpen then return end
+    local container = viewer
+    if type(viewer.GetItemContainerFrame) == "function" then
+        local ok, itemContainer = pcall(viewer.GetItemContainerFrame, viewer)
+        if ok and itemContainer then container = itemContainer end
+    end
+    if type(container.Layout) == "function" then
+        -- Re-run only Blizzard's existing grid engine. RefreshLayout would
+        -- release/reacquire item frames and touch protected viewer data.
+        pcall(container.Layout, container)
+    end
+end
+
 local function StyleIcons(onlyViewerName)
     if IsInCombat() then return end
-    if not ShouldSkin() then return end
+    local shouldSkin = ShouldSkin()
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
         if not onlyViewerName or viewerName == onlyViewerName then
         local viewerSettings = cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
         local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
-        local preserveNativeSize = onlyViewerName == "BuffIconCooldownViewer"
         for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
             if BCDM:IsCustomizableCooldownViewerItem(childFrame) then
-                if childFrame.Icon then
+                -- Blizzard exposes inactive Tracked Buff placeholders while its
+                -- editor is open. Keep only those placeholders at their native
+                -- size; active buffs must retain the size selected in BCDM.
+                local preserveNativeSize = onlyViewerName == "BuffIconCooldownViewer"
+                    and not IsCooldownViewerItemActive(childFrame)
+                if childFrame.Icon and shouldSkin then
                     BCDM:StripTextures(childFrame.Icon)
                     local iconZoomAmount = cooldownManagerSettings.General.IconZoom * 0.5
                     local textureWidth, textureHeight = iconWidth, iconHeight
@@ -346,7 +390,7 @@ local function StyleIcons(onlyViewerName)
                     end
                     BCDM:ApplyIconTexCoord(childFrame.Icon, textureWidth, textureHeight, iconZoomAmount)
                 end
-                if childFrame.Cooldown then
+                if childFrame.Cooldown and shouldSkin then
                     local borderSize = cooldownManagerSettings.General.BorderSize
                     childFrame.Cooldown:ClearAllPoints()
                     childFrame.Cooldown:SetPoint("TOPLEFT", childFrame, "TOPLEFT", borderSize, -borderSize)
@@ -356,12 +400,13 @@ local function StyleIcons(onlyViewerName)
                     childFrame.Cooldown:SetDrawSwipe(true)
                     childFrame.Cooldown:SetSwipeTexture("Interface\\Buttons\\WHITE8X8")
                 end
-                if childFrame.CooldownFlash then childFrame.CooldownFlash:SetAlpha(0) end
-                if childFrame.DebuffBorder then childFrame.DebuffBorder:SetAlpha(0) end
+                if shouldSkin and childFrame.CooldownFlash then childFrame.CooldownFlash:SetAlpha(0) end
+                if shouldSkin and childFrame.DebuffBorder then childFrame.DebuffBorder:SetAlpha(0) end
                 if not preserveNativeSize then childFrame:SetSize(iconWidth, iconHeight) end
-                BCDM:AddBorder(childFrame)
+                if shouldSkin then BCDM:AddBorder(childFrame) end
             end
         end
+        RelayoutCooldownViewerItems(_G[viewerName])
         end
     end
 end
@@ -594,12 +639,7 @@ local function GetCenteredTrackedBuffEntries()
     local entries = {}
     for frame in pool:EnumerateActive() do
         local okIcon, icon = pcall(function() return frame.Icon end)
-        local active = true
-        local okActiveMethod, isActive = pcall(function() return frame and frame.IsActive end)
-        if okActiveMethod and type(isActive) == "function" then
-            local okActive, value = pcall(isActive, frame)
-            active = okActive and not BCDM:IsSecretValue(value) and value == true
-        end
+        local active = IsCooldownViewerItemActive(frame)
         local okShown, shown = false, false
         local okShownMethod, isShown = pcall(function() return frame and frame.IsShown end)
         if okShownMethod and type(isShown) == "function" then
@@ -615,8 +655,12 @@ local function GetCenteredTrackedBuffEntries()
                 frame = frame,
                 layoutIndex = layoutIndex,
                 order = #entries + 1,
-                width = ReadTrackedBuffNumber(frame, "GetWidth", fallbackWidth) * scale,
-                height = ReadTrackedBuffNumber(frame, "GetHeight", fallbackHeight) * scale,
+                -- Active rows are sized by BCDM. Do not consume transient
+                -- per-frame dimensions reported while Edit Mode is changing
+                -- its native icon scale, otherwise every icon can receive a
+                -- different layout step and overlap its neighbours.
+                width = fallbackWidth * scale,
+                height = fallbackHeight * scale,
                 scale = scale,
             }
         end
@@ -629,12 +673,12 @@ local function PositionCenteredTrackedBuffOwner(width, height)
     local settings = BCDM.db and BCDM.db.profile and BCDM.db.profile.CooldownManager
         and BCDM.db.profile.CooldownManager.Buffs
     local layout = settings and settings.Layout or { "CENTER", "NONE", "CENTER", 0, 0 }
-    local anchorParent, relativePoint, xOffset, yOffset = GetPersistentViewerAnchor(layout)
-    if not anchorParent then
-        anchorParent = BCDM.ResolveAnchorParent
-            and BCDM:ResolveAnchorParent(layout[2]) or UIParent
-        relativePoint, xOffset, yOffset = layout[3], layout[4], layout[5]
-    end
+    -- This owner is addon-controlled and is never persisted in Blizzard's
+    -- Edit Mode layout. Keep its real relative anchor so it automatically
+    -- follows parent movement, including a single typed offset change.
+    local anchorParent = BCDM.ResolveAnchorParent
+        and BCDM:ResolveAnchorParent(layout[2]) or UIParent
+    local relativePoint, xOffset, yOffset = layout[3], layout[4], layout[5]
     anchorParent = anchorParent or UIParent
     relativePoint = relativePoint or "CENTER"
     xOffset, yOffset = xOffset or 0, yOffset or 0
