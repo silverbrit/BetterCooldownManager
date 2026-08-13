@@ -353,12 +353,14 @@ RunFrameUpdates()
 RunFrameUpdates()
 Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
     "active Tracked Buff rows stay compact in Edit Mode")
-Check(inactiveEditorBuff.point[2] == viewer,
-    "inactive Edit Mode placeholders remain under Blizzard layout ownership")
+Check(inactiveEditorBuff.point[2] == centeredOwner,
+    "inactive Edit Mode placeholders align with the active Tracked Buff row")
 EventRegistry:TriggerEvent("EditMode.Exit")
 RunTimers()
 RunFrameUpdates()
 RunFrameUpdates()
+Check(inactiveEditorBuff.shown == false,
+    "inactive Tracked Buff placeholders hide again after leaving Edit Mode")
 viewer.items = { second, first }
 
 BCDM.db.profile.CooldownManager.Enable = true
@@ -420,6 +422,29 @@ viewer:RefreshData()
 RunTimers()
 Check(lateSpell.bcdmStyleCount == 1 and lateSpell.width == 30 and lateSpell.height == 20,
     "spell rows acquired after login are styled after viewer data refreshes")
+
+local essentialFirst = NewItem(11, 64, 64, false)
+local essentialSecond = NewItem(12, 91, 73, false)
+EssentialCooldownViewer.items = { essentialFirst, essentialSecond }
+function EssentialCooldownViewer:GetItemFrames() return self.items end
+local essentialLayoutCalls = 0
+function EssentialCooldownViewer:Layout()
+    essentialLayoutCalls = essentialLayoutCalls + 1
+    local x = 0
+    for _, item in ipairs(self.items) do
+        item:ClearAllPoints()
+        item:SetPoint("TOPLEFT", self, "TOPLEFT", x, 0)
+        x = x + item.width + 4
+    end
+end
+essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
+essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 10, 0)
+BCDM:UpdateCooldownViewer("Essential")
+RunTimers()
+Check(essentialLayoutCalls > 0 and essentialFirst.width == 30 and essentialSecond.width == 30,
+    "BCM icon-size changes immediately rerun the existing native grid")
+Check(essentialFirst.point[4] == 0 and essentialSecond.point[4] == 34,
+    "BCM icon-size changes update positions without opening Edit Mode")
 
 combat = true
 viewer:RefreshLayout()

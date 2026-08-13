@@ -59,11 +59,13 @@ local viewerLayoutEventFrame
 local nativeSettingsOpen = false
 local editModeOpen = false
 local nativeSettingsOpenPending = false
+local QueueCenteredTrackedBuffs
 
 local function EnsureViewerLayoutEventFrame()
     if viewerLayoutEventFrame then return end
     viewerLayoutEventFrame = CreateFrame("Frame")
     viewerLayoutEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    viewerLayoutEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     viewerLayoutEventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
     viewerLayoutEventFrame:RegisterEvent("COOLDOWN_VIEWER_DATA_LOADED")
     viewerLayoutEventFrame:RegisterEvent("COOLDOWN_VIEWER_TABLE_HOTFIXED")
@@ -74,6 +76,9 @@ local function EnsureViewerLayoutEventFrame()
             BCDM:QueueCooldownViewerStyleRefresh()
         end
         if TryApplyViewerStyles then TryApplyViewerStyles() end
+        if event == "PLAYER_ENTERING_WORLD" and QueueCenteredTrackedBuffs then
+            QueueCenteredTrackedBuffs()
+        end
     end)
 end
 
@@ -323,6 +328,21 @@ local function ApplyCooldownText(cooldownViewer)
     end
 end
 
+local function RelayoutCooldownViewerItems(viewer)
+    if not viewer or editModeOpen then return end
+    local container = viewer
+    if type(viewer.GetItemContainerFrame) == "function" then
+        local ok, itemContainer = pcall(viewer.GetItemContainerFrame, viewer)
+        if ok and itemContainer then container = itemContainer end
+    end
+    if type(container.Layout) == "function" then
+        -- Icon sizes are changed after Blizzard initially lays out the viewer.
+        -- Re-run its existing grid so every item receives an anchor based on
+        -- the final BCDM dimensions, without recycling any item frames.
+        pcall(container.Layout, container)
+    end
+end
+
 local function StyleIcons(onlyViewerName)
     if IsInCombat() then return end
     if not ShouldSkin() then return end
@@ -366,6 +386,7 @@ local function StyleIcons(onlyViewerName)
                 BCDM:AddBorder(childFrame)
             end
         end
+        RelayoutCooldownViewerItems(_G[viewerName])
         end
     end
 end
@@ -471,10 +492,10 @@ local centeredTrackedBuffActive = false
 local centeredTrackedBuffPending = false
 local centeredTrackedBuffTicks = 0
 local centeredTrackedBuffHooksInstalled = false
+local centeredTrackedBuffNativeLayout = false
 local centeredTrackedBuffFrameHooks = setmetatable({}, { __mode = "k" })
 local centeredTrackedBuffAnchors = setmetatable({}, { __mode = "k" })
 local centeredTrackedBuffOriginalPoints = setmetatable({}, { __mode = "k" })
-local QueueCenteredTrackedBuffs
 
 local function IsTrackedBuffCenteringEnabled()
     local profile = BCDM.db and BCDM.db.profile
@@ -531,6 +552,11 @@ local function RestoreTrackedBuffPoints()
         end
         centeredTrackedBuffOriginalPoints[frame] = nil
     end
+end
+
+local function ForgetTrackedBuffPoints()
+    for frame in pairs(centeredTrackedBuffAnchors) do centeredTrackedBuffAnchors[frame] = nil end
+    for frame in pairs(centeredTrackedBuffOriginalPoints) do centeredTrackedBuffOriginalPoints[frame] = nil end
 end
 
 local function RestoreTrackedBuffFramePoints(frame)
@@ -595,6 +621,9 @@ local function GetCenteredTrackedBuffEntries()
         end
     end
 
+    local previewInactive = nativeSettingsOpen or editModeOpen
+        or IsSettingsFrameShown(CooldownViewerSettings)
+        or IsSettingsFrameShown(EditModeManagerFrame)
     local entries = {}
     for frame in pool:EnumerateActive() do
         local okIcon, icon = pcall(function() return frame.Icon end)
@@ -609,7 +638,12 @@ local function GetCenteredTrackedBuffEntries()
         if okShownMethod and type(isShown) == "function" then
             okShown, shown = pcall(isShown, frame)
         end
-        if active and okShown and not BCDM:IsSecretValue(shown) and shown == true and okIcon and icon then
+        if not active and not previewInactive then
+            pcall(frame.Hide, frame)
+            shown = false
+        end
+        if (active or previewInactive) and okShown and not BCDM:IsSecretValue(shown)
+            and shown == true and okIcon and icon then
             local okIndex, layoutIndex = pcall(function() return frame.layoutIndex end)
             if not okIndex or type(layoutIndex) ~= "number" or BCDM:IsSecretValue(layoutIndex) then
                 layoutIndex = 99999
@@ -693,7 +727,8 @@ local function HookCenteredTrackedBuffFrame(frame)
     if okSetPoint and type(setPoint) == "function" then
         hooksecurefunc(frame, "SetPoint", function(_, point, relativeTo, relativePoint, x, y)
             local anchor = centeredTrackedBuffAnchors[frame]
-            if not centeredTrackedBuffActive or not anchor or relativeTo == anchor[2] then return end
+            if not centeredTrackedBuffActive or centeredTrackedBuffNativeLayout
+                or not anchor or relativeTo == anchor[2] then return end
             if type(point) == "string" and IsReadableTrackedBuffPointValue(x)
                 and IsReadableTrackedBuffPointValue(y) then
                 centeredTrackedBuffOriginalPoints[frame] = {
@@ -709,7 +744,7 @@ local function HookCenteredTrackedBuffFrame(frame)
     local okActiveState, activeStateChanged = pcall(function() return frame.OnActiveStateChanged end)
     if okActiveState and type(activeStateChanged) == "function" then
         hooksecurefunc(frame, "OnActiveStateChanged", function()
-            if centeredTrackedBuffActive then
+            if centeredTrackedBuffActive and not centeredTrackedBuffNativeLayout then
                 ReapplyCenteredTrackedBuffPositions()
                 QueueCenteredTrackedBuffs()
             end
@@ -773,6 +808,19 @@ local function EnsureCenteredTrackedBuffs()
     end
     if centeredTrackedBuffHooksInstalled then return true end
     centeredTrackedBuffHooksInstalled = true
+    if type(pool.ReleaseAll) == "function" then
+        hooksecurefunc(pool, "ReleaseAll", function()
+            centeredTrackedBuffNativeLayout = true
+            ForgetTrackedBuffPoints()
+        end)
+    end
+    if type(viewer.RefreshLayout) == "function" then
+        hooksecurefunc(viewer, "RefreshLayout", function()
+            centeredTrackedBuffNativeLayout = false
+            HookCenteredTrackedBuffFrames()
+            QueueCenteredTrackedBuffs()
+        end)
+    end
     if type(pool.Acquire) == "function" then
         hooksecurefunc(pool, "Acquire", function()
             HookCenteredTrackedBuffFrames()
