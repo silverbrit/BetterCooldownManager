@@ -219,7 +219,7 @@ local function CreateGeneralPanel()
     return panel
 end
 
-local function OpenBlizzardCooldownManager()
+local function OpenBlizzardCooldownManager(displayMode)
     if InCombatLockdown() then
         BCDM:PrettyPrint("Blizzard's Cooldown Manager cannot be opened during combat.")
         return
@@ -243,6 +243,8 @@ local function OpenBlizzardCooldownManager()
         if BCDM.SetCooldownViewerOpenPending then BCDM:SetCooldownViewerOpenPending(false) end
         if not opened or not shown then
             BCDM:PrettyPrint("Blizzard's Cooldown Manager is not available.")
+        elseif displayMode and type(CooldownViewerSettings.SetDisplayMode) == "function" then
+            pcall(CooldownViewerSettings.SetDisplayMode, CooldownViewerSettings, displayMode)
         end
     end
 
@@ -527,7 +529,7 @@ local function CreateViewerPanel(viewerType)
     panel.RefreshSettingsHighlight = RefreshViewerHighlight
     if viewerType == "Essential" or viewerType == "Utility" or viewerType == "Buffs" then
         panel.OnStandaloneSettingsActivated = function()
-            OpenBlizzardCooldownManager()
+            OpenBlizzardCooldownManager(viewerType == "Buffs" and "auras" or "spells")
         end
     end
     panel:HookScript("OnShow", function()

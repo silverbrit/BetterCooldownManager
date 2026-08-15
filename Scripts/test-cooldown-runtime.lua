@@ -431,8 +431,12 @@ Check(not BCDM:IsCustomizableCooldownViewerItem(unreadable),
 local optionsFile = assert(io.open(root .. "/Options/Settings.lua", "r"))
 local optionsSource = optionsFile:read("*a")
 optionsFile:close()
-Check(not optionsSource:find("SetDisplayMode", 1, true),
-    "BCM never writes Blizzard's native Cooldown Manager display mode")
+Check(optionsSource:find("SetDisplayMode", 1, true) ~= nil
+    and optionsSource:find('viewerType == "Buffs" and "auras" or "spells"', 1, true) ~= nil,
+    "BCM opens the matching native Cooldown Manager display mode")
+Check(optionsSource:find("GetTrackedBuffSettingsHighlightTarget", 1, true) ~= nil
+    and optionsSource:find("GetTrackedBuffSettingsHighlightFrames", 1, true) ~= nil,
+    "Tracked Buff settings use the live centered highlight geometry")
 Check(optionsSource:find("securecallfunction", 1, true) ~= nil,
     "automatic native Cooldown Manager opening crosses a secure call boundary")
 
