@@ -315,8 +315,20 @@ Check(nativeRefreshLayoutCalls == 0,
 local centeredOwner = createdFrames[#createdFrames - 1]
 Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
     "native Tracked Buff rows use the BCM-owned centering anchor")
+Check(BCDM:GetTrackedBuffSettingsHighlightTarget() == centeredOwner,
+    "Tracked Buff settings highlights follow the BCM-owned centering anchor")
+local highlightFrames = BCDM:GetTrackedBuffSettingsHighlightFrames()
+Check(#highlightFrames == 2 and highlightFrames[1] == first and highlightFrames[2] == second,
+    "Tracked Buff settings highlights use the visible native rows")
+Check(centeredOwner.point[2] == BCDM_PowerBar and centeredOwner.point[3] == "TOP",
+    "Tracked Buff centering keeps a live relative anchor to its selected parent")
 Check(first.point[4] == 0 and second.point[4] == 34,
     "native Tracked Buff rows preserve sorted layout order and spacing")
+viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "PLAYER_ENTERING_WORLD")
+RunFrameUpdates()
+RunFrameUpdates()
+Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
+    "Tracked Buff centering retries after the player enters the world")
 
 viewer:RefreshLayout()
 RunFrameUpdates()

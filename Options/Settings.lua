@@ -508,7 +508,20 @@ local function CreateViewerPanel(viewerType)
                 width = width, height = height, point = point,
             })
         else
-            BCDM:ShowSettingsHighlight(overlayKey, _G[overlayName])
+            local nativeTarget = _G[overlayName]
+            if viewerType == "Buffs" then
+                local target = BCDM:GetTrackedBuffSettingsHighlightTarget()
+                if target ~= nativeTarget then
+                    BCDM:ShowSettingsHighlight(overlayKey, target)
+                    return
+                end
+                local frames = BCDM:GetTrackedBuffSettingsHighlightFrames()
+                if #frames > 0 then
+                    BCDM:ShowSettingsHighlightForFrames(overlayKey, frames, target)
+                    return
+                end
+            end
+            BCDM:ShowSettingsHighlight(overlayKey, nativeTarget)
         end
     end
     panel.RefreshSettingsHighlight = RefreshViewerHighlight

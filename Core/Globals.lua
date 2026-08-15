@@ -285,19 +285,40 @@ function BCDM:ShowSettingsHighlightForFrames(key, frames, fallbackTarget, option
         self:HideSettingsHighlight(key)
         return
     end
-    local parentScale = UIParent:GetEffectiveScale()
+    local okParentScale, parentScale = pcall(UIParent.GetEffectiveScale, UIParent)
+    if not okParentScale or self:IsSecretValue(parentScale) or type(parentScale) ~= "number"
+        or parentScale <= 0 then
+        self:HideSettingsHighlight(key)
+        return
+    end
     local left, bottom, right, top
     for _, frame in pairs(frames or {}) do
-        if frame and frame:IsShown() then
-            local frameLeft, frameBottom, width, height = frame:GetRect()
-            if frameLeft and frameBottom and width and height then
-                local scale = frame:GetEffectiveScale() / parentScale
-                frameLeft, frameBottom = frameLeft * scale, frameBottom * scale
-                width, height = width * scale, height * scale
-                left = not left and frameLeft or math.min(left, frameLeft)
-                bottom = not bottom and frameBottom or math.min(bottom, frameBottom)
-                right = not right and (frameLeft + width) or math.max(right, frameLeft + width)
-                top = not top and (frameBottom + height) or math.max(top, frameBottom + height)
+        local okShownMethod, isShown = pcall(function() return frame and frame.IsShown end)
+        if okShownMethod and type(isShown) == "function" then
+            local okShown, shown = pcall(isShown, frame)
+            if okShown and not self:IsSecretValue(shown) and shown == true then
+                local okRect, frameLeft, frameBottom, width, height = pcall(function()
+                    return frame:GetRect()
+                end)
+                local okScale, frameScale = pcall(function()
+                    return frame:GetEffectiveScale()
+                end)
+                local readable = okRect and okScale
+                    and not self:IsSecretValue(frameLeft) and type(frameLeft) == "number"
+                    and not self:IsSecretValue(frameBottom) and type(frameBottom) == "number"
+                    and not self:IsSecretValue(width) and type(width) == "number"
+                    and not self:IsSecretValue(height) and type(height) == "number"
+                    and not self:IsSecretValue(frameScale) and type(frameScale) == "number"
+                    and frameScale > 0
+                if readable then
+                    local scale = frameScale / parentScale
+                    frameLeft, frameBottom = frameLeft * scale, frameBottom * scale
+                    width, height = width * scale, height * scale
+                    left = not left and frameLeft or math.min(left, frameLeft)
+                    bottom = not bottom and frameBottom or math.min(bottom, frameBottom)
+                    right = not right and (frameLeft + width) or math.max(right, frameLeft + width)
+                    top = not top and (frameBottom + height) or math.max(top, frameBottom + height)
+                end
             end
         end
     end
