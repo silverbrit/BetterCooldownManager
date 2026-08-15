@@ -46,8 +46,6 @@ local function SetupSlashCommands()
     SLASH_BCDM2 = "/bettercooldownmanager"
     SLASH_BCDM3 = "/bcm"
     SlashCmdList["BCDM"] = function() BCDM:CreateGUI() end
-    if BCDM.db.global.DisplayLoginMessage then BCDM:PrettyPrint("'|cFF8080FF/bcdm|r' for in-game configuration.") end
-
     SLASH_BCDMRELOAD1 = "/rl"
     SlashCmdList["BCDMRELOAD"] = function() C_UI.Reload() end
 end

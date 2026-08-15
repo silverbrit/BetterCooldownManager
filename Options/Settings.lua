@@ -140,8 +140,6 @@ local function CreateGeneralPanel()
     local panel, controls = U.NewPanel()
 
     local general = U.Section(controls, "General", true)
-    PathCheckbox(controls, general, "Display Login Message", GlobalRoot,
-        { "DisplayLoginMessage" })
     PathCheckbox(controls, general, "Skin Blizzard Cooldown Viewers", ProfileRoot,
         { "CooldownManager", "Enable" }, function() BCDM:PromptReload() end, {
             description = L("Apply Better Cooldown Manager styling to Blizzard's Essential, Utility, and Tracked Buff viewers. A UI reload is required when changing this setting."),

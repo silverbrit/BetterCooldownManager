@@ -24,7 +24,6 @@ local Defaults = {
     global = {
         UseGlobalProfile = false,
         GlobalProfile = "Default",
-        DisplayLoginMessage = true,
         SettingsWindow = {
             Point = "CENTER",
             RelativePoint = "CENTER",
