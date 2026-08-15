@@ -381,6 +381,7 @@ local function GetSpellCharges(spellId)
     if not C_Spell or not C_Spell.GetSpellCastCount then return nil, false end
     local ok, charges = pcall(C_Spell.GetSpellCastCount, spellId)
     if not ok then return nil, false end
+    if BCDM:IsSecretValue(charges) then return charges, false, true end
     charges = ReadResourceNumber(charges)
     return charges, charges ~= nil
 end
@@ -412,7 +413,13 @@ RESOURCE_HANDLERS.AURA_STACKS = function(descriptor, bar)
     return current, descriptor.maximum, tostring(current)
 end
 RESOURCE_HANDLERS.SPELL_CHARGES = function(descriptor, bar)
-    local current, readable = GetSpellCharges(descriptor.sourceSpellID)
+    local current, readable, secret = GetSpellCharges(descriptor.sourceSpellID)
+    if secret then
+        bar.Status:SetMinMaxValues(0, descriptor.maximum)
+        bar.Status:SetValue(current)
+        bar.Status:Show()
+        return nil, nil, "", nil, true
+    end
     if not readable then return nil end
     bar.Status:SetMinMaxValues(0, descriptor.maximum)
     bar.Status:SetValue(current)
@@ -517,7 +524,13 @@ local function UpdatePowerValues()
     local handler = RESOURCE_HANDLERS[descriptor.kind]
     if not handler then bar:Hide() return end
     HideInactiveResourceDisplays(descriptor.kind)
-    local current, maximum, text, colourApplied = handler(descriptor, bar, settings)
+    local current, maximum, text, colourApplied, renderedSecretValue = handler(descriptor, bar, settings)
+    if renderedSecretValue then
+        if not colourApplied then bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor)) end
+        bar.Text:SetText("")
+        bar:Show()
+        return
+    end
     if current == nil then
         bar.Status:Hide()
         bar.Text:SetText("")
