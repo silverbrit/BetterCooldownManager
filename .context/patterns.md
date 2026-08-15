@@ -36,7 +36,7 @@ Custom tracker icons must occupy the bounds of their anchored container. Horizon
 
 Guard API reads that may return secret values. When a state cannot safely be interpreted, retain the last valid visual or fail closed instead of probing further. Never use aura enumeration as a fallback for custom cooldown state.
 
-Pre-create AuraContainers outside combat. Configure returned AuraButtons during the container initialization callback, anchor custom regions to the AuraButton before passing them to `SetApplicationCount`, `SetDurationCooldown`, or `SetIcon`, keep their parent entry frames stable, and update candidate filters only outside combat.
+Pre-create AuraContainers outside combat. Configure returned AuraButtons during the container initialization callback, anchor custom regions to the AuraButton before passing them to `SetApplicationCount`, `SetDurationCooldown`, or `SetIcon`, and query `CanBeAccessedInContext()` before any later region styling; if access is denied, retain the prepared style and retry on a later refresh. Keep their parent entry frames stable and update candidate filters only outside combat.
 
 Treat `UNIT_AURA` as a refresh signal without inspecting its payload. Aura presence, application counts, and spell cast counts must be readable before they drive a custom resource bar; otherwise hide that BCM-owned display until a later readable refresh.
 

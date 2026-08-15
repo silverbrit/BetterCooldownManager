@@ -104,7 +104,15 @@ local function ApplyVisualStyleUnsafe(visual, icon, entry, bar)
     return true
 end
 
-local function ApplyVisualStyle(visual, icon, entry, bar)
+local function IsAuraButtonAccessible(auraButton)
+    local okRead, canBeAccessed = pcall(function() return auraButton and auraButton.CanBeAccessedInContext end)
+    if not okRead or type(canBeAccessed) ~= "function" then return false end
+    local okAccess, accessible = pcall(canBeAccessed, auraButton)
+    return okAccess and not BCDM:IsSecretValue(accessible) and accessible == true
+end
+
+local function ApplyVisualStyle(visual, icon, entry, bar, initializing)
+    if initializing ~= true and not IsAuraButtonAccessible(visual and visual.button) then return false end
     local ok, applied = pcall(ApplyVisualStyleUnsafe, visual, icon, entry, bar)
     return ok and applied == true
 end
@@ -119,7 +127,7 @@ local function InitializeAuraButton(icon, entry, bar, auraButton, container, lay
     if not Call(auraButton, "ClearAllPoints")
         or not Call(auraButton, "SetAllPoints", container)
         or not Call(auraButton, "SetFrameLevel", (layer:GetFrameLevel() or 1) + priority)
-        or not ApplyVisualStyle(visual, icon, entry, bar)
+        or not ApplyVisualStyle(visual, icon, entry, bar, true)
         or not Call(auraButton, "SetDurationCooldown", visual.cooldown)
         or not Call(auraButton, "SetIcon", visual.icon)
         or not Call(auraButton, "SetApplicationCount", visual.count, {})
@@ -259,7 +267,7 @@ function BCDM:RefreshCustomTrackerAuraUnit(unit)
     end
 end
 
-local function ApplyTrinketCountStyle(state, settings, entrySettings)
+local function ApplyTrinketCountStyleUnsafe(state, settings, entrySettings)
     local text = settings.Text or {}
     local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }
     local colour = text.Colour or { 1, 1, 1 }
@@ -276,6 +284,12 @@ local function ApplyTrinketCountStyle(state, settings, entrySettings)
         state.count:SetShadowColor(0, 0, 0, 0)
         state.count:SetShadowOffset(0, 0)
     end
+end
+
+local function ApplyTrinketCountStyle(state, settings, entrySettings, initializing)
+    if initializing ~= true and not IsAuraButtonAccessible(state and state.button) then return false end
+    local ok = pcall(ApplyTrinketCountStyleUnsafe, state, settings, entrySettings)
+    return ok
 end
 
 local function BuildTrinketCandidateFilters(spellIDs)
@@ -305,7 +319,7 @@ local function CreateTrinketCountState(icon, candidateFilters, signature, settin
         if not Call(auraButton, "SetAllPoints", container)
             or not Call(auraButton, "SetFrameLevel", (layer:GetFrameLevel() or 1) + 1)
             or not Call(auraButton, "SetMouseMotionEnabled", false) then return end
-        ApplyTrinketCountStyle(state, settings, entrySettings)
+        if not ApplyTrinketCountStyle(state, settings, entrySettings, true) then return end
         initialized = Call(auraButton, "SetApplicationCount", state.count, {})
     end
     local ok, button = Call(container, "AddAuraSlot", "active", "HELPFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY", {

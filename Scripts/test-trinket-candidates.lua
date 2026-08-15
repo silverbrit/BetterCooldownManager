@@ -52,8 +52,12 @@ BCDM.db = { profile = { General = { Fonts = {
 } } } }
 
 local boundCount
+local accessDenied = false
 local count = {}
-function count:ClearAllPoints() self.anchored = false end
+function count:ClearAllPoints()
+    if accessDenied then error("forbidden count region was restyled") end
+    self.anchored = false
+end
 function count:SetPoint() self.anchored = true end
 function count:SetFont() end
 function count:SetTextColor() end
@@ -66,6 +70,7 @@ function auraButton:CreateFontString() return count end
 function auraButton:SetAllPoints() end
 function auraButton:SetFrameLevel() end
 function auraButton:SetMouseMotionEnabled() end
+function auraButton:CanBeAccessedInContext() return not accessDenied end
 function auraButton:SetApplicationCount(region)
     if not region.anchored then error("application count must be anchored before binding") end
     boundCount = region
@@ -98,5 +103,10 @@ local prepared = BCDM:EnsureTrinketAuraCountDisplay(icon, { 100 }, {
 }, { TextEnabled = true })
 Check(prepared and boundCount == count and count.anchored,
     "trinket aura counts are anchored before Blizzard validates their binding")
+accessDenied = true
+Check(BCDM:EnsureTrinketAuraCountDisplay(icon, { 100 }, {
+    Text = { Layout = { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }, FontSize = 15, Colour = { 1, 1, 1 } },
+}, { TextEnabled = true }),
+    "inaccessible trinket aura buttons retain their prepared style without errors")
 
 return failures == 0
