@@ -487,7 +487,9 @@ local function ScheduleCastBarWidth(delay)
         local anchorFrame = ResolveCastBarAnchor()
         if not anchorFrame or type(anchorFrame.GetWidth) ~= "function" then return end
         local ok, anchorWidth = pcall(anchorFrame.GetWidth, anchorFrame)
-        if ok and type(anchorWidth) == "number" then CastBar:SetWidth(anchorWidth) end
+        if ok and not IsSecretValue(anchorWidth) and type(anchorWidth) == "number" then
+            CastBar:SetWidth(anchorWidth)
+        end
     end
 
     if C_Timer and type(C_Timer.NewTimer) == "function" then
