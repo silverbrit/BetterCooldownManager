@@ -15,10 +15,15 @@ end
 
 local function NudgePowerBar(powerBar, xOffset, yOffset)
     local powerBarFrame = _G[powerBar]
-    if not powerBarFrame then return end
-    local point, relativeTo, relativePoint, xOfs, yOfs = powerBarFrame:GetPoint(1)
-    powerBarFrame:ClearAllPoints()
-    powerBarFrame:SetPoint(point, relativeTo, relativePoint, xOfs + xOffset, yOfs + yOffset)
+    local okMethod, getPoint = pcall(function() return powerBarFrame and powerBarFrame.GetPoint end)
+    if not okMethod or type(getPoint) ~= "function" then return end
+    local ok, point, relativeTo, relativePoint, xOfs, yOfs = pcall(getPoint, powerBarFrame, 1)
+    if not ok or BCDM:IsSecretValue(point) or type(point) ~= "string" then return end
+    xOfs = type(xOfs) == "number" and not BCDM:IsSecretValue(xOfs) and xOfs or 0
+    yOfs = type(yOfs) == "number" and not BCDM:IsSecretValue(yOfs) and yOfs or 0
+    pcall(function() powerBarFrame:ClearAllPoints() end)
+    BCDM:SetSafeAnchorPoint(powerBarFrame, point, relativeTo, relativePoint,
+        xOfs + xOffset, yOfs + yOffset)
 end
 
 local function UpdatePowerValues()
@@ -107,7 +112,8 @@ function BCDM:CreatePowerBar()
     local hasSecondary = BCDM:GetCurrentSecondaryResource() ~= nil
     PowerBar:SetSize(PowerBarDB.Width, hasSecondary and PowerBarDB.Height or PowerBarDB.HeightWithoutSecondary)
     local powerLayout, powerAnchor = BCDM:GetPowerBarLayout("PowerBar", false)
-    PowerBar:SetPoint(powerLayout[1], powerAnchor, powerLayout[3], powerLayout[4], powerLayout[5])
+    BCDM:SetSafeAnchorPoint(PowerBar, powerLayout[1], powerAnchor,
+        powerLayout[3], powerLayout[4], powerLayout[5])
     PowerBar:SetFrameStrata(PowerBarDB.FrameStrata or "LOW")
 
     PowerBar.Status = CreateFrame("StatusBar", nil, PowerBar)
@@ -182,7 +188,8 @@ function BCDM:UpdatePowerBarAppearance()
     powerBar.Status:SetPoint("BOTTOMRIGHT", powerBar, "BOTTOMRIGHT", -borderSize, borderSize)
     powerBar:ClearAllPoints()
     local powerLayout, powerAnchor = BCDM:GetPowerBarLayout("PowerBar", false)
-    powerBar:SetPoint(powerLayout[1], powerAnchor, powerLayout[3], powerLayout[4], powerLayout[5])
+    BCDM:SetSafeAnchorPoint(powerBar, powerLayout[1], powerAnchor,
+        powerLayout[3], powerLayout[4], powerLayout[5])
     powerBar:SetWidth(powerBarDB.Width)
     powerBar:SetHeight(BCDM._SecondaryDisplayVisible == true
         and powerBarDB.Height or powerBarDB.HeightWithoutSecondary)

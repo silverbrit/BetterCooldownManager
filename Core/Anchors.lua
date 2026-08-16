@@ -42,9 +42,53 @@ function BCDM:GetAnchorParents(anchorType)
     return self:BuildAnchorParents(self.AnchorParents[anchorType], self:IsElvUIActive(), ELVUI_ANCHORS)
 end
 
+local function IsSecret(self, value)
+    return type(self.IsSecretValue) == "function" and self:IsSecretValue(value)
+end
+
+local function ReadMethod(self, frame, methodName)
+    local ok, method = pcall(function() return frame and frame[methodName] end)
+    if not ok or IsSecret(self, method) or type(method) ~= "function" then return end
+    return method
+end
+
+function BCDM:IsSafeAnchorParent(frame)
+    if frame and frame == UIParent then return true end
+    if not frame or IsSecret(self, frame) then return false end
+
+    local isObjectType = ReadMethod(self, frame, "IsObjectType")
+    if not isObjectType then return false end
+    local okFrame, isFrame = pcall(isObjectType, frame, "Frame")
+    if not okFrame or IsSecret(self, isFrame) or isFrame ~= true then return false end
+
+    local isForbidden = ReadMethod(self, frame, "IsForbidden")
+    if not isForbidden then return false end
+    local okForbidden, forbidden = pcall(isForbidden, frame)
+    if not okForbidden or IsSecret(self, forbidden) or forbidden ~= false then return false end
+
+    return ReadMethod(self, frame, "SetPoint") ~= nil
+end
+
+function BCDM:SetSafeAnchorPoint(frame, point, relativeTo, relativePoint, xOffset, yOffset)
+    local setPoint = ReadMethod(self, frame, "SetPoint")
+    if not setPoint then return false end
+    point = not IsSecret(self, point) and ANCHOR_POINTS[point] and point or "CENTER"
+    relativePoint = not IsSecret(self, relativePoint) and ANCHOR_POINTS[relativePoint] and relativePoint or "CENTER"
+    xOffset = not IsSecret(self, xOffset) and type(xOffset) == "number" and xOffset or 0
+    yOffset = not IsSecret(self, yOffset) and type(yOffset) == "number" and yOffset or 0
+    local anchor = self:IsSafeAnchorParent(relativeTo) and relativeTo or UIParent
+    if pcall(setPoint, frame, point, anchor, relativePoint, xOffset, yOffset) then return true end
+    if anchor ~= UIParent and UIParent then
+        return pcall(setPoint, frame, point, UIParent, relativePoint, xOffset, yOffset)
+    end
+    return false
+end
+
 function BCDM:ResolveAnchorParent(frameName)
-    if frameName == nil or frameName == "NONE" then return UIParent end
-    return _G[frameName] or UIParent
+    if type(frameName) ~= "string" or IsSecret(self, frameName)
+        or frameName == "NONE" then return UIParent end
+    local frame = _G[frameName]
+    return self:IsSafeAnchorParent(frame) and frame or UIParent
 end
 
 local POWER_BAR_FRAMES = {
@@ -73,12 +117,14 @@ function BCDM:ResolvePowerBarAnchorParent(barType, layout, secondaryOwnsPrimary)
     local originalTarget = targetName
     local sourceFrame = POWER_BAR_FRAMES[barType]
     if sourceFrame and targetName then
+        if type(targetName) ~= "string" or IsSecret(self, targetName) then return UIParent end
         local visited = { [sourceFrame] = true }
         while POWER_BAR_TYPES[targetName] do
             if visited[targetName] then return UIParent end
             visited[targetName] = true
             targetName = ConfiguredPowerBarTarget(self, targetName, secondaryOwnsPrimary)
             if not targetName then break end
+            if type(targetName) ~= "string" or IsSecret(self, targetName) then return UIParent end
         end
     end
     return self:ResolveAnchorParent(originalTarget)

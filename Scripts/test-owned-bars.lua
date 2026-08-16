@@ -157,14 +157,50 @@ for name, value in pairs(savedPowerGlobals) do _G[name] = value end
 
 local savedUIParent = UIParent
 local savedAnchor = _G.OwnedBarsTestAnchor
+local savedNonFrame = _G.OwnedBarsNonFrame
+local savedForbiddenAnchor = _G.OwnedBarsForbiddenAnchor
+local savedUnreadableAnchor = _G.OwnedBarsUnreadableAnchor
+local savedThrowingWidthAnchor = _G.OwnedBarsThrowingWidthAnchor
 UIParent = {}
-_G.OwnedBarsTestAnchor = { GetWidth = function() return 111 end }
+local function importedFrame(width)
+    return {
+        IsObjectType = function(_, objectType) return objectType == "Frame" end,
+        IsForbidden = function() return false end,
+        SetPoint = function() end,
+        GetWidth = function() return width or 111 end,
+    }
+end
+_G.OwnedBarsTestAnchor = importedFrame()
+_G.OwnedBarsNonFrame = {}
+_G.OwnedBarsForbiddenAnchor = importedFrame()
+_G.OwnedBarsForbiddenAnchor.IsForbidden = function() return true end
+_G.OwnedBarsUnreadableAnchor = importedFrame()
+_G.OwnedBarsUnreadableAnchor.IsObjectType = function() error("unreadable frame type") end
 local cycleProfile = {
-    PowerBar = { Layout = { "BOTTOM", "BCDM_SecondaryPowerBar", "TOP", 0, 0 } },
-    SecondaryPowerBar = { Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 0, 0 } },
+    PowerBar = { Layout = { "BOTTOM", "BCDM_SecondaryPowerBar", "TOP", 0, 0 }, Width = 123 },
+    SecondaryPowerBar = { Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 0, 0 }, Width = 234 },
     CastBar = { Layout = { "TOP", "BCDM_PowerBar", "BOTTOM", 0, 0 } },
 }
 BCDM.db = { profile = cycleProfile }
+Check(BCDM:ResolveAnchorParent("OwnedBarsNonFrame") == UIParent,
+    "non-frame imported anchors fall back to UIParent")
+Check(BCDM:ResolveAnchorParent("OwnedBarsForbiddenAnchor") == UIParent,
+    "forbidden imported anchors fall back to UIParent")
+Check(BCDM:ResolveAnchorParent("OwnedBarsUnreadableAnchor") == UIParent,
+    "unreadable imported anchors fall back to UIParent")
+local throwingSetPointAnchor = importedFrame()
+local throwingSetPointFrame = {}
+function throwingSetPointFrame:SetPoint(_, relativeTo)
+    if relativeTo == throwingSetPointAnchor then error("imported anchor rejected") end
+    self.anchor = relativeTo
+end
+Check(BCDM:SetSafeAnchorPoint(throwingSetPointFrame, "CENTER", throwingSetPointAnchor,
+    "CENTER", 0, 0) and throwingSetPointFrame.anchor == UIParent,
+    "Power/Secondary SetPoint failures fall back to UIParent")
+cycleProfile.PowerBar.Layout = { "BOTTOM", "OwnedBarsNonFrame", "TOP", 0, 0 }
+local _, nonFramePowerParent = BCDM:GetPowerBarLayout("PowerBar", false)
+Check(nonFramePowerParent == UIParent, "power-bar anchor resolution rejects non-frames")
+cycleProfile.PowerBar.Layout = { "BOTTOM", "BCDM_SecondaryPowerBar", "TOP", 0, 0 }
 local _, cycleParent = BCDM:GetPowerBarLayout("PowerBar", false)
 Check(cycleParent == UIParent, "Power and Secondary anchor cycles fall back to UIParent")
 cycleProfile.PowerBar.Layout = { "BOTTOM", "BCDM_CastBar", "TOP", 0, 0 }
@@ -203,9 +239,22 @@ callbacks[2]()
 Check(widthPower.width == 222 and widthSecondary.width == 222,
     "the newest delayed width callback applies both bar widths")
 
+_G.OwnedBarsThrowingWidthAnchor = importedFrame()
+_G.OwnedBarsThrowingWidthAnchor.GetWidth = function() error("unreadable anchor width") end
+cycleProfile.PowerBar.Layout = { "BOTTOM", "OwnedBarsThrowingWidthAnchor", "TOP", 0, 0 }
+cycleProfile.SecondaryPowerBar.Layout = { "BOTTOM", "OwnedBarsThrowingWidthAnchor", "TOP", 0, 0 }
+BCDM:QueuePowerBarWidthUpdates()
+callbacks[3]()
+Check(widthPower.width == 123 and widthSecondary.width == 234,
+    "throwing imported anchor widths fall back to each bar's configured width")
+
 C_Timer = savedTimer
 UIParent = savedUIParent
 _G.OwnedBarsTestAnchor = savedAnchor
+_G.OwnedBarsNonFrame = savedNonFrame
+_G.OwnedBarsForbiddenAnchor = savedForbiddenAnchor
+_G.OwnedBarsUnreadableAnchor = savedUnreadableAnchor
+_G.OwnedBarsThrowingWidthAnchor = savedThrowingWidthAnchor
 BCDM.db = oldDB
 BCDM._SecondaryResourceState = oldState
 BCDM.ShouldShowOwnedFrame = oldShouldShow

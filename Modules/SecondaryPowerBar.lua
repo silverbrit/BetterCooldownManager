@@ -63,11 +63,15 @@ end
 
 local function NudgeSecondaryPowerBar(secondaryPowerBar, xOffset, yOffset)
     local powerBarFrame = _G[secondaryPowerBar]
-    if not powerBarFrame then return end
-
-    local point, relativeTo, relativePoint, xOfs, yOfs = powerBarFrame:GetPoint(1)
-    powerBarFrame:ClearAllPoints()
-    powerBarFrame:SetPoint(point, relativeTo, relativePoint, xOfs + xOffset, yOfs + yOffset)
+    local okMethod, getPoint = pcall(function() return powerBarFrame and powerBarFrame.GetPoint end)
+    if not okMethod or type(getPoint) ~= "function" then return end
+    local ok, point, relativeTo, relativePoint, xOfs, yOfs = pcall(getPoint, powerBarFrame, 1)
+    if not ok or BCDM:IsSecretValue(point) or type(point) ~= "string" then return end
+    xOfs = type(xOfs) == "number" and not BCDM:IsSecretValue(xOfs) and xOfs or 0
+    yOfs = type(yOfs) == "number" and not BCDM:IsSecretValue(yOfs) and yOfs or 0
+    pcall(function() powerBarFrame:ClearAllPoints() end)
+    BCDM:SetSafeAnchorPoint(powerBarFrame, point, relativeTo, relativePoint,
+        xOfs + xOffset, yOfs + yOffset)
 end
 
 local function GetPowerBarColor(descriptor, overrideColour)
@@ -855,28 +859,37 @@ local function LayoutWidthDependentChildren()
     end
 end
 
+local function IsReadableWidth(value)
+    return type(value) == "number" and not BCDM:IsSecretValue(value) and value > 0
+end
+
+local function ReadAnchorWidth(anchor)
+    local okMethod, getWidth = pcall(function() return anchor and anchor.GetWidth end)
+    if not okMethod or BCDM:IsSecretValue(getWidth) or type(getWidth) ~= "function" then return end
+    local ok, width = pcall(getWidth, anchor)
+    if ok and IsReadableWidth(width) then return width end
+end
+
 local function ApplyPowerBarWidth(barType, secondaryOwnsPrimary)
     local profile = BCDM.db and BCDM.db.profile
     local settings = profile and profile[barType]
     local frame = BCDM[barType == "PowerBar" and "PowerBar" or "SecondaryPowerBar"]
     if not settings or not frame then return end
     local _, anchor = BCDM:GetPowerBarLayout(barType, secondaryOwnsPrimary)
+    local width
     if settings.MatchWidthOfAnchor == true then
-        local width
         local primarySettings = profile.PowerBar
         if barType == "SecondaryPowerBar" and secondaryOwnsPrimary
-            and primarySettings and primarySettings.MatchWidthOfAnchor ~= true
-            and BCDM.PowerBar and BCDM.PowerBar.GetWidth then
-            width = BCDM.PowerBar:GetWidth()
+            and primarySettings and primarySettings.MatchWidthOfAnchor ~= true then
+            width = ReadAnchorWidth(BCDM.PowerBar)
         else
-            width = anchor and anchor.GetWidth and anchor:GetWidth()
+            width = ReadAnchorWidth(anchor)
         end
-        if type(width) == "number" and not BCDM:IsSecretValue(width) and width > 0 then
-            frame:SetWidth(width)
-        end
+        width = width or settings.Width
     else
-        frame:SetWidth(settings.Width)
+        width = settings.Width
     end
+    if IsReadableWidth(width) then frame:SetWidth(width) end
 end
 
 function BCDM:QueuePowerBarWidthUpdates()
@@ -899,7 +912,6 @@ function BCDM:QueuePowerBarWidthUpdates()
     end
 
     if C_Timer.NewTimer then widthTimer = C_Timer.NewTimer(0.5, Apply) end
-end
 end
 
 local function UpdateBarWidth()
@@ -1036,7 +1048,8 @@ function BCDM:CreateSecondaryPowerBar()
     secondaryPowerBar:SetSize(secondaryPowerBarDB.Width, secondaryPowerBarDB.Height)
     local secondaryLayout, secondaryAnchor = BCDM:GetPowerBarLayout("SecondaryPowerBar", false)
     secondaryPowerBar:ClearAllPoints()
-    secondaryPowerBar:SetPoint(secondaryLayout[1], secondaryAnchor, secondaryLayout[3], secondaryLayout[4], secondaryLayout[5])
+    BCDM:SetSafeAnchorPoint(secondaryPowerBar, secondaryLayout[1], secondaryAnchor,
+        secondaryLayout[3], secondaryLayout[4], secondaryLayout[5])
 
     secondaryPowerBar:SetFrameStrata(secondaryPowerBarDB.FrameStrata)
     secondaryPowerBar.Status = CreateFrame("StatusBar", nil, secondaryPowerBar)
@@ -1122,7 +1135,7 @@ function BCDM:UpdateSecondaryPowerBarAppearance()
 
     secondaryPowerBar:ClearAllPoints()
     local secondaryLayout, secondaryAnchor = BCDM:GetPowerBarLayout("SecondaryPowerBar", false)
-    secondaryPowerBar:SetPoint(secondaryLayout[1], secondaryAnchor,
+    BCDM:SetSafeAnchorPoint(secondaryPowerBar, secondaryLayout[1], secondaryAnchor,
         secondaryLayout[3], secondaryLayout[4], secondaryLayout[5])
     secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
     secondaryPowerBar:SetFrameStrata(secondaryPowerBarDB.FrameStrata)
@@ -1172,7 +1185,7 @@ function BCDM:UpdateSecondaryPowerBarAppearance()
     BCDM._SecondaryOwnsPrimaryPosition = ownsPrimary
     secondaryLayout, secondaryAnchor = BCDM:GetPowerBarLayout("SecondaryPowerBar", ownsPrimary)
     secondaryPowerBar:ClearAllPoints()
-    secondaryPowerBar:SetPoint(secondaryLayout[1], secondaryAnchor,
+    BCDM:SetSafeAnchorPoint(secondaryPowerBar, secondaryLayout[1], secondaryAnchor,
         secondaryLayout[3], secondaryLayout[4], secondaryLayout[5])
     secondaryPowerBar:SetHeight(ownsPrimary
         and secondaryPowerBarDB.HeightWithoutPrimary or secondaryPowerBarDB.Height)
