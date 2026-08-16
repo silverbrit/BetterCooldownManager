@@ -258,6 +258,13 @@ for _, expected in ipairs({
 end
 Check(not BCDM:ResolveSecondaryResource({ class = "PALADIN", specID = 65, powerTypes = Enum.PowerType }).swapToPrimaryEligible,
     "holy paladin retains the separate secondary position")
+descriptor = BCDM:ResolveSecondaryResource({ class = "DEMONHUNTER", specID = 1480, powerTypes = Enum.PowerType })
+Check(descriptor.sourceSpellID == 1225789 and descriptor.transformedSourceSpellID == 1227702
+    and descriptor.metamorphosisAuraID == 1217607 and descriptor.maximumSpellID == 1225789,
+    "devourer uses Blizzard's Dark Heart and Silence the Whispers aura sources")
+descriptor = BCDM:ResolveSecondaryResource({ class = "SHAMAN", specID = 263, powerTypes = Enum.PowerType })
+Check(descriptor.sourceSpellID == 344179 and descriptor.maximumSpellID == 344179 and descriptor.maximum == 5,
+    "enhancement uses the native Maelstrom Weapon maximum source")
 
 local profile = {
     CooldownManager = {
