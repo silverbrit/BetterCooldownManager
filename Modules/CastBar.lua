@@ -14,10 +14,21 @@ end
 
 local function GetDisplayCastText(text, maxChars)
     if IsSecretValue(text) then return text end
-    if text == nil then return "" end
     if type(text) ~= "string" then return "" end
+
+    text = text:gsub("\226\128\152", "'"):gsub("\226\128\153", "'"):gsub("`", "'")
     if type(maxChars) ~= "number" then return text end
-    return string.sub(text, 1, maxChars)
+    maxChars = math.floor(maxChars)
+    if maxChars < 1 then return "" end
+
+    local position, characters = 1, 0
+    while position <= #text and characters < maxChars do
+        local byte = string.byte(text, position)
+        local width = byte < 128 and 1 or byte < 224 and 2 or byte < 240 and 3 or 4
+        position = position + width
+        characters = characters + 1
+    end
+    return string.sub(text, 1, position - 1)
 end
 
 local function FetchCastBarColour(notInterruptible)
@@ -596,6 +607,7 @@ function BCDM:UpdateCastBarWidth()
 end
 
 BCDM._CastBarTest = {
+    GetDisplayCastText = GetDisplayCastText,
     CreatePips = CreatePips,
     BindCastDuration = BindCastDuration,
     HandleEvent = UpdateCastBarValues,

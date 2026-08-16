@@ -14,6 +14,10 @@ local secretDuration = setmetatable({}, {
     __index = function() error("secret duration was read") end,
 })
 local secretStageList = {}
+local secretText = setmetatable({}, {
+    __tostring = function() error("secret text was formatted") end,
+    __index = function() error("secret text was read") end,
+})
 local castInfo, channelInfo
 local durations = {}
 
@@ -182,7 +186,9 @@ local BCDM = {
     } },
 }
 _G.BCDM_TestAnchor = anchor
-function BCDM:IsSecretValue(value) return value == secretDuration or value == secretStageList end
+function BCDM:IsSecretValue(value)
+    return value == secretDuration or value == secretStageList or value == secretText
+end
 function BCDM:ResolveBarFillColour() return 1, 1, 1, 1 end
 function BCDM:ApplyStatusBarDirection(statusBar, direction) statusBar.direction = direction end
 function BCDM:ResolveAnchorParent() return anchor end
@@ -197,6 +203,21 @@ assert(loadfile(root .. "/Modules/CastBar.lua"))("BetterCooldownManager", BCDM)
 BCDM:CreateCastBar()
 local bar = BCDM.CastBar
 local handleEvent = BCDM._CastBarTest.HandleEvent
+local displayCastText = BCDM._CastBarTest.GetDisplayCastText
+
+local leftSmartQuote = "\226\128\152"
+local rightSmartQuote = "\226\128\153"
+Check(displayCastText("L" .. rightSmartQuote .. "été" .. leftSmartQuote .. "café", 99) == "L'été'café",
+    "French smart quotes normalize to ASCII apostrophes")
+Check(displayCastText("l`été", 99) == "l'été", "backticks normalize to ASCII apostrophes")
+local korean = "한국어테스트"
+for length, expected in ipairs({ "한", "한국", "한국어", "한국어테" }) do
+    Check(displayCastText(korean, length) == expected, "Korean text truncates at UTF-8 code point length " .. length)
+end
+Check(displayCastText(nil, 2) == "" and displayCastText(123, 2) == "", "nil and non-string cast text are empty")
+local returnedSecretText
+local secretTextOK = pcall(function() returnedSecretText = displayCastText(secretText, 1) end)
+Check(secretTextOK and returnedSecretText == secretText, "secret cast text passes through without inspection")
 
 Check(nativeCastBar.shown == false, "enabling BCM hides the native cast bar through Blizzard's API")
 Check(bar.events.UNIT_SPELLCAST_DELAYED and bar.events.UNIT_SPELLCAST_CHANNEL_UPDATE
