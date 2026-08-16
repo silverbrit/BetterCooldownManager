@@ -25,6 +25,15 @@ assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Modules/CooldownManager.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Scripts/test-cooldown-manager.lua"))(BCDM, Check)
+assert(loadfile(root .. "/CustomViewers/CustomTrackerBar.lua"))("BetterCooldownManager", BCDM)
+local refreshEvents = {}
+for _, event in ipairs(BCDM.CustomTrackerRuntime.RefreshEvents) do refreshEvents[event] = true end
+for _, event in ipairs({
+    "UNIT_PET", "SPELLS_CHANGED", "PLAYER_MOUNT_DISPLAY_CHANGED",
+    "UPDATE_OVERRIDE_ACTIONBAR", "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED",
+}) do
+    Check(refreshEvents[event], "custom trackers refresh on " .. event)
+end
 
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,

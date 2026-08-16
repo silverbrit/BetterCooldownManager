@@ -1,11 +1,22 @@
 local _, BCDM = ...
 
+local TRACKER_REFRESH_EVENTS = {
+    "PLAYER_ENTERING_WORLD", "LOADING_SCREEN_DISABLED", "PLAYER_SPECIALIZATION_CHANGED",
+    "SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_CHARGES", "SPELLS_CHANGED", "UNIT_PET",
+    "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_CONTROL_LOST", "PLAYER_CONTROL_GAINED",
+    "UPDATE_BONUS_ACTIONBAR", "UPDATE_VEHICLE_ACTIONBAR", "UPDATE_OVERRIDE_ACTIONBAR",
+    "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED", "BAG_UPDATE_COOLDOWN", "BAG_UPDATE_DELAYED",
+    "ITEM_COUNT_CHANGED", "PLAYER_EQUIPMENT_CHANGED", "ITEM_DATA_LOAD_RESULT",
+    "PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED",
+}
+
 local Runtime = {
     Containers = {},
     Icons = {},
     IconPool = {},
     PendingRefresh = false,
     TimerStates = setmetatable({}, { __mode = "k" }),
+    RefreshEvents = TRACKER_REFRESH_EVENTS,
 }
 BCDM.CustomTrackerRuntime = Runtime
 local UNKNOWN_ICON = 134400
@@ -502,11 +513,10 @@ end
 function BCDM:SetupCustomTrackers()
     if not Runtime.EventFrame then
         local frame = CreateFrame("Frame", "BCDMCustomTrackerEventFrame")
-        for _, event in ipairs({
-            "PLAYER_ENTERING_WORLD", "PLAYER_SPECIALIZATION_CHANGED", "SPELL_UPDATE_COOLDOWN",
-            "SPELL_UPDATE_CHARGES", "BAG_UPDATE_COOLDOWN", "BAG_UPDATE_DELAYED", "ITEM_COUNT_CHANGED",
-            "PLAYER_EQUIPMENT_CHANGED", "ITEM_DATA_LOAD_RESULT", "PLAYER_REGEN_ENABLED", "PLAYER_TARGET_CHANGED",
-        }) do frame:RegisterEvent(event) end
+        for _, event in ipairs(TRACKER_REFRESH_EVENTS) do
+            if event == "UNIT_PET" then frame:RegisterUnitEvent(event, "player")
+            else frame:RegisterEvent(event) end
+        end
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         frame:SetScript("OnEvent", function(_, event, arg1, _, spellID)
             if event == "UNIT_SPELLCAST_SUCCEEDED" then BCDM:TriggerCustomTrackerTimers(spellID)
