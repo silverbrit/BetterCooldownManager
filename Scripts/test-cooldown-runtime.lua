@@ -42,10 +42,26 @@ local function NewFrame(parent)
     function frame:Show() self.shown = true end
     function frame:Hide() self.shown = false end
     function frame:IsShown() return self.shown end
-    function frame:SetSize(width, height) self.width, self.height = width, height end
+    function frame:SetSize(width, height)
+        self.width, self.height = width, height
+        if self.triggerSizeEvents and self.scripts.OnSizeChanged then
+            self.scripts.OnSizeChanged(self, width, height)
+        end
+    end
+    function frame:GetWidth() return self.width or 0 end
+    function frame:GetHeight() return self.height or 0 end
     function frame:EnableMouse(enabled) self.mouseEnabled = enabled end
-    function frame:ClearAllPoints() self.point = nil end
-    function frame:SetPoint(...) self.point = { ... } end
+    function frame:ClearAllPoints()
+        if self.failClearAllPoints then error("ClearAllPoints failure") end
+        self.point = nil
+    end
+    function frame:SetPoint(...)
+        if self.failSetPoint or self.failNextSetPoint then
+            self.failNextSetPoint = nil
+            error("SetPoint failure")
+        end
+        self.point = { ... }
+    end
     function frame:GetNumPoints() return self.point and 1 or 0 end
     function frame:GetPoint(index)
         if index ~= 1 or not self.point then return end
@@ -61,6 +77,7 @@ end
 CreateFrame = function(_, name, parent)
     local frame = NewFrame(parent)
     frame.name = name
+    frame.triggerSizeEvents = name and name:match("^BCDM_") ~= nil
     if name then _G[name] = frame end
     createdFrames[#createdFrames + 1] = frame
     return frame
@@ -104,11 +121,12 @@ viewer.isHorizontal = true
 function viewer:GetFrameStrata() return "MEDIUM" end
 function viewer:GetFrameLevel() return 5 end
 local nativeRefreshLayoutCalls = 0
+local nativeRefreshDataCalls = 0
 function viewer:RefreshLayout()
     nativeRefreshLayoutCalls = nativeRefreshLayoutCalls + 1
     for _, item in ipairs(self.items) do item:SetPoint("TOPLEFT", self, "TOPLEFT", 0, 0) end
 end
-function viewer:RefreshData() end
+function viewer:RefreshData() nativeRefreshDataCalls = nativeRefreshDataCalls + 1 end
 function viewer:OnAcquireItemFrame() end
 
 EssentialCooldownViewer = NewFrame(nil)
@@ -134,6 +152,10 @@ function viewer.itemFramePool:EnumerateActive()
         return viewer.items[index]
     end
 end
+function viewer.itemFramePool:ReleaseAll()
+    for _, item in ipairs(viewer.items) do item:ClearAllPoints() end
+end
+function viewer.itemFramePool:Acquire() return viewer.items[1] end
 function EssentialCooldownViewer:GetItemFrames() return {} end
 function UtilityCooldownViewer:GetItemFrames() return {} end
 function EssentialCooldownViewer:RefreshData() end
@@ -258,6 +280,8 @@ function BCDM:GetIconDimensions() return 30, 20 end
 function BCDM:StripTextures() end
 function BCDM:ApplyIconTexCoord() end
 function BCDM:AddBorder(frame) frame.bcdmStyleCount = (frame.bcdmStyleCount or 0) + 1 end
+local glowRefreshes = 0
+function BCDM:RefreshCustomGlows() glowRefreshes = glowRefreshes + 1 end
 function BCDM:UpdatePowerBarWidth() end
 function BCDM:UpdateSecondaryPowerBarWidth() end
 function BCDM:UpdateCastBarWidth() end
@@ -270,11 +294,17 @@ BCDM:QueueCooldownViewerLayoutApply()
 BCDM:QueueCooldownViewerLayoutApply()
 Check(#timers == 1, "viewer layout requests coalesce into one deferred application")
 local viewerLayoutEventFrame = createdFrames[4]
+Check(viewerLayoutEventFrame.events.ADDON_LOADED and viewerLayoutEventFrame.events.UI_SCALE_CHANGED
+    and viewerLayoutEventFrame.events.DISPLAY_SIZE_CHANGED,
+    "viewer layout retries listen for late anchors and display geometry changes")
 RunTimers()
 Check(layoutCalls.load == 1 and layoutCalls.reanchor == 3 and layoutCalls.save == 1
     and layoutCalls.apply == 0 and savedViewerUpdates == 3 and managerViewerRebinds == 3
     and managerAnchorSyncs == 3 and compactFrameRefreshes == 0,
     "the layout queue securely refreshes only Cooldown Viewer systems")
+
+local powerLeft, powerWidth = 100, 300
+function BCDM_PowerBar:GetRect() return powerLeft, 200, powerWidth, 20 end
 
 local savesBeforeSettle = layoutCalls.save
 BCDM:QueueCooldownViewerLayoutSettle()
@@ -285,7 +315,6 @@ RunTimers()
 Check(layoutCalls.save == savesBeforeSettle + 2 and #timers == 0,
     "a single typed viewer change gets one bounded dependent-layout settle pass")
 
-function BCDM_PowerBar:GetRect() return 100, 200, 300, 20 end
 BCDM.db.profile.CooldownManager.Essential.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 2, 3 }
 BCDM.db.profile.CooldownManager.Buffs.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 4, 5 }
 BCDM:QueueCooldownViewerLayoutApply()
@@ -301,37 +330,63 @@ Check(persistedBuffAnchor[2] == UIParent and persistedBuffAnchor[3] == "BOTTOMLE
 Check(persistedBuffAnchor[4] == 254 and persistedBuffAnchor[5] == 225,
     "the UIParent anchor preserves the addon frame's visual position")
 
+local savesBeforeScale = layoutCalls.save
+viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "UI_SCALE_CHANGED")
+RunTimers()
+Check(layoutCalls.save == savesBeforeScale + 1, "UI scale changes reapply persisted viewer positions")
+local savesBeforeDisplay = layoutCalls.save
+viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "DISPLAY_SIZE_CHANGED")
+RunTimers()
+Check(layoutCalls.save == savesBeforeDisplay + 1, "display size changes reapply persisted viewer positions")
+
+powerLeft, powerWidth = 140, 320
+BCDM_PowerBar:SetSize(powerWidth, 20)
+RunTimers()
+local movedEssentialAnchor = layoutCalls.anchors[EssentialCooldownViewer]
+Check(movedEssentialAnchor[4] == 302,
+    "moving and resizing a BCM anchor changes the next persisted viewer coordinates")
+
 BCDM.db.profile.CooldownManager.Utility.Layout = { "TOP", "ElvUF_Player", "BOTTOM", 6, 7 }
 local savesBeforeLateAnchor = layoutCalls.save
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
 Check(layoutCalls.save == savesBeforeLateAnchor,
     "viewer layout persistence waits for a late-loading anchor frame")
+viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "ADDON_LOADED", "OtherAddon")
+Check(layoutCalls.save == savesBeforeLateAnchor,
+    "unrelated addon loads do not retry unavailable viewer anchors")
 ElvUF_Player = NewFrame(UIParent)
 function ElvUF_Player:GetRect() return 400, 300, 200, 80 end
-viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "PLAYER_ENTERING_WORLD")
+viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "ADDON_LOADED", "ElvUI")
+RunTimers()
 local persistedUtilityAnchor = layoutCalls.anchors[UtilityCooldownViewer]
 Check(persistedUtilityAnchor[2] == UIParent and persistedUtilityAnchor[3] == "BOTTOMLEFT",
     "late-bound ElvUI anchors are persisted relative to UIParent")
 Check(persistedUtilityAnchor[4] == 506 and persistedUtilityAnchor[5] == 307,
     "ElvUI anchors preserve the viewer's visual position")
+Check(layoutCalls.save == savesBeforeLateAnchor + 1,
+    "a late external anchor load retries the pending viewer layout")
 
 combat = true
+local savesBeforeCombat = layoutCalls.save
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
-Check(layoutCalls.apply == 0 and layoutCalls.save == 5,
+Check(layoutCalls.apply == 0 and layoutCalls.save == savesBeforeCombat,
     "viewer layouts are not applied during combat")
 combat = false
 viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "PLAYER_REGEN_ENABLED")
-Check(layoutCalls.save == 6, "a combat-deferred viewer layout applies after combat")
+Check(layoutCalls.save == savesBeforeCombat + 1,
+    "a combat-deferred viewer layout applies after combat")
 
 editable = false
+local savesBeforePreset = layoutCalls.save
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
-Check(layoutCalls.save == 6, "preset Edit Mode layouts are left unchanged")
+Check(layoutCalls.save == savesBeforePreset, "preset Edit Mode layouts are left unchanged")
 editable = true
 viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "EDIT_MODE_LAYOUTS_UPDATED")
-Check(layoutCalls.save == 7, "a pending viewer layout retries after leaving a preset layout")
+Check(layoutCalls.save == savesBeforePreset + 1,
+    "a pending viewer layout retries after leaving a preset layout")
 
 viewer:RefreshLayout()
 nativeRefreshLayoutCalls = 0
@@ -340,8 +395,10 @@ BCDM:SkinCooldownManager()
 RunTimers()
 RunFrameUpdates()
 RunFrameUpdates()
-Check(nativeRefreshLayoutCalls == 0,
-    "BCM initialization never invokes Blizzard's Tracked Buff RefreshLayout")
+Check(nativeRefreshLayoutCalls == 0 and nativeRefreshDataCalls == 0,
+    "BCM initialization never invokes Blizzard's Tracked Buff RefreshLayout or RefreshData")
+Check(glowRefreshes > 0,
+    "viewer style refreshes reconcile active custom glow geometry after icon sizing")
 local centeredOwner = createdFrames[#createdFrames - 1]
 Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
     "native Tracked Buff rows use the BCM-owned centering anchor")
@@ -376,6 +433,76 @@ RunFrameUpdates()
 RunFrameUpdates()
 Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
     "native rows are re-centered after settings close")
+
+BCDM.db.profile.CooldownManager.Buffs.CenterBuffs = false
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+Check(first.point[2] == viewer and second.point[2] == viewer
+    and first.point[4] == 0 and second.point[4] == 0,
+    "disabling tracked-buff centering restores every claimed native point")
+
+BCDM.db.profile.CooldownManager.Buffs.CenterBuffs = true
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+first.failNextSetPoint = true
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+Check(first.point[2] == viewer,
+    "a failed tracked-buff SetPoint leaves the row on its native point")
+first.failNextSetPoint = nil
+
+BCDM.db.profile.CooldownManager.Buffs.CenterBuffs = false
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+local secretPoint = {}
+BCDM.secretValue = secretPoint
+second.point = { "TOPLEFT", viewer, "TOPLEFT", secretPoint, secretPoint }
+BCDM.db.profile.CooldownManager.Buffs.CenterBuffs = true
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+Check(first.point[2] == viewer and second.point[2] == viewer,
+    "unreadable original tracked-buff points leave Blizzard layout untouched")
+BCDM.secretValue = nil
+second:SetPoint("TOPLEFT", viewer, "TOPLEFT", 0, 0)
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+
+viewer.itemFramePool:ReleaseAll()
+Check(first.point == nil and second.point == nil,
+    "pool release removes every stale BCM tracked-buff anchor")
+first:SetPoint("BOTTOMLEFT", viewer, "BOTTOMLEFT", 11, 12)
+second:SetPoint("BOTTOMLEFT", viewer, "BOTTOMLEFT", 21, 22)
+viewer.itemFramePool:Acquire()
+RunFrameUpdates()
+RunFrameUpdates()
+BCDM.db.profile.CooldownManager.Buffs.CenterBuffs = false
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+Check(first.point[4] == 11 and first.point[5] == 12
+    and second.point[4] == 21 and second.point[5] == 22,
+    "reacquired tracked-buff rows capture a fresh native point snapshot")
+BCDM.db.profile.CooldownManager.Buffs.CenterBuffs = true
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+EventRegistry:TriggerEvent("EditMode.Enter")
+Check(first.point[2] == viewer and second.point[2] == viewer,
+    "Edit Mode suspends tracked-buff centering and restores native ownership")
+EventRegistry:TriggerEvent("EditMode.Exit")
+RunFrameUpdates()
+RunFrameUpdates()
+Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
+    "tracked-buff centering resumes after Edit Mode closes")
 
 BCDM.db.profile.CooldownManager.Enable = true
 local editorSpell = NewItem(7, 44, 40, false)
@@ -439,7 +566,8 @@ Check(lateSpell.bcdmStyleCount == 1 and lateSpell.width == 30 and lateSpell.heig
 
 local essentialFirst = NewItem(11, 64, 64, false)
 local essentialSecond = NewItem(12, 91, 73, false)
-EssentialCooldownViewer.items = { essentialFirst, essentialSecond }
+local essentialThird = NewItem(13, 52, 47, false)
+EssentialCooldownViewer.items = { essentialFirst, essentialSecond, essentialThird }
 function EssentialCooldownViewer:GetItemFrames() return self.items end
 local essentialLayoutCalls = 0
 function EssentialCooldownViewer:Layout()
@@ -457,15 +585,70 @@ local defaultIsAddOnLoaded = C_AddOns.IsAddOnLoaded
 C_AddOns.IsAddOnLoaded = function(name) return name == "MasqueBlizzBars" end
 BCDM:UpdateCooldownViewer("Essential")
 RunTimers()
-Check(essentialLayoutCalls == 0 and essentialFirst.width == 64 and essentialSecond.width == 91,
+Check(essentialLayoutCalls == 0 and essentialFirst.width == 64 and essentialSecond.width == 91
+    and essentialThird.width == 52,
     "externally skinned viewers are not resized or relaid out by BCM")
 C_AddOns.IsAddOnLoaded = defaultIsAddOnLoaded
 BCDM:UpdateCooldownViewer("Essential")
 RunTimers()
-Check(essentialLayoutCalls > 0 and essentialFirst.width == 30 and essentialSecond.width == 30,
+Check(essentialLayoutCalls > 0 and essentialFirst.width == 30 and essentialSecond.width == 30
+    and essentialThird.width == 30,
     "BCM icon-size changes immediately rerun the existing native grid")
 Check(essentialFirst.point[4] == 0 and essentialSecond.point[4] == 34,
     "BCM icon-size changes update positions without opening Edit Mode")
+
+BCDM.db.profile.CooldownManager.Essential.CenterHorizontally = true
+EssentialCooldownViewer.iconLimit = 2
+EssentialCooldownViewer.isHorizontal = true
+EssentialCooldownViewer.layoutFramesGoingRight = false
+EssentialCooldownViewer.layoutFramesGoingUp = false
+EssentialCooldownViewer.childXPadding = 4
+EssentialCooldownViewer.childYPadding = 3
+essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
+essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 34, 0)
+essentialThird:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 68, 0)
+BCDM:QueueCooldownViewerStyleRefresh()
+RunTimers()
+Check(essentialFirst.point[1] == "TOP" and essentialFirst.point[4] == 17
+    and essentialSecond.point[4] == -17 and essentialThird.point[4] == 0
+    and essentialThird.point[5] == -23,
+    "left-growing wrapped rows preserve layoutIndex order and top-down row growth")
+
+local essentialAnchorLayout = { "TOP", "NONE", "TOP", 0, 0 }
+BCDM.db.profile.CooldownManager.Essential.Layout = essentialAnchorLayout
+BCDM:QueueCooldownViewerLayoutApply()
+RunTimers()
+Check(layoutCalls.anchors[EssentialCooldownViewer][1] == "TOP"
+    and layoutCalls.anchors[EssentialCooldownViewer][3] == "TOP",
+    "Essential Anchor To persists the configured native relative point")
+
+local wrappedPoint = { unpack(essentialFirst.point) }
+local secretGeometry = {}
+BCDM.secretValue = secretGeometry
+BCDM.db.profile.CooldownManager.Enable = false
+essentialFirst.width, essentialFirst.height = secretGeometry, secretGeometry
+BCDM:QueueCooldownViewerStyleRefresh()
+RunTimers()
+Check(essentialFirst.point[4] == wrappedPoint[4] and essentialFirst.point[5] == wrappedPoint[5],
+    "secret wrapped-row width and height leave Blizzard layout untouched")
+essentialFirst.width, essentialFirst.height = 30, 20
+local beforeSecretDirection = { unpack(essentialFirst.point) }
+EssentialCooldownViewer.childXPadding = secretGeometry
+BCDM:QueueCooldownViewerStyleRefresh()
+RunTimers()
+Check(essentialFirst.point[4] == beforeSecretDirection[4]
+    and essentialFirst.point[5] == beforeSecretDirection[5],
+    "secret wrapped-row padding leaves Blizzard layout untouched")
+EssentialCooldownViewer.childXPadding = 4
+EssentialCooldownViewer.layoutFramesGoingRight = secretGeometry
+BCDM:QueueCooldownViewerStyleRefresh()
+RunTimers()
+Check(essentialFirst.point[4] == beforeSecretDirection[4]
+    and essentialFirst.point[5] == beforeSecretDirection[5],
+    "secret wrapped-row direction leaves Blizzard layout untouched")
+BCDM.secretValue = nil
+EssentialCooldownViewer.layoutFramesGoingRight = false
+BCDM.db.profile.CooldownManager.Enable = true
 
 combat = true
 viewer:RefreshLayout()
@@ -497,14 +680,18 @@ Check(optionsSource:find("SetDisplayMode", 1, true) ~= nil
 Check(optionsSource:find("GetTrackedBuffSettingsHighlightTarget", 1, true) ~= nil
     and optionsSource:find("GetTrackedBuffSettingsHighlightFrames", 1, true) ~= nil,
     "Tracked Buff settings use the live centered highlight geometry")
+Check(optionsSource:find("QueueCooldownViewerLayoutSettle", 1, true) ~= nil
+    and optionsSource:find("QueueCooldownViewerLayoutApply", 1, true) ~= nil,
+    "viewer setting and bar-size callbacks queue native anchor persistence")
 Check(optionsSource:find("securecallfunction", 1, true) ~= nil,
     "automatic native Cooldown Manager opening crosses a secure call boundary")
 
 local cooldownFile = assert(io.open(root .. "/Modules/CooldownManager.lua", "r"))
 local cooldownSource = cooldownFile:read("*a")
 cooldownFile:close()
-Check(not cooldownSource:find("pcall(viewer.RefreshLayout", 1, true),
-    "BCM has no direct native RefreshLayout restore path")
+Check(not cooldownSource:find("pcall(viewer.RefreshLayout", 1, true)
+    and not cooldownSource:find("pcall(viewer.RefreshData", 1, true),
+    "BCM has no direct native RefreshLayout or RefreshData restore path")
 Check(not cooldownSource:find("LEMO:ApplyChanges", 1, true),
     "BCM never opens Edit Mode from addon code")
 Check(not cooldownSource:find("UpdateLayoutInfo", 1, true)

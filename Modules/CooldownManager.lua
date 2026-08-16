@@ -1,5 +1,4 @@
 local _, BCDM = ...
-local unpack = unpack or table.unpack
 
 local EARLY_VIEWER_ANCHOR_NAMES = {
     "BCDM_PowerBar",
@@ -636,7 +635,8 @@ local function RestoreTrackedBuffPointList(frame, points)
     local ok = pcall(frame.ClearAllPoints, frame)
     if not ok then return false end
     for _, point in ipairs(points) do
-        local pointOK = pcall(frame.SetPoint, frame, unpack(point))
+        local pointOK = pcall(frame.SetPoint, frame,
+            point[1], point[2], point[3], point[4], point[5])
         ok = pointOK and ok
     end
     return ok
@@ -644,7 +644,8 @@ end
 
 local function SetTrackedBuffAnchor(frame, anchor)
     if not pcall(frame.ClearAllPoints, frame) then return false end
-    return pcall(frame.SetPoint, frame, unpack(anchor))
+    return pcall(frame.SetPoint, frame,
+        anchor[1], anchor[2], anchor[3], anchor[4], anchor[5])
 end
 
 local function RestoreTrackedBuffPoints(frame)
@@ -689,13 +690,20 @@ local function ReapplyCenteredTrackedBuffPositions()
 end
 
 local function ReadTrackedBuffBoolean(frame, methodName, fieldName)
-    local okMethod, method = pcall(function() return frame and frame[methodName] end)
-    if okMethod and type(method) == "function" then
-        local ok, value = pcall(method, frame)
-        return ok and type(value) == "boolean" and not BCDM:IsSecretValue(value) and value or nil
+    if methodName then
+        local okMethod, method = pcall(function() return frame and frame[methodName] end)
+        if okMethod and type(method) == "function" then
+            local ok, value = pcall(method, frame)
+            if ok and type(value) == "boolean" and not BCDM:IsSecretValue(value) then
+                return value
+            end
+            return nil
+        end
     end
     local okField, value = pcall(function() return frame and frame[fieldName] end)
-    return okField and type(value) == "boolean" and not BCDM:IsSecretValue(value) and value or nil
+    if okField and type(value) == "boolean" and not BCDM:IsSecretValue(value) then
+        return value
+    end
 end
 
 local function GetTrackedBuffViewerSettings(viewer)
@@ -855,6 +863,8 @@ local function LayoutCenteredTrackedBuffs()
         local y = (position[2] - height / 2 + entry.height / 2) / scale
         local anchor = { "TOPLEFT", centeredTrackedBuffOwner, "TOPLEFT", x, y }
         if not SetTrackedBuffAnchor(entry.frame, anchor) then
+            centeredTrackedBuffAnchors[entry.frame] = nil
+            centeredTrackedBuffOriginalPoints[entry.frame] = nil
             RestoreTrackedBuffPointList(entry.frame, captured[entry.frame])
             for _, claimedFrame in ipairs(claimed) do
                 RestoreTrackedBuffPoints(claimedFrame)
@@ -1193,7 +1203,8 @@ local function CenterWrappedRows(viewerName)
     local function RestoreIcon(icon)
         local point = icon.point
         pcall(icon.frame.ClearAllPoints, icon.frame)
-        pcall(icon.frame.SetPoint, icon.frame, unpack(point))
+        pcall(icon.frame.SetPoint, icon.frame,
+            point[1], point[2], point[3], point[4], point[5])
     end
     for index, icon in ipairs(visibleIcons) do
         local position = positions[index]
