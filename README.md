@@ -12,6 +12,7 @@
 
 ## Features
 - Clean, Pixel Border Skinning. Borders can be adjusted.
+- Draggable minimap button for opening the Better Cooldown Manager settings window.
 - Custom Cooldown Text & Tweaks.
 - Clickable custom, power-type, class, specialization, and cast-state fill-colour swatches without conflicting toggles.
 - Power Bar, Secondary Power Bar & Cast Bar with anchoring, automatic width matching, fill direction, and display controls.

@@ -150,6 +150,10 @@ local function CreateGeneralPanel()
         end, {
             description = L("Show a blue outline around the element configured by the current settings page."),
         })
+    PathCheckbox(controls, general, "Show Minimap Button", GlobalRoot,
+        { "MinimapButton", "Show" }, function() BCDM:UpdateMinimapButton() end, {
+            description = L("Show a draggable minimap button that opens Better Cooldown Manager settings."),
+        })
 
     BCDM:AddVisibilityPolicySettings(panel, controls, "Shared Visibility", ProfileRoot,
         { "Visibility" }, nil, function() BCDM:RefreshOwnedFrameVisibility() end)
