@@ -29,14 +29,14 @@ local GROWTH_DIRECTIONS = {
 }
 
 local FRAME_STRATA = {
-    { text = "Background", value = "BACKGROUND" },
-    { text = "Low", value = "LOW" },
-    { text = "Medium", value = "MEDIUM" },
-    { text = "High", value = "HIGH" },
-    { text = "Dialog", value = "DIALOG" },
-    { text = "Fullscreen", value = "FULLSCREEN" },
-    { text = "Fullscreen Dialog", value = "FULLSCREEN_DIALOG" },
-    { text = "Tooltip", value = "TOOLTIP" },
+    { text = L("Background"), value = "BACKGROUND" },
+    { text = L("Low"), value = "LOW" },
+    { text = L("Medium"), value = "MEDIUM" },
+    { text = L("High"), value = "HIGH" },
+    { text = L("Dialog"), value = "DIALOG" },
+    { text = L("Fullscreen"), value = "FULLSCREEN" },
+    { text = L("Fullscreen Dialog"), value = "FULLSCREEN_DIALOG" },
+    { text = L("Tooltip"), value = "TOOLTIP" },
 }
 
 local function ProfileRoot() return BCDM.db.profile end
@@ -73,9 +73,9 @@ local function DisabledWhen(path, expected)
 end
 
 local VISIBILITY_MODES = {
-    { text = "Always", value = "ALWAYS" },
-    { text = "In Combat", value = "IN_COMBAT" },
-    { text = "Out of Combat", value = "OUT_OF_COMBAT" },
+    { text = L("Always"), value = "ALWAYS" },
+    { text = L("In Combat"), value = "IN_COMBAT" },
+    { text = L("Out of Combat"), value = "OUT_OF_COMBAT" },
 }
 
 function BCDM:AddVisibilityPolicySettings(panel, controls, title, rootProvider, policyPath, useSharedPath, changed, disabled)
@@ -182,10 +182,10 @@ local function CreateGeneralPanel()
     PathDropdown(controls, appearance, "Font Flag", ProfileRoot,
         { "General", "Fonts", "FontFlag" }, RefreshAll, function()
             return {
-                { text = "None", value = "" },
-                { text = "Outline", value = "OUTLINE" },
-                { text = "Thick Outline", value = "THICKOUTLINE" },
-                { text = "Monochrome", value = "MONOCHROME" },
+                { text = L("None"), value = "" },
+                { text = L("Outline"), value = "OUTLINE" },
+                { text = L("Thick Outline"), value = "THICKOUTLINE" },
+                { text = L("Monochrome"), value = "MONOCHROME" },
             }
         end)
     PathCheckbox(controls, appearance, "Enable Font Shadow", ProfileRoot,
@@ -297,10 +297,10 @@ AddSharedCooldownSettings = function(controls)
         { "CooldownManager", "General", "Glow", "Type" }, function() BCDM:RefreshCustomGlows() end,
         function()
             return {
-                { text = "Pixel", value = "Pixel" },
-                { text = "Autocast", value = "Autocast" },
-                { text = "Proc", value = "Proc" },
-                { text = "Button", value = "Button" },
+                { text = L("Pixel"), value = "Pixel" },
+                { text = L("Autocast"), value = "Autocast" },
+                { text = L("Proc"), value = "Proc" },
+                { text = L("Button"), value = "Button" },
             }
         end, { hidden = function() return not GlowEnabled() end })
     local function GlowHidden(glowType)
@@ -803,7 +803,7 @@ local function CreateBarPanel(barType)
     end
     PathDropdown(controls, behavior, "Fill Direction", ProfileRoot,
         { barType, "FillDirection" }, update, function()
-            return { { text = "Right", value = "RIGHT" }, { text = "Left", value = "LEFT" } }
+            return { { text = L("Right"), value = "RIGHT" }, { text = L("Left"), value = "LEFT" } }
         end, { disabled = EnabledDisabled })
     PathCheckbox(controls, behavior, "Match Width Of Anchor", ProfileRoot,
         { barType, "MatchWidthOfAnchor" }, update, { disabled = EnabledDisabled })
@@ -912,10 +912,10 @@ local function CreateBarPanel(barType)
         PathDropdown(controls, text, "Text Mode", ProfileRoot,
             { barType, "Text", "Mode" }, update, function()
                 return {
-                    { text = "Automatic", value = "AUTO" },
-                    { text = "Current", value = "CURRENT" },
-                    { text = "Current / Maximum", value = "CURRENT_MAX" },
-                    { text = "Percent", value = "PERCENT" },
+                    { text = L("Automatic"), value = "AUTO" },
+                    { text = L("Current"), value = "CURRENT" },
+                    { text = L("Current / Maximum"), value = "CURRENT_MAX" },
+                    { text = L("Percent"), value = "PERCENT" },
                 }
             end, { disabled = TextDisabled })
         PathDropdown(controls, text, "Anchor From", ProfileRoot,

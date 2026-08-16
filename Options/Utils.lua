@@ -7,20 +7,25 @@ local LocaleTable = AceLocale and AceLocale:GetLocale("BetterCooldownManager", t
 local M = {}
 BCDM.SettingsUtils = M
 
+function M.L(key)
+    if not key then return key end
+    return (LocaleTable and rawget(LocaleTable, key)) or key
+end
+
 M.SELECTOR_ICON_SIZE = 44
 M.SELECTED_ICON_SIZE = 48
 M.SETTINGS_ICON_CROP = 0.08
 M.DISPLAY_MODES = {
-    { text = "Always", value = "ALWAYS" }, { text = "Ready Only", value = "READY" },
-    { text = "Active Only", value = "ACTIVE" },
+    { text = M.L("Always"), value = "ALWAYS" }, { text = M.L("Ready Only"), value = "READY" },
+    { text = M.L("Active Only"), value = "ACTIVE" },
 }
 M.VISUAL_MODES = {
-    { text = "Full", value = "FULL" }, { text = "Desaturate", value = "DESATURATE" },
-    { text = "Lower Alpha", value = "LOW_ALPHA" },
+    { text = M.L("Full"), value = "FULL" }, { text = M.L("Desaturate"), value = "DESATURATE" },
+    { text = M.L("Lower Alpha"), value = "LOW_ALPHA" },
 }
 M.GLOW_MODES = {
-    { text = "No Glow", value = "NONE" }, { text = "Glow Ready", value = "READY" },
-    { text = "Glow Active", value = "ACTIVE" },
+    { text = M.L("No Glow"), value = "NONE" }, { text = M.L("Glow Ready"), value = "READY" },
+    { text = M.L("Glow Active"), value = "ACTIVE" },
 }
 
 function M.SetSettingsIcon(texture, icon)
@@ -105,11 +110,6 @@ local function EnsurePreviewTexture(button)
     if type(button.AttachTexture) ~= "function" then return nil end
     button.bcdmMediaPreviewTexture = button:AttachTexture()
     return button.bcdmMediaPreviewTexture
-end
-
-function M.L(key)
-    if not key then return key end
-    return (LocaleTable and rawget(LocaleTable, key)) or key
 end
 
 function M.Values(map, order)
@@ -394,6 +394,9 @@ function M.ColorChoices(controls, section, title, getValue, setValue, choicesPro
 end
 
 function M.Buttons(controls, section, buttons, options)
+    for _, button in ipairs(buttons or {}) do
+        if type(button.text) == "string" then button.text = M.L(button.text) end
+    end
     local row = SettingsCanvas.CreateButtonRow(section.Content, buttons)
     if options and type(options.disabled) == "function" then
         local refresh = row.Refresh

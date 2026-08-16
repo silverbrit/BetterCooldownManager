@@ -2,6 +2,7 @@ local _, BCDM = ...
 
 local U = BCDM.SettingsUtils
 local Canvas = U.Canvas
+local L = U.L
 local UNKNOWN_ICON = 134400
 local selectedSlot = 13
 
@@ -122,9 +123,9 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
             local name, _, itemID = ItemMetadata(self.SlotID)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText(name, 1, 0.82, 0)
-            GameTooltip:AddLine("Trinket Slot " .. (self.SlotID == 13 and "1" or "2"), 1, 1, 1)
-            if itemID then GameTooltip:AddLine("Item ID: " .. itemID, 0.7, 0.7, 0.7) end
-            GameTooltip:AddLine("Click to edit. Drag to reorder.", 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(L("Trinket Slot") .. " " .. (self.SlotID == 13 and "1" or "2"), 1, 1, 1)
+            if itemID then GameTooltip:AddLine(L("Item ID:") .. " " .. itemID, 0.7, 0.7, 0.7) end
+            GameTooltip:AddLine(L("Click to edit. Drag to reorder."), 0.7, 0.7, 0.7)
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -184,7 +185,7 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
     header.Enabled = CreateFrame("CheckButton", nil, header, "UICheckButtonTemplate")
     header.Enabled:SetSize(24, 24)
     header.Enabled:SetPoint("RIGHT", 0, 0)
-    header.EnabledLabel = Canvas.CreateLabel(header, "Enabled", "GameFontHighlight")
+    header.EnabledLabel = Canvas.CreateLabel(header, L("Enabled"), "GameFontHighlight")
     header.EnabledLabel:SetPoint("RIGHT", header.Enabled, "LEFT", -2, 0)
     header.Enabled:SetScript("OnClick", function(self)
         Slot().Enabled = self:GetChecked() == true
@@ -194,8 +195,8 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
         local name, icon, itemID = ItemMetadata(selectedSlot)
         U.SetSettingsIcon(self.Icon, icon)
         self.Name:SetText(name)
-        self.Source:SetText("Trinket Slot " .. (selectedSlot == 13 and "1" or "2")
-            .. (itemID and ("  •  Item ID: " .. itemID) or ""))
+        self.Source:SetText(L("Trinket Slot") .. " " .. (selectedSlot == 13 and "1" or "2")
+            .. (itemID and ("  •  " .. L("Item ID:") .. " " .. itemID) or ""))
         self.Enabled:SetChecked(Slot().Enabled ~= false)
     end
 
@@ -249,17 +250,17 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
 
     local filters = Canvas.CreateBaseRow(behavior.Content, 28)
     U.Add(controls, behavior, filters)
-    filters.Label = Canvas.CreateLabel(filters, "Class / Specialization", "GameFontHighlight")
+    filters.Label = Canvas.CreateLabel(filters, L("Class / Specialization"), "GameFontHighlight")
     filters.Label:SetPoint("LEFT", 0, 0)
     filters.Dropdown = Canvas.CreateDropdown(filters)
     filters.Dropdown:SetPoint("RIGHT", 0, 0)
     filters.Dropdown:SetWidth(320)
-    filters.Dropdown:OverrideText("Choose Class / Specialization")
+    filters.Dropdown:OverrideText(L("Choose Class / Specialization"))
     function filters:Refresh()
         self:SetShown(not UsingShared())
         if UsingShared() then return end
         SetupFilterMenu(self.Dropdown, Slot(), panel, callback)
-        self.Dropdown:OverrideText("Choose Class / Specialization")
+        self.Dropdown:OverrideText(L("Choose Class / Specialization"))
     end
 
     local shared = U.Section(controls, "Shared Trinket Settings", true)
@@ -297,15 +298,15 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
 
     local sharedFilters = Canvas.CreateBaseRow(shared.Content, 28)
     U.Add(controls, shared, sharedFilters)
-    sharedFilters.Label = Canvas.CreateLabel(sharedFilters, "Class / Specialization", "GameFontHighlight")
+    sharedFilters.Label = Canvas.CreateLabel(sharedFilters, L("Class / Specialization"), "GameFontHighlight")
     sharedFilters.Label:SetPoint("LEFT", 0, 0)
     sharedFilters.Dropdown = Canvas.CreateDropdown(sharedFilters)
     sharedFilters.Dropdown:SetPoint("RIGHT", 0, 0)
     sharedFilters.Dropdown:SetWidth(320)
-    sharedFilters.Dropdown:OverrideText("Choose Class / Specialization")
+    sharedFilters.Dropdown:OverrideText(L("Choose Class / Specialization"))
     function sharedFilters:Refresh()
         SetupFilterMenu(self.Dropdown, SharedTarget(), panel, callback)
-        self.Dropdown:OverrideText("Choose Class / Specialization")
+        self.Dropdown:OverrideText(L("Choose Class / Specialization"))
     end
 
     local itemData = CreateFrame("Frame", nil, panel)
