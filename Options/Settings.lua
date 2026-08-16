@@ -290,6 +290,9 @@ AddSharedCooldownSettings = function(controls)
     local glow = U.Section(controls, "Custom Glows", true)
     PathCheckbox(controls, glow, "Enable Custom Glow", ProfileRoot,
         { "CooldownManager", "General", "Glow", "Enabled" }, function() BCDM:RefreshCustomGlows() end)
+    local function GlowEnabled()
+        return U.Get(ProfileRoot, { "CooldownManager", "General", "Glow", "Enabled" }) == true
+    end
     PathDropdown(controls, glow, "Glow Type", ProfileRoot,
         { "CooldownManager", "General", "Glow", "Type" }, function() BCDM:RefreshCustomGlows() end,
         function()
@@ -299,14 +302,19 @@ AddSharedCooldownSettings = function(controls)
                 { text = "Proc", value = "Proc" },
                 { text = "Button", value = "Button" },
             }
-        end)
+        end, { hidden = function() return not GlowEnabled() end })
     local function GlowHidden(glowType)
-        return function() return U.Get(ProfileRoot, { "CooldownManager", "General", "Glow", "Type" }) ~= glowType end
+        return function()
+            return not GlowEnabled()
+                or U.Get(ProfileRoot, { "CooldownManager", "General", "Glow", "Type" }) ~= glowType
+        end
     end
-    local function AddGlowColor(glowType)
+    local function AddGlowColor(glowType, options)
+        options = options or {}
+        options.hidden = GlowHidden(glowType)
         PathColor(controls, glow, glowType .. " Glow Colour", ProfileRoot,
             { "CooldownManager", "General", "Glow", glowType, "Color" },
-            function() BCDM:RefreshCustomGlows() end, true, { hidden = GlowHidden(glowType) })
+            function() BCDM:RefreshCustomGlows() end, true, options)
     end
     AddGlowColor("Pixel")
     PathCheckbox(controls, glow, "Pixel Border", ProfileRoot,
@@ -338,7 +346,14 @@ AddSharedCooldownSettings = function(controls)
             { "CooldownManager", "General", "Glow", "Proc", entry[1] }, function() BCDM:RefreshCustomGlows() end,
             { min = entry[2], max = entry[3], step = entry[4], hidden = GlowHidden("Proc") })
     end
-    AddGlowColor("Button")
+    PathCheckbox(controls, glow, "Use Button Glow Colour", ProfileRoot,
+        { "CooldownManager", "General", "Glow", "Button", "UseColor" },
+        function() BCDM:RefreshCustomGlows() end, { hidden = GlowHidden("Button") })
+    AddGlowColor("Button", {
+        disabled = function()
+            return U.Get(ProfileRoot, { "CooldownManager", "General", "Glow", "Button", "UseColor" }) ~= true
+        end,
+    })
     PathSlider(controls, glow, "Button Frequency", ProfileRoot,
         { "CooldownManager", "General", "Glow", "Button", "Frequency" }, function() BCDM:RefreshCustomGlows() end,
         { min = -2, max = 2, step = 0.05, hidden = GlowHidden("Button") })

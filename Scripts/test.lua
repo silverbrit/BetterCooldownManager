@@ -52,6 +52,15 @@ Check(defaults.profile.General.Fonts.Font == "Friz Quadrata TT",
 Check(defaults.profile.General.Textures.Foreground == "Solid"
     and defaults.profile.General.Textures.Background == "Solid",
     "default bar textures use Solid")
+local glowDefaults = defaults.profile.CooldownManager.General.Glow
+Check(glowDefaults.Type == "Button"
+    and glowDefaults.Button.UseColor == false
+    and glowDefaults.Button.Frequency == 0.3
+    and glowDefaults.Button.Color[1] == 0.95
+    and glowDefaults.Button.Color[2] == 0.95
+    and glowDefaults.Button.Color[3] == 0
+    and glowDefaults.Button.Color[4] == 0.9,
+    "custom glow defaults match ElvUI's button glow")
 Check(defaults.profile.CooldownManager.Buffs.CenterBuffs == true
     and defaults.profile.CooldownManager.Buffs.Layout[2] == "BCDM_PowerBar"
     and defaults.profile.CooldownManager.Trinket.Enabled == true,

@@ -399,6 +399,27 @@ local function StyleIcons(onlyViewerName)
     end
 end
 
+-- BCM's glow overlay is item +1 and LibCustomGlow's renderer is one level above it.
+local COUNT_FRAME_LEVEL_OFFSET = 3
+
+local function RaiseCountFrame(itemFrame, countFrame)
+    if not itemFrame or not countFrame or type(itemFrame.GetFrameLevel) ~= "function"
+        or type(countFrame.GetFrameLevel) ~= "function" or type(countFrame.SetFrameLevel) ~= "function" then
+        return
+    end
+    local ok, itemLevel, countLevel = pcall(function()
+        return itemFrame:GetFrameLevel(), countFrame:GetFrameLevel()
+    end)
+    if not ok or type(itemLevel) ~= "number" or type(countLevel) ~= "number"
+        or BCDM:IsSecretValue(itemLevel) or BCDM:IsSecretValue(countLevel) then
+        return
+    end
+    local desiredLevel = itemLevel + COUNT_FRAME_LEVEL_OFFSET
+    if countLevel < desiredLevel then
+        pcall(countFrame.SetFrameLevel, countFrame, desiredLevel)
+    end
+end
+
 local function StyleChargeCount(onlyViewerName)
     if IsInCombat() then return end
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
@@ -408,6 +429,7 @@ local function StyleChargeCount(onlyViewerName)
         for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
             if BCDM:IsCustomizableCooldownViewerItem(childFrame)
                 and childFrame.ChargeCount and childFrame.ChargeCount.Current then
+                RaiseCountFrame(childFrame, childFrame.ChargeCount)
                 local currentChargeText = childFrame.ChargeCount.Current
                 currentChargeText:SetFont(BCDM.Media.Font, cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]].Text.FontSize, generalSettings.Fonts.FontFlag)
                 currentChargeText:ClearAllPoints()
@@ -425,6 +447,7 @@ local function StyleChargeCount(onlyViewerName)
         end
         for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
             if BCDM:IsCustomizableCooldownViewerItem(childFrame) and childFrame.Applications then
+                RaiseCountFrame(childFrame, childFrame.Applications)
                 local applicationsText = childFrame.Applications.Applications
                 applicationsText:SetFont(BCDM.Media.Font, cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]].Text.FontSize, generalSettings.Fonts.FontFlag)
                 applicationsText:ClearAllPoints()

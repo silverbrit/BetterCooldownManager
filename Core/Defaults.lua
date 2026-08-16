@@ -112,7 +112,7 @@ local Defaults = {
                 BorderSize = 1,
                 Glow = {
                     Enabled = true,
-                    Type = "Pixel",
+                    Type = "Button",
                     Pixel = {
                         Color = {1, 1, 1, 1},
                         Lines = 5,
@@ -139,8 +139,9 @@ local Defaults = {
                         YOffset = 0,
                     },
                     Button = {
-                        Color = {1, 1, 1, 1},
-                        Frequency = 0.125,
+                        Color = {0.95, 0.95, 0, 0.9},
+                        UseColor = false,
+                        Frequency = 0.3,
                     },
                 },
                 CooldownText = {

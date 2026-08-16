@@ -3,11 +3,17 @@ local LibCustomGlow = LibStub("LibCustomGlow-1.0")
 
 local activeGlows = setmetatable({}, { __mode = "k" })
 local glowStates = setmetatable({}, { __mode = "k" })
-local pendingNativeStarts = setmetatable({}, { __mode = "k" })
 local activeNativeAlerts = setmetatable({}, { __mode = "k" })
 local suppressedNativeAlerts = setmetatable({}, { __mode = "k" })
 local hookedCooldownViewers = setmetatable({}, { __mode = "k" })
+local hookedAlertManagers = setmetatable({}, { __mode = "k" })
+local hookedCooldownViewerPools = setmetatable({}, { __mode = "k" })
+local knownPoolFrames = setmetatable({}, { __mode = "k" })
+local activePoolFrames = setmetatable({}, { __mode = "k" })
+local cooldownViewerTargets = setmetatable({}, { __mode = "k" })
 local reportedGlowErrors = {}
+local reconcileInProgress = false
+local ReconcileCooldownViewerGlows
 local customGlowHooksSet = false
 local glowPreparationFrame
 
@@ -67,7 +73,7 @@ function BCDM:NormalizeGlowSettings()
     end
 
     glow.Enabled = NormalizeValue(glow.Enabled, true)
-    glow.Type = glow.Type or "Pixel"
+    glow.Type = glow.Type or "Button"
 
     local legacyColor = glow.Colour
     glow.Pixel = glow.Pixel or {}
@@ -96,8 +102,9 @@ function BCDM:NormalizeGlowSettings()
     glow.Proc.YOffset = NormalizeValue(glow.Proc.YOffset, 0)
 
     glow.Button = glow.Button or {}
-    glow.Button.Color = NormalizeColor(glow.Button.Color or legacyColor, { 1, 1, 1, 1 })
-    glow.Button.Frequency = NormalizeValue(glow.Button.Frequency, 0.125)
+    glow.Button.Color = NormalizeColor(glow.Button.Color or legacyColor, { 0.95, 0.95, 0, 0.9 })
+    glow.Button.UseColor = NormalizeValue(glow.Button.UseColor, false)
+    glow.Button.Frequency = NormalizeValue(glow.Button.Frequency, 0.3)
 
     return glow
 end
@@ -150,7 +157,11 @@ local function RunGlowCall(action, glowType, callback)
 end
 
 local function StopGlowOnOverlay(overlay, glowType)
-    if not overlay or not glowType then return true end
+    if not glowType then return true end
+    if not overlay then
+        ReportGlowError("stop", glowType, "missing glow overlay")
+        return false
+    end
     return RunGlowCall("stop", glowType, function()
         overlay:Hide()
         if glowType == "Pixel" then
@@ -165,12 +176,6 @@ local function StopGlowOnOverlay(overlay, glowType)
     end)
 end
 
-local function CancelNativeStart(frame)
-    local timer = pendingNativeStarts[frame]
-    if timer and timer.Cancel then timer:Cancel() end
-    pendingNativeStarts[frame] = nil
-end
-
 local function GetGlowState(frame)
     local state = glowStates[frame]
     if state then return state end
@@ -179,17 +184,114 @@ local function GetGlowState(frame)
     return state
 end
 
-local function RefreshOverlayGeometry(frame, overlay)
-    overlay:ClearAllPoints()
-    overlay:SetAllPoints(frame)
-    if frame.GetFrameLevel and overlay.SetFrameLevel then
-        local ok, frameLevel = pcall(frame.GetFrameLevel, frame)
-        if ok and type(frameLevel) == "number" then overlay:SetFrameLevel(frameLevel + 1) end
+local function ReleaseGlowRenderer(frame, state)
+    if not state or not state.glowType then
+        activeGlows[frame] = nil
+        return true
     end
+
+    if not StopGlowOnOverlay(state.overlay, state.glowType) then
+        state.cleanupPending = true
+        state.rendererActive = false
+        activeGlows[frame] = true
+        return false
+    end
+
+    state.glowType = nil
+    state.rendererActive = false
+    state.cleanupPending = nil
+    state.geometry = nil
+    activeGlows[frame] = nil
+    return true
+end
+
+local GLOW_GEOMETRY_FIELDS = { "width", "height", "frameLevel", "frameStrata" }
+
+local function ReadGlowGeometry(frame)
+    local geometry = {}
+    local okSize, width, height = pcall(function()
+        return frame:GetSize()
+    end)
+    if okSize and type(width) == "number" and type(height) == "number"
+        and not BCDM:IsSecretValue(width) and not BCDM:IsSecretValue(height) then
+        geometry.width, geometry.height = width, height
+    end
+
+    local okLevel, frameLevel = pcall(function()
+        return frame:GetFrameLevel()
+    end)
+    if okLevel and type(frameLevel) == "number" and not BCDM:IsSecretValue(frameLevel) then
+        geometry.frameLevel = frameLevel
+    end
+
+    local okStrata, frameStrata = pcall(function()
+        return frame:GetFrameStrata()
+    end)
+    if okStrata and type(frameStrata) == "string" and not BCDM:IsSecretValue(frameStrata) then
+        geometry.frameStrata = frameStrata
+    end
+
+    return geometry
+end
+
+local function MergeGlowGeometry(previous, current)
+    local merged = {}
+    for _, field in ipairs(GLOW_GEOMETRY_FIELDS) do
+        merged[field] = current[field] ~= nil and current[field] or previous and previous[field]
+    end
+    return merged
+end
+
+local function GlowGeometryChanged(previous, current)
+    if not previous then return false end
+    for _, field in ipairs(GLOW_GEOMETRY_FIELDS) do
+        if previous[field] ~= nil and current[field] ~= nil and previous[field] ~= current[field] then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetGlowCooldown(frame)
+    local okCooldown, cooldown = pcall(function()
+        return frame and (frame.Cooldown or frame.cooldown)
+    end)
+    if not okCooldown or not cooldown or BCDM:IsSecretValue(cooldown) then return nil end
+
+    local okMethods, isShown, getDuration = pcall(function()
+        return cooldown.IsShown, cooldown.GetCooldownDuration
+    end)
+    if not okMethods or type(isShown) ~= "function" or type(getDuration) ~= "function" then return nil end
+
+    local okForbiddenMethod, isForbidden = pcall(function() return cooldown.IsForbidden end)
+    if okForbiddenMethod and type(isForbidden) == "function" then
+        local okForbidden, forbidden = pcall(isForbidden, cooldown)
+        if not okForbidden or BCDM:IsSecretValue(forbidden) or forbidden == true then return nil end
+    end
+
+    return cooldown
+end
+
+local function RefreshOverlayGeometry(frame, overlay)
+    local geometry = ReadGlowGeometry(frame)
+    local ok = pcall(function() overlay:SetAllPoints(frame) end)
+    if not ok then return false, geometry end
+
+    if geometry.frameLevel then
+        local okLevel = pcall(function() overlay:SetFrameLevel(geometry.frameLevel + 1) end)
+        if not okLevel then geometry.frameLevel = nil end
+    end
+    if geometry.frameStrata then
+        local okStrata = pcall(function() overlay:SetFrameStrata(geometry.frameStrata) end)
+        if not okStrata then geometry.frameStrata = nil end
+    end
+    overlay.cooldown = GetGlowCooldown(frame)
+    return true, geometry
 end
 
 local function GetGlowOverlay(frame)
     local state = GetGlowState(frame)
+    local created = false
     if not state.overlay then
         if GetCooldownViewerChild(frame) and InCombatLockdown and InCombatLockdown() then return nil end
         local ok, overlay = pcall(CreateFrame, "Frame", nil, frame)
@@ -197,26 +299,56 @@ local function GetGlowOverlay(frame)
             ReportGlowError("overlay", "Frame", overlay)
             return nil
         end
-        if overlay.EnableMouse then overlay:EnableMouse(false) end
-        overlay:Hide()
+        if overlay.EnableMouse then pcall(overlay.EnableMouse, overlay, false) end
+        pcall(overlay.Hide, overlay)
         state.overlay = overlay
+        created = true
     end
-    RefreshOverlayGeometry(frame, state.overlay)
-    return state.overlay
+
+    local geometryOK, geometry = RefreshOverlayGeometry(frame, state.overlay)
+    if not geometryOK and created then
+        pcall(state.overlay.Hide, state.overlay)
+        return nil
+    end
+    return state.overlay, geometry, geometryOK
 end
 
 local function RestoreNativeAlertAlpha(frame)
-    local alertFrame = suppressedNativeAlerts[frame]
+    local suppressed = suppressedNativeAlerts[frame]
+    if not suppressed then return true end
+
+    local alertFrame = suppressed.frame
+    local alpha = suppressed.alpha
+    if not alertFrame or type(alertFrame.SetAlpha) ~= "function" then return false end
+    local ok = pcall(alertFrame.SetAlpha, alertFrame, alpha)
+    if not ok then return false end
+
     suppressedNativeAlerts[frame] = nil
-    if alertFrame and alertFrame.SetAlpha then pcall(alertFrame.SetAlpha, alertFrame, 1) end
+    return true
 end
 
 local function SuppressNativeAlertAlpha(frame)
     local okAlert, alertFrame = pcall(function() return frame and frame.SpellActivationAlert end)
-    if not okAlert then return end
-    if not alertFrame or not alertFrame.SetAlpha then return end
+    if not okAlert or not alertFrame or type(alertFrame.SetAlpha) ~= "function" then return false end
+
+    local existing = suppressedNativeAlerts[frame]
+    if existing and existing.frame == alertFrame then
+        return pcall(alertFrame.SetAlpha, alertFrame, 0)
+    elseif existing and not RestoreNativeAlertAlpha(frame) then
+        return false
+    end
+
+    local alpha = 1
+    local okAlpha, currentAlpha = pcall(alertFrame.GetAlpha, alertFrame)
+    if okAlpha and type(currentAlpha) == "number" and not BCDM:IsSecretValue(currentAlpha) then
+        alpha = currentAlpha
+    end
+
     local ok = pcall(alertFrame.SetAlpha, alertFrame, 0)
-    if ok then suppressedNativeAlerts[frame] = alertFrame end
+    if ok then
+        suppressedNativeAlerts[frame] = { frame = alertFrame, alpha = alpha }
+    end
+    return ok
 end
 
 function BCDM:StartCustomGlow(frame, forceRefresh)
@@ -237,13 +369,29 @@ function BCDM:StartCustomGlow(frame, forceRefresh)
 
     local glowType = glow.Type or "Pixel"
     local state = GetGlowState(frame)
-    if state.glowType == glowType and not forceRefresh then return true end
-    if state.glowType then StopGlowOnOverlay(state.overlay, state.glowType) end
-
-    local overlay = GetGlowOverlay(frame)
+    local overlay, geometry, geometryOK = GetGlowOverlay(frame)
     if not overlay then return false end
-    overlay:Show()
+    if not geometryOK then return state.rendererActive == true end
+
+    local geometryChanged = GlowGeometryChanged(state.geometry, geometry)
+    if state.glowType and state.rendererActive and state.glowType == glowType
+        and not forceRefresh and not geometryChanged then
+        state.geometry = MergeGlowGeometry(state.geometry, geometry)
+        return true
+    end
+
+    if state.glowType and not ReleaseGlowRenderer(frame, state) then
+        RestoreNativeAlertAlpha(frame)
+        return false
+    end
+
+    state.glowType = glowType
+    state.rendererActive = false
+    state.cleanupPending = true
+    activeGlows[frame] = true
+
     local started = RunGlowCall("start", glowType, function()
+        overlay:Show()
         if glowType == "Pixel" then
             local settings = glow.Pixel
             LibCustomGlow.PixelGlow_Start(overlay, settings.Color, settings.Lines, settings.Frequency, settings.Length, settings.Thickness, settings.XOffset, settings.YOffset, settings.Border, "BCDM", 1)
@@ -263,37 +411,40 @@ function BCDM:StartCustomGlow(frame, forceRefresh)
             })
         elseif glowType == "Button" then
             local settings = glow.Button
-            LibCustomGlow.ButtonGlow_Start(overlay, settings.Color, settings.Frequency, 1)
+            local color = settings.UseColor and settings.Color or nil
+            LibCustomGlow.ButtonGlow_Start(overlay, color, settings.Frequency, 1)
         else
             error("unsupported glow type " .. tostring(glowType))
         end
     end)
     if not started then
-        overlay:Hide()
-        state.glowType = nil
-        activeGlows[frame] = nil
+        ReleaseGlowRenderer(frame, state)
         RestoreNativeAlertAlpha(frame)
         return false
     end
 
-    state.glowType = glowType
+    state.rendererActive = true
+    state.cleanupPending = nil
+    state.geometry = MergeGlowGeometry(state.geometry, geometry)
     activeGlows[frame] = true
     return true
 end
 
 function BCDM:StopCustomGlow(frame)
-    if not frame then return end
+    if not frame then return true end
     local state = glowStates[frame]
-    if state and state.glowType then
-        StopGlowOnOverlay(state.overlay, state.glowType)
-        state.glowType = nil
-    end
-    activeGlows[frame] = nil
+    if not state then return true end
+    local stopped = ReleaseGlowRenderer(frame, state)
+    if not stopped then RestoreNativeAlertAlpha(frame) end
+    return stopped
 end
 
 function BCDM:StopAllCustomGlows()
     local targets = {}
     for frame in pairs(activeGlows) do targets[#targets + 1] = frame end
+    for frame, state in pairs(glowStates) do
+        if state.glowType and not activeGlows[frame] then targets[#targets + 1] = frame end
+    end
     for _, frame in ipairs(targets) do self:StopCustomGlow(frame) end
 end
 
@@ -305,42 +456,111 @@ local function HasNativeAlert(frame)
 end
 
 local function RestoreNativeAlert(frame)
-    CancelNativeStart(frame)
-    BCDM:StopCustomGlow(frame)
+    local stopped = BCDM:StopCustomGlow(frame)
+    local restored = RestoreNativeAlertAlpha(frame)
     activeNativeAlerts[frame] = nil
-    RestoreNativeAlertAlpha(frame)
+    return stopped and restored
 end
 
-local function QueueNativeGlow(frame)
-    CancelNativeStart(frame)
-    local timer
-    timer = C_Timer.NewTimer(0, function()
-        if pendingNativeStarts[frame] ~= timer then return end
-        pendingNativeStarts[frame] = nil
-        if not activeNativeAlerts[frame] or not HasNativeAlert(frame) then
-            activeNativeAlerts[frame] = nil
-            BCDM:StopCustomGlow(frame)
-            return
-        end
-        local glow = BCDM:GetCustomGlowSettings()
-        if not glow or not glow.Enabled then
-            RestoreNativeAlert(frame)
-            return
-        end
-        if BCDM:StartCustomGlow(frame) then SuppressNativeAlertAlpha(frame) end
-    end)
-    pendingNativeStarts[frame] = timer
+local function StartNativeGlow(frame)
+    if not activeNativeAlerts[frame] or not HasNativeAlert(frame) then
+        RestoreNativeAlert(frame)
+        return
+    end
+
+    local glow = BCDM:GetCustomGlowSettings()
+    if not glow or not glow.Enabled then
+        RestoreNativeAlert(frame)
+        return
+    end
+
+    if BCDM:StartCustomGlow(frame) then
+        SuppressNativeAlertAlpha(frame)
+    end
 end
 
-local function AdoptActiveNativeAlerts()
+local function CleanupReleasedGlow(frame)
+    if not frame then return true end
+    local tracked = activeNativeAlerts[frame] or activeGlows[frame] or suppressedNativeAlerts[frame]
+    local shouldClearNative = activeNativeAlerts[frame] or cooldownViewerTargets[frame]
+    if not tracked and not shouldClearNative then return true end
+
+    local nativeCleared = not shouldClearNative
+    if not nativeCleared and not HasNativeAlert(frame) then
+        nativeCleared = true
+    end
+
+    -- Cooldown Viewer pool reset hides the row but does not clear the alert manager.
+    local manager = ActionButtonSpellAlertManager
+    if not nativeCleared and manager and type(manager.HideAlert) == "function" then
+        local ok = pcall(manager.HideAlert, manager, frame)
+        nativeCleared = ok and not HasNativeAlert(frame)
+    end
+
+    local stopped = BCDM:StopCustomGlow(frame)
+    local restored = RestoreNativeAlertAlpha(frame)
+    if nativeCleared then activeNativeAlerts[frame] = nil end
+    return nativeCleared and stopped and restored
+end
+
+local function RememberPoolFrame(pool, frame)
+    if not pool or not frame or not BCDM:IsCustomizableCooldownViewerItem(frame) then return end
+    cooldownViewerTargets[frame] = true
+    local frames = knownPoolFrames[pool]
+    if not frames then
+        frames = setmetatable({}, { __mode = "k" })
+        knownPoolFrames[pool] = frames
+    end
+    frames[frame] = true
+end
+
+local function CleanupPoolFrames(pool)
+    local frames = knownPoolFrames[pool]
+    if not frames then return end
+    for frame in pairs(frames) do
+        activePoolFrames[frame] = nil
+        CleanupReleasedGlow(frame)
+    end
+    if ReconcileCooldownViewerGlows then ReconcileCooldownViewerGlows() end
+end
+
+local function HookCooldownViewerPool(pool)
+    if not pool then return end
+    local state = hookedCooldownViewerPools[pool]
+    if not state then
+        state = {}
+        hookedCooldownViewerPools[pool] = state
+    end
+
+    if type(pool.Release) == "function" and not state.Release then
+        local ok = pcall(hooksecurefunc, pool, "Release", function(_, frame)
+            activePoolFrames[frame] = nil
+            CleanupReleasedGlow(frame)
+        end)
+        if ok then state.Release = true end
+    end
+
+    if type(pool.ReleaseAll) == "function" and not state.ReleaseAll then
+        local ok = pcall(hooksecurefunc, pool, "ReleaseAll", function()
+            CleanupPoolFrames(pool)
+        end)
+        if ok then state.ReleaseAll = true end
+    end
+end
+
+local function RememberActiveCooldownViewerFrame(frame)
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers or {}) do
         local viewer = _G[viewerName]
-        if viewer and viewer.itemFramePool then
-            for frame in viewer.itemFramePool:EnumerateActive() do
-                if BCDM:IsCustomizableCooldownViewerItem(frame) and HasNativeAlert(frame) then
-                    activeNativeAlerts[frame] = true
-                    QueueNativeGlow(frame)
+        local pool = viewer and viewer.itemFramePool
+        if pool and type(pool.IsActive) == "function" then
+            local okActive, active = pcall(pool.IsActive, pool, frame)
+            if okActive and not BCDM:IsSecretValue(active) and active == true then
+                activePoolFrames[frame] = true
+                if not (InCombatLockdown and InCombatLockdown()) then
+                    HookCooldownViewerPool(pool)
                 end
+                RememberPoolFrame(pool, frame)
+                return
             end
         end
     end
@@ -352,23 +572,100 @@ local function PrepareCooldownViewerGlowTarget(frame)
     GetGlowOverlay(frame)
 end
 
+ReconcileCooldownViewerGlows = function()
+    if reconcileInProgress then return end
+    reconcileInProgress = true
+
+    local ok, message = pcall(function()
+        local current = setmetatable({}, { __mode = "k" })
+        local glow = BCDM:GetCustomGlowSettings()
+        local enabled = glow and glow.Enabled == true
+
+        for _, viewerName in ipairs(BCDM.CooldownManagerViewers or {}) do
+            local viewer = _G[viewerName]
+            local pool = viewer and viewer.itemFramePool
+            if pool then
+                HookCooldownViewerPool(pool)
+                local okEnum, iterator, invariant, control = pcall(pool.EnumerateActive, pool)
+                if okEnum and type(iterator) == "function" then
+                    for frame in iterator, invariant, control do
+                        if BCDM:IsCustomizableCooldownViewerItem(frame) then
+                            current[frame] = true
+                            activePoolFrames[frame] = true
+                            RememberPoolFrame(pool, frame)
+                            PrepareCooldownViewerGlowTarget(frame)
+
+                            local hasNativeAlert = HasNativeAlert(frame)
+                            if enabled and hasNativeAlert then
+                                activeNativeAlerts[frame] = true
+                                StartNativeGlow(frame)
+                            elseif activeNativeAlerts[frame] then
+                                RestoreNativeAlert(frame)
+                            elseif activeGlows[frame] then
+                                BCDM:StopCustomGlow(frame)
+                                RestoreNativeAlertAlpha(frame)
+                            elseif suppressedNativeAlerts[frame] then
+                                RestoreNativeAlertAlpha(frame)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        for frame in pairs(activePoolFrames) do
+            if not current[frame] then CleanupReleasedGlow(frame) end
+        end
+        for _, frames in pairs(knownPoolFrames) do
+            for frame in pairs(frames) do
+                if not current[frame] and not activePoolFrames[frame] then
+                    CleanupReleasedGlow(frame)
+                end
+            end
+        end
+        activePoolFrames = current
+    end)
+
+    reconcileInProgress = false
+    if not ok then ReportGlowError("reconcile", "Pool", message) end
+end
+
 local function PrepareCooldownViewerGlowTargets()
     if InCombatLockdown and InCombatLockdown() then return end
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers or {}) do
         local viewer = _G[viewerName]
-        if viewer and viewer.itemFramePool then
-            for frame in viewer.itemFramePool:EnumerateActive() do
-                PrepareCooldownViewerGlowTarget(frame)
-            end
-        end
-        if viewer and viewer.RefreshData and not hookedCooldownViewers[viewer] then
-            hookedCooldownViewers[viewer] = true
-            hooksecurefunc(viewer, "RefreshData", function()
-                if InCombatLockdown and InCombatLockdown() then return end
-                for frame in viewer.itemFramePool:EnumerateActive() do
+        local pool = viewer and viewer.itemFramePool
+        if pool then
+            HookCooldownViewerPool(pool)
+            local okEnum, iterator, invariant, control = pcall(pool.EnumerateActive, pool)
+            if okEnum and type(iterator) == "function" then
+                for frame in iterator, invariant, control do
+                    RememberPoolFrame(pool, frame)
                     PrepareCooldownViewerGlowTarget(frame)
                 end
-            end)
+            end
+        end
+
+        if viewer then
+            local hooks = hookedCooldownViewers[viewer]
+            if not hooks then
+                hooks = {}
+                hookedCooldownViewers[viewer] = hooks
+            end
+            if type(viewer.RefreshData) == "function" and not hooks.RefreshData then
+                local ok = pcall(hooksecurefunc, viewer, "RefreshData", function()
+                    PrepareCooldownViewerGlowTargets()
+                    ReconcileCooldownViewerGlows()
+                end)
+                if ok then hooks.RefreshData = true end
+            end
+            if type(viewer.RefreshLayout) == "function" and not hooks.RefreshLayout then
+                local ok = pcall(hooksecurefunc, viewer, "RefreshLayout", function()
+                    PrepareCooldownViewerGlowTargets()
+                    ReconcileCooldownViewerGlows()
+                end)
+                if ok then hooks.RefreshLayout = true end
+            end
         end
     end
 end
@@ -377,54 +674,83 @@ local function EnsureGlowPreparationFrame()
     if glowPreparationFrame then return end
     glowPreparationFrame = CreateFrame("Frame")
     glowPreparationFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    glowPreparationFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    glowPreparationFrame:RegisterEvent("ADDON_LOADED")
     glowPreparationFrame:SetScript("OnEvent", function()
+        if not customGlowHooksSet and not BCDM:SetupCustomGlows() then return end
         PrepareCooldownViewerGlowTargets()
-        AdoptActiveNativeAlerts()
+        ReconcileCooldownViewerGlows()
     end)
 end
 
 function BCDM:RefreshCustomGlows()
     self:SetupCustomGlows()
+    ReconcileCooldownViewerGlows()
+
     local glow = self:GetCustomGlowSettings()
     if not glow or not glow.Enabled then
-        local nativeTargets = {}
-        for frame in pairs(activeNativeAlerts) do nativeTargets[#nativeTargets + 1] = frame end
-        self:StopAllCustomGlows()
-        for _, frame in ipairs(nativeTargets) do RestoreNativeAlert(frame) end
+        local targets = {}
+        for frame in pairs(activeNativeAlerts) do targets[frame] = true end
+        for frame in pairs(activeGlows) do targets[frame] = true end
+        for frame in pairs(suppressedNativeAlerts) do targets[frame] = true end
+        for frame in pairs(targets) do RestoreNativeAlert(frame) end
         return
     end
 
     local targets = {}
-    for frame in pairs(activeGlows) do targets[#targets + 1] = frame end
+    for frame in pairs(activeGlows) do
+        if not cooldownViewerTargets[frame] or activePoolFrames[frame] then
+            targets[#targets + 1] = frame
+        end
+    end
     for _, frame in ipairs(targets) do self:StartCustomGlow(frame, true) end
-    AdoptActiveNativeAlerts()
+    ReconcileCooldownViewerGlows()
 end
 
 function BCDM:SetupCustomGlows()
     if customGlowHooksSet then return true end
-    if not ActionButtonSpellAlertManager then return false end
-    customGlowHooksSet = true
     EnsureGlowPreparationFrame()
+
+    local manager = ActionButtonSpellAlertManager
+    if not manager or type(manager.ShowAlert) ~= "function" or type(manager.HideAlert) ~= "function" then
+        return false
+    end
+
+    local hooks = hookedAlertManagers[manager]
+    if not hooks then
+        hooks = {}
+        hookedAlertManagers[manager] = hooks
+    end
+
+    if not hooks.ShowAlert then
+        local ok = pcall(hooksecurefunc, manager, "ShowAlert", function(_, frame)
+            local activeGlowTarget = GetGlowTarget(frame)
+            if not activeGlowTarget then return end
+
+            local glow = BCDM:GetCustomGlowSettings()
+            if not glow or not glow.Enabled then return end
+            RememberActiveCooldownViewerFrame(activeGlowTarget)
+            activeNativeAlerts[activeGlowTarget] = true
+            StartNativeGlow(activeGlowTarget)
+        end)
+        if ok then hooks.ShowAlert = true end
+    end
+
+    if not hooks.HideAlert then
+        local ok = pcall(hooksecurefunc, manager, "HideAlert", function(_, frame)
+            local activeGlowTarget = GetCooldownViewerChild(frame)
+            if not activeGlowTarget then return end
+            activeNativeAlerts[activeGlowTarget] = nil
+            BCDM:StopCustomGlow(activeGlowTarget)
+            RestoreNativeAlertAlpha(activeGlowTarget)
+            ReconcileCooldownViewerGlows()
+        end)
+        if ok then hooks.HideAlert = true end
+    end
+
+    if not hooks.ShowAlert or not hooks.HideAlert then return false end
+    customGlowHooksSet = true
     PrepareCooldownViewerGlowTargets()
-
-    hooksecurefunc(ActionButtonSpellAlertManager, "ShowAlert", function(_, frame)
-        local activeGlowTarget = GetGlowTarget(frame)
-        if not activeGlowTarget then return end
-
-        local glow = BCDM:GetCustomGlowSettings()
-        if not glow or not glow.Enabled then return end
-        activeNativeAlerts[activeGlowTarget] = true
-        QueueNativeGlow(activeGlowTarget)
-    end)
-
-    hooksecurefunc(ActionButtonSpellAlertManager, "HideAlert", function(_, frame)
-        local activeGlowTarget = GetCooldownViewerChild(frame)
-        if not activeGlowTarget then return end
-        CancelNativeStart(activeGlowTarget)
-        activeNativeAlerts[activeGlowTarget] = nil
-        BCDM:StopCustomGlow(activeGlowTarget)
-        RestoreNativeAlertAlpha(activeGlowTarget)
-    end)
-
+    ReconcileCooldownViewerGlows()
     return true
 end
