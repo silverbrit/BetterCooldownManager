@@ -4,6 +4,58 @@ local runeBars = {}
 local comboPoints = {}
 local essenceTicks = {}
 local resizeTimer = nil
+local tickLayoutKey
+local tickLayoutResource
+local lastReadableMaximum = {}
+
+local RENDER_UNAVAILABLE = 0
+local RENDER_READABLE = 1
+local RENDER_WIDGET = 2
+
+local function ReadValue(value)
+    if BCDM:IsSecretValue(value) then return value, RENDER_WIDGET end
+    if type(value) ~= "number" then return nil, RENDER_UNAVAILABLE end
+    return value, RENDER_READABLE
+end
+
+local function ReadAPI(api, ...)
+    if type(api) ~= "function" then return nil, RENDER_UNAVAILABLE end
+    local ok, value = pcall(api, ...)
+    if not ok then return nil, RENDER_UNAVAILABLE end
+    return ReadValue(value)
+end
+
+local function MergeRenderStates(...)
+    local widget = false
+    for i = 1, select("#", ...) do
+        local state = select(i, ...)
+        if state == RENDER_UNAVAILABLE then return RENDER_UNAVAILABLE end
+        if state == RENDER_WIDGET then widget = true end
+    end
+    return widget and RENDER_WIDGET or RENDER_READABLE
+end
+
+local function ApplyChildBarDirection(bar, direction)
+    if BCDM.ApplyStatusBarDirection then
+        BCDM:ApplyStatusBarDirection(bar, direction)
+    elseif bar and bar.SetReverseFill then
+        bar:SetReverseFill(direction == "LEFT")
+    end
+end
+
+local function HideBars(bars, getBar)
+    for _, value in ipairs(bars) do
+        local bar = getBar and getBar(value) or value
+        if bar then
+            bar:SetScript("OnUpdate", nil)
+            bar:Hide()
+        end
+    end
+end
+
+local function SetBarText(bar, text)
+    if bar.Text and bar.Text.SetText then bar.Text:SetText(text or "") end
+end
 
 local function NudgeSecondaryPowerBar(secondaryPowerBar, xOffset, yOffset)
     local powerBarFrame = _G[secondaryPowerBar]
@@ -63,6 +115,7 @@ local function CreateRuneBars()
         runeBar:SetStatusBarTexture(BCDM.Media.Foreground)
         runeBar:SetMinMaxValues(0, 1)
         runeBar:SetValue(0)
+        ApplyChildBarDirection(runeBar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
         runeBars[i] = runeBar
     end
 end
@@ -83,6 +136,7 @@ local function CreateComboPoints(maxPower)
         bar:SetStatusBarTexture(BCDM.Media.Foreground)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
+        ApplyChildBarDirection(bar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
         comboPoints[i] = bar
     end
 end
@@ -104,6 +158,7 @@ local function CreateEssenceTicks(maxEssence)
         bar:SetStatusBarTexture(BCDM.Media.Foreground)
         bar:SetMinMaxValues(0, 1)
         bar:SetValue(0)
+        ApplyChildBarDirection(bar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
 
         essenceTicks[i] = {
             bar = bar,
@@ -126,6 +181,7 @@ local function LayoutRuneBars()
 
         runeBar:ClearAllPoints()
         runeBar:SetSize(runeWidth, powerBarHeight)
+        ApplyChildBarDirection(runeBar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
 
         if i == 1 then
             runeBar:SetPoint("LEFT", secondaryBar, "LEFT", 1, 0)
@@ -149,6 +205,7 @@ local function LayoutComboPoints()
         local bar = comboPoints[i]
         bar:ClearAllPoints()
         bar:SetHeight(height)
+        ApplyChildBarDirection(bar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
 
         if i == count then
             bar:SetPoint("TOPLEFT", comboPoints[i-1], "TOPRIGHT", 0, 0)
@@ -179,6 +236,7 @@ local function LayoutEssenceTicks()
 
         bar:ClearAllPoints()
         bar:SetSize(barWidth, powerBarHeight)
+        ApplyChildBarDirection(bar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
 
         if i == 1 then
             bar:SetPoint("LEFT", parent, "LEFT", 1, 0)
@@ -270,304 +328,430 @@ local function UpdateRuneDisplay(descriptor)
     end
 end
 
-local function UpdateComboDisplay(descriptor)
-    local powerCurrent = UnitPower("player", Enum.PowerType.ComboPoints) or 0
-    local powerMax = UnitPowerMax("player", Enum.PowerType.ComboPoints) or 0
-    local charged = GetUnitChargedPowerPoints("player")
+local function GetChargedPowerPointLookup()
     local chargedLookup = {}
-
-    if charged then
-        for _, index in ipairs(charged) do
-            chargedLookup[index] = true
-        end
+    if type(GetUnitChargedPowerPoints) ~= "function" then return chargedLookup end
+    local ok, charged = pcall(GetUnitChargedPowerPoints, "player")
+    if not ok or BCDM:IsSecretValue(charged) or type(charged) ~= "table" then return chargedLookup end
+    for _, index in ipairs(charged) do
+        local point, state = ReadValue(index)
+        if state == RENDER_READABLE then chargedLookup[point] = true end
     end
+    return chargedLookup
+end
 
-    if #comboPoints ~= powerMax then
-        CreateComboPoints(powerMax)
+local function UpdateComboDisplay(descriptor, powerCurrent, currentState, powerMax, maxState)
+    local state = MergeRenderStates(currentState, maxState)
+    if state == RENDER_UNAVAILABLE then return state end
+
+    local maxPoints = powerMax
+    if maxState == RENDER_WIDGET then
+        maxPoints = lastReadableMaximum.COMBO_POINTS or #comboPoints
+    else
+        lastReadableMaximum.COMBO_POINTS = powerMax
+    end
+    if not maxPoints or maxPoints <= 0 then return state end
+
+    if #comboPoints ~= maxPoints then
+        CreateComboPoints(maxPoints)
         LayoutComboPoints()
+    end
+    for _, bar in ipairs(comboPoints) do
+        ApplyChildBarDirection(bar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
     end
 
     local powerBarColourR, powerBarColourG, powerBarColourB, powerBarColourA = GetPowerBarColor(descriptor)
     local chargedComboPointColour = BCDM.db.profile.General.Colours.SecondaryPower["CHARGED_COMBO_POINTS"]
+    local chargedLookup = GetChargedPowerPointLookup()
 
-    for i = 1, powerMax do
+    for i = 1, maxPoints do
         local bar = comboPoints[i]
-
-        if i <= powerCurrent then
-            bar:SetValue(1)
-            if chargedLookup[i] then
-                bar:SetStatusBarColor(GetPowerBarColor(descriptor, chargedComboPointColour))
-            else
-                bar:SetStatusBarColor(powerBarColourR, powerBarColourG, powerBarColourB, powerBarColourA or 1)
-            end
-            bar:Show()
+        bar:SetMinMaxValues(i - 1, i)
+        bar:SetValue(powerCurrent)
+        if chargedLookup[i] then
+            bar:SetStatusBarColor(GetPowerBarColor(descriptor, chargedComboPointColour))
         else
-            bar:SetValue(0)
-            bar:Hide()
+            bar:SetStatusBarColor(powerBarColourR, powerBarColourG, powerBarColourB, powerBarColourA or 1)
         end
+        bar:Show()
+    end
+    return state
+end
+
+local function HideEssenceBars()
+    for _, tick in ipairs(essenceTicks) do
+        tick.bar:SetScript("OnUpdate", nil)
+        tick.bar:Hide()
     end
 end
 
 local function GetEssencePartialProgress()
-    local displayMod = UnitPowerDisplayMod(Enum.PowerType.Essence) or 0
-    if displayMod <= 0 then
-        return 0
+    local displayMod, displayState = ReadAPI(UnitPowerDisplayMod, Enum.PowerType.Essence)
+    if displayState ~= RENDER_READABLE or displayMod <= 0 then
+        return nil, displayState
     end
 
-    local partialPower = UnitPartialPower("player", Enum.PowerType.Essence) or 0
-    return math.max(0, math.min(1, partialPower / displayMod))
+    local partialPower, partialState = ReadAPI(UnitPartialPower, "player", Enum.PowerType.Essence)
+    if partialState ~= RENDER_READABLE then return nil, partialState end
+    return math.max(0, math.min(1, partialPower / displayMod)), RENDER_READABLE
 end
 
-local function UpdateEssenceDisplay(descriptor)
+local function UpdateEssenceDisplay(descriptor, powerCurrent, currentState, powerMax, maxState)
     local parent = BCDM.SecondaryPowerBar
     if not parent or #essenceTicks == 0 then return end
 
-    local powerCurrent = UnitPower("player", Enum.PowerType.Essence) or 0
-    local partialProgress = GetEssencePartialProgress()
+    local partialProgress, partialState = GetEssencePartialProgress()
+    if currentState ~= RENDER_READABLE or maxState ~= RENDER_READABLE or partialState ~= RENDER_READABLE then
+        HideEssenceBars()
+        return
+    end
+
     local r, g, b, a = GetPowerBarColor(descriptor)
     local rechargeColour = BCDM.db.profile.General.Colours.SecondaryPower["ESSENCE_RECHARGE"]
+    local maxPoints = powerMax
+    lastReadableMaximum.ESSENCE = maxPoints
 
     for i = 1, #essenceTicks do
         local tick = essenceTicks[i]
         local bar = tick.bar
-
+        ApplyChildBarDirection(bar, BCDM.db.profile.SecondaryPowerBar.FillDirection)
         bar:Show()
         bar:SetScript("OnUpdate", nil)
+        bar:SetMinMaxValues(i - 1, i)
+        bar:SetValue(powerCurrent)
 
         if i <= powerCurrent then
-            bar:SetValue(1)
             bar:SetStatusBarColor(r, g, b, a)
-        elseif i == powerCurrent + 1 and powerCurrent < #essenceTicks then
+        elseif i == powerCurrent + 1 and powerCurrent < maxPoints then
+            bar:SetMinMaxValues(0, 1)
             bar:SetValue(partialProgress)
             bar:SetStatusBarColor(GetPowerBarColor(descriptor, rechargeColour))
         else
-            bar:SetValue(0)
             bar:SetStatusBarColor(0, 0, 0, 1)
         end
     end
 end
 
-local function ReadResourceNumber(value)
-    if BCDM:IsSecretValue(value) or type(value) ~= "number" then return nil end
-    return value
-end
-
 local function GetPlayerAuraBySpellID(spellId)
-    if not C_UnitAuras or not C_UnitAuras.GetPlayerAuraBySpellID then return nil, false end
+    if not C_UnitAuras or not C_UnitAuras.GetPlayerAuraBySpellID then return nil, RENDER_UNAVAILABLE end
     local ok, auraData = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
-    if not ok or BCDM:IsSecretValue(auraData) then return nil, false end
-    return auraData, true
+    if not ok or BCDM:IsSecretValue(auraData) then return nil, RENDER_UNAVAILABLE end
+    return auraData, RENDER_READABLE
 end
 
 local function GetAuraStacks(spellId)
-    local auraData, readable = GetPlayerAuraBySpellID(spellId)
-    if not readable then return nil, false end
-    if auraData == nil then return 0, true end
-    if type(auraData) ~= "table" then return nil, false end
+    local auraData, auraState = GetPlayerAuraBySpellID(spellId)
+    if auraState == RENDER_UNAVAILABLE then return nil, false, false end
+    if auraData == nil then return 0, true, false end
+    if type(auraData) ~= "table" then return nil, false, false end
     local ok, applications = pcall(function() return auraData.applications end)
-    if not ok or BCDM:IsSecretValue(applications) then return nil, false end
-    if applications == nil then return 0, true end
-    applications = ReadResourceNumber(applications)
-    return applications, applications ~= nil
+    if not ok then return nil, false, false end
+    if applications == nil then return 0, true, false end
+    local value, state = ReadValue(applications)
+    return value, state == RENDER_READABLE, state == RENDER_WIDGET
 end
 
 local function IsInMetamorphosis(spellId)
-    local auraData, readable = GetPlayerAuraBySpellID(spellId)
-    if not readable then return nil, false end
-    return auraData ~= nil, true
+    local auraData, auraState = GetPlayerAuraBySpellID(spellId)
+    if auraState == RENDER_UNAVAILABLE then return nil, false, false end
+    return auraData ~= nil, true, false
 end
 
 local function GetSpellCharges(spellId)
-    if not C_Spell or not C_Spell.GetSpellCastCount then return nil, false end
+    if not C_Spell or not C_Spell.GetSpellCastCount then return nil, false, false end
     local ok, charges = pcall(C_Spell.GetSpellCastCount, spellId)
-    if not ok then return nil, false end
-    if BCDM:IsSecretValue(charges) then return charges, false, true end
-    charges = ReadResourceNumber(charges)
-    return charges, charges ~= nil
+    if not ok then return nil, false, false end
+    local value, state = ReadValue(charges)
+    return value, state == RENDER_READABLE, state == RENDER_WIDGET
+end
+
+local function GetSpellMaximum(spellId, fallback)
+    if C_Spell and C_Spell.GetSpellMaxCumulativeAuraApplications then
+        return ReadAPI(C_Spell.GetSpellMaxCumulativeAuraApplications, spellId)
+    end
+    return ReadValue(fallback)
+end
+
+local function GetPowerValue(powerType, unmodified)
+    return ReadAPI(UnitPower, "player", powerType, unmodified == true)
+end
+
+local function GetPowerMaximum(powerType)
+    return ReadAPI(UnitPowerMax, "player", powerType)
+end
+
+local function GetHealthMaximum()
+    return ReadAPI(UnitHealthMax, "player")
+end
+
+local function ReaderState(readable, widget)
+    if widget then return RENDER_WIDGET end
+    if readable then return RENDER_READABLE end
+    return RENDER_UNAVAILABLE
+end
+
+local function GetDevourerValues(descriptor)
+    local inMetamorphosis, auraReadable, auraWidget = IsInMetamorphosis(descriptor.metamorphosisAuraID)
+    local auraState = ReaderState(auraReadable, auraWidget)
+    if auraState ~= RENDER_READABLE then return nil, nil, auraState end
+
+    local sourceSpellID = inMetamorphosis and descriptor.transformedSourceSpellID or descriptor.sourceSpellID
+    local current, currentReadable, currentWidget = GetAuraStacks(sourceSpellID)
+    local currentState = ReaderState(currentReadable, currentWidget)
+    local maximum, maximumState
+    if inMetamorphosis then
+        maximum, maximumState = ReadAPI(GetCollapsingStarCost)
+    else
+        maximum, maximumState = GetSpellMaximum(descriptor.maximumSpellID, descriptor.maximum)
+    end
+    return current, maximum, MergeRenderStates(currentState, maximumState), sourceSpellID
 end
 
 BCDM._SecondaryResourceReaders = {
     GetAuraStacks = GetAuraStacks,
     IsInMetamorphosis = IsInMetamorphosis,
     GetSpellCharges = GetSpellCharges,
+    GetSpellMaximum = function(spellId, fallback)
+        local value, state = GetSpellMaximum(spellId, fallback)
+        return value, state == RENDER_READABLE, state == RENDER_WIDGET
+    end,
+    GetDevourerValues = GetDevourerValues,
 }
 
 local RESOURCE_HANDLERS = {}
 
-local function SetStandardValue(descriptor, bar)
-    local current = UnitPower("player", descriptor.powerType) or 0
-    local maximum = UnitPowerMax("player", descriptor.powerType) or 0
+local function SetResourceStatus(bar, current, maximum)
     bar.Status:SetMinMaxValues(0, maximum)
     bar.Status:SetValue(current)
     bar.Status:Show()
-    return current, maximum, tostring(current)
+end
+
+local function ReadableText(current, maximum, fractional)
+    if fractional then return string.format("%.1f", current / 10) end
+    return tostring(current)
+end
+
+local function SetStandardValue(descriptor, bar)
+    local current, currentState = GetPowerValue(descriptor.powerType)
+    local maximum, maximumState = GetPowerMaximum(descriptor.powerType)
+    local state = MergeRenderStates(currentState, maximumState)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    SetResourceStatus(bar, current, maximum)
+    return current, maximum, state, state == RENDER_READABLE and ReadableText(current, maximum) or nil
 end
 
 RESOURCE_HANDLERS.STANDARD = SetStandardValue
 RESOURCE_HANDLERS.AURA_STACKS = function(descriptor, bar)
-    local current, readable = GetAuraStacks(descriptor.sourceSpellID)
-    if not readable then return nil end
-    bar.Status:SetMinMaxValues(0, descriptor.maximum)
-    bar.Status:SetValue(current)
-    bar.Status:Show()
-    return current, descriptor.maximum, tostring(current)
+    local current, readable, widget = GetAuraStacks(descriptor.sourceSpellID)
+    local maximum, maximumState = GetSpellMaximum(descriptor.maximumSpellID, descriptor.maximum)
+    local state = MergeRenderStates(ReaderState(readable, widget), maximumState)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    SetResourceStatus(bar, current, maximum)
+    return current, maximum, state, state == RENDER_READABLE and ReadableText(current, maximum) or nil
 end
 RESOURCE_HANDLERS.SPELL_CHARGES = function(descriptor, bar)
-    local current, readable, secret = GetSpellCharges(descriptor.sourceSpellID)
-    if secret then
-        bar.Status:SetMinMaxValues(0, descriptor.maximum)
-        bar.Status:SetValue(current)
-        bar.Status:Show()
-        return nil, nil, "", nil, true
-    end
-    if not readable then return nil end
-    bar.Status:SetMinMaxValues(0, descriptor.maximum)
-    bar.Status:SetValue(current)
-    bar.Status:Show()
-    return current, descriptor.maximum, tostring(current)
+    local current, readable, widget = GetSpellCharges(descriptor.sourceSpellID)
+    local state = ReaderState(readable, widget)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    SetResourceStatus(bar, current, descriptor.maximum)
+    return current, descriptor.maximum, state, state == RENDER_READABLE and ReadableText(current, descriptor.maximum) or nil
 end
 RESOURCE_HANDLERS.DEVOURER_SOUL = function(descriptor, bar)
-    local hasSoulGlutton = C_SpellBook.IsSpellKnown(descriptor.soulGluttonSpellID)
-    local inMetamorphosis, auraReadable = IsInMetamorphosis(descriptor.metamorphosisAuraID)
-    local current, chargesReadable = GetSpellCharges(descriptor.sourceSpellID)
-    if not auraReadable or not chargesReadable then return nil end
-    local maximum = inMetamorphosis and 40 or (hasSoulGlutton and 35 or 50)
-    bar.Status:SetMinMaxValues(0, maximum)
-    bar.Status:SetValue(current)
-    bar.Status:Show()
-    return current, maximum, tostring(current)
+    local current, maximum, state = GetDevourerValues(descriptor)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    SetResourceStatus(bar, current, maximum)
+    return current, maximum, state, state == RENDER_READABLE and ReadableText(current, maximum) or nil
 end
 RESOURCE_HANDLERS.SOUL_SHARDS = function(descriptor, bar)
-    local current, maximum, text
+    local current, currentState = GetPowerValue(descriptor.powerType, descriptor.fractional)
+    local maximum, maximumState
     if descriptor.fractional then
-        current, maximum = UnitPower("player", descriptor.powerType, true) or 0, 50
-        text = string.format("%.1f", current / 10)
+        maximum, maximumState = 50, RENDER_READABLE
     else
-        current = UnitPower("player", descriptor.powerType, false) or 0
-        maximum = UnitPowerMax("player", descriptor.powerType) or 0
-        text = tostring(current)
+        maximum, maximumState = GetPowerMaximum(descriptor.powerType)
     end
-    bar.Status:SetMinMaxValues(0, maximum)
-    bar.Status:SetValue(current)
-    bar.Status:Show()
-    return current, maximum, text
+    local state = MergeRenderStates(currentState, maximumState)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    SetResourceStatus(bar, current, maximum)
+    return current, maximum, state, state == RENDER_READABLE and ReadableText(current, maximum, descriptor.fractional) or nil
 end
 RESOURCE_HANDLERS.COMBO_POINTS = function(descriptor, bar)
-    local current = UnitPower("player", descriptor.powerType) or 0
-    local maximum = UnitPowerMax("player", descriptor.powerType) or 0
-    bar.Status:SetMinMaxValues(0, maximum)
-    bar.Status:SetValue(0)
-    UpdateComboDisplay(descriptor)
-    bar.Status:Show()
-    return current, maximum, tostring(current)
+    local current, currentState = GetPowerValue(descriptor.powerType)
+    local maximum, maximumState = GetPowerMaximum(descriptor.powerType)
+    local state = MergeRenderStates(currentState, maximumState)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    SetResourceStatus(bar, current, maximum)
+    UpdateComboDisplay(descriptor, current, currentState, maximum, maximumState)
+    return current, maximum, state, state == RENDER_READABLE and ReadableText(current, maximum) or nil
 end
-RESOURCE_HANDLERS.ESSENCE = function(descriptor, bar)
-    local current = UnitPower("player", descriptor.powerType) or 0
-    local maximum = UnitPowerMax("player", descriptor.powerType) or 0
-    UpdateEssenceDisplay(descriptor)
-    bar.Status:SetMinMaxValues(0, maximum)
-    bar.Status:SetValue(current)
-    bar.Status:Show()
-    return current, maximum, tostring(current)
+RESOURCE_HANDLERS.ESSENCE = function(descriptor, bar, settings)
+    local current, currentState = GetPowerValue(descriptor.powerType)
+    local maximum, maximumState = GetPowerMaximum(descriptor.powerType)
+    local state = MergeRenderStates(currentState, maximumState)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    if settings.HideTicks then
+        HideEssenceBars()
+    else
+        UpdateEssenceDisplay(descriptor, current, currentState, maximum, maximumState)
+    end
+    SetResourceStatus(bar, current, maximum)
+    return current, maximum, state, state == RENDER_READABLE and ReadableText(current, maximum) or nil
 end
-RESOURCE_HANDLERS.RUNES = function(descriptor, bar)
+RESOURCE_HANDLERS.RUNES = function(descriptor, bar, settings)
+    if settings.HideTicks then
+        HideBars(runeBars)
+        local current, state = GetPowerValue(descriptor.powerType)
+        if state == RENDER_UNAVAILABLE then return nil, nil, state end
+        SetResourceStatus(bar, current, 6)
+        return current, 6, state, state == RENDER_READABLE and ReadableText(current, 6) or nil
+    end
     bar.Status:Hide()
     UpdateRuneDisplay(descriptor)
-    return 0, descriptor.tickCount or 6, ""
+    return 0, 6, RENDER_READABLE, ""
 end
 RESOURCE_HANDLERS.STAGGER = function(descriptor, bar, settings)
-    BCDM:ClearTicks()
-    local current = UnitStagger("player") or 0
-    local maximum = UnitHealthMax("player") or 0
-    local percentage = maximum > 0 and (current / maximum) * 100 or 0
-    bar.Status:SetMinMaxValues(0, maximum)
-    bar.Status:SetValue(current)
+    if BCDM.ClearTicks then BCDM:ClearTicks() end
+    tickLayoutKey = nil
+    tickLayoutResource = nil
+    local current, currentState = ReadAPI(UnitStagger, "player")
+    local maximum, maximumState = GetHealthMaximum()
+    local state = MergeRenderStates(currentState, maximumState)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    SetResourceStatus(bar, current, maximum)
+    if state == RENDER_WIDGET then
+        bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor))
+        return current, maximum, state
+    end
+
     if settings.ColourByState then
         local colours = BCDM.db.profile.General.Colours.SecondaryPower.STAGGER_COLOURS
+        local percentage = maximum > 0 and (current / maximum) * 100 or 0
         local stateColour = percentage < 30 and colours.LIGHT or percentage < 60 and colours.MODERATE or colours.HEAVY
         bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor, stateColour))
     else
         bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor))
     end
-    bar.Status:Show()
     local text = AbbreviateLargeNumbers(current)
     if settings.Text.ShowStaggerDPS and current > 0 then
         text = text .. " (" .. AbbreviateLargeNumbers(current / 20) .. " / 0.5s)"
     end
-    return current, maximum, text, true
+    return current, maximum, state, text, true
 end
 
 local function HideInactiveResourceDisplays(kind)
-    if kind ~= "RUNES" then
-        for _, runeBar in ipairs(runeBars) do
-            runeBar:SetScript("OnUpdate", nil)
-            runeBar:Hide()
-        end
-    end
-    if kind ~= "COMBO_POINTS" then
-        for _, comboPoint in ipairs(comboPoints) do comboPoint:Hide() end
-    end
-    if kind ~= "ESSENCE" then
-        for _, essenceTick in ipairs(essenceTicks) do
-            essenceTick.bar:SetScript("OnUpdate", nil)
-            essenceTick.bar:Hide()
-        end
-    end
+    if kind ~= "RUNES" then HideBars(runeBars) end
+    if kind ~= "COMBO_POINTS" then HideBars(comboPoints) end
+    if kind ~= "ESSENCE" then HideBars(essenceTicks, function(value) return value.bar end) end
+end
+
+local function HideAllResourceDisplays()
+    HideInactiveResourceDisplays(nil)
+    tickLayoutKey = nil
+    tickLayoutResource = nil
+    if BCDM.ClearTicks and BCDM.SecondaryPowerBar then BCDM:ClearTicks() end
 end
 
 local function UpdatePowerValues()
     local descriptor = BCDM:GetCurrentSecondaryResource()
     local bar = BCDM.SecondaryPowerBar
     local settings = BCDM.db.profile.SecondaryPowerBar
-    if not descriptor then if bar then bar:Hide() end return end
-    if not bar then return end
-    local handler = RESOURCE_HANDLERS[descriptor.kind]
-    if not handler then bar:Hide() return end
-    HideInactiveResourceDisplays(descriptor.kind)
-    local current, maximum, text, colourApplied, renderedSecretValue = handler(descriptor, bar, settings)
-    if renderedSecretValue then
-        if not colourApplied then bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor)) end
-        bar.Text:SetText("")
-        bar:Show()
-        return
+    if not descriptor then
+        HideAllResourceDisplays()
+        if bar then
+            bar.Status:Hide()
+            SetBarText(bar, "")
+            bar:Hide()
+        end
+        return RENDER_UNAVAILABLE
     end
-    if current == nil then
+    if not bar then return RENDER_UNAVAILABLE end
+    local handler = RESOURCE_HANDLERS[descriptor.kind]
+    if not handler then
+        HideAllResourceDisplays()
         bar.Status:Hide()
-        bar.Text:SetText("")
+        SetBarText(bar, "")
         bar:Hide()
-        return
+        return RENDER_UNAVAILABLE
+    end
+
+    HideInactiveResourceDisplays(descriptor.kind)
+    local current, maximum, state, text, colourApplied = handler(descriptor, bar, settings)
+    if state == RENDER_UNAVAILABLE then
+        bar.Status:Hide()
+        SetBarText(bar, "")
+        bar:Hide()
+        return state
     end
     if not colourApplied then bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor)) end
-    if settings.Text.Mode and settings.Text.Mode ~= "AUTO" then
+    if state == RENDER_READABLE and settings.Text and settings.Text.Mode and settings.Text.Mode ~= "AUTO" then
         text = BCDM:FormatResourceText(current, maximum, settings.Text.Mode)
+    elseif state == RENDER_WIDGET then
+        text = nil
     end
-    bar.Text:SetText(text or "")
+    SetBarText(bar, text)
     bar:Show()
+    return state
+end
+
+local function ClearTickLayout()
+    if tickLayoutKey ~= false and BCDM.ClearTicks then BCDM:ClearTicks() end
+    tickLayoutKey = false
+    tickLayoutResource = nil
+end
+
+local function SetTickLayout(key, count, resource)
+    if not count or count <= 1 or not BCDM.CreateTicks then
+        ClearTickLayout()
+        return
+    end
+    if tickLayoutKey == key then return end
+    BCDM:CreateTicks(count)
+    tickLayoutKey = key
+    tickLayoutResource = resource or key
+end
+
+local function GetTickMaximum(descriptor)
+    if descriptor.kind == "DEVOURER_SOUL" then
+        local _, maximum, state = GetDevourerValues(descriptor)
+        return maximum, state
+    elseif descriptor.maximumSpellID then
+        return GetSpellMaximum(descriptor.maximumSpellID, descriptor.maximum)
+    elseif descriptor.kind == "ESSENCE" or descriptor.kind == "STANDARD"
+        or descriptor.kind == "COMBO_POINTS" then
+        return GetPowerMaximum(descriptor.powerType)
+    end
+    return descriptor.tickCount, descriptor.tickCount and RENDER_READABLE or RENDER_UNAVAILABLE
 end
 
 local function CreateTicksBasedOnPowerType()
     local settings = BCDM.db.profile.SecondaryPowerBar
     local descriptor = BCDM:GetCurrentSecondaryResource()
-    BCDM:ClearTicks()
-    if settings.HideTicks or not descriptor then return end
-    if descriptor.kind == "RUNES" then
-        CreateRuneBars()
-        LayoutRuneBars()
-        UpdateRuneDisplay(descriptor)
-    elseif descriptor.kind == "ESSENCE" then
-        local maximum = UnitPowerMax("player", descriptor.powerType) or 0
-        CreateEssenceTicks(maximum)
-        LayoutEssenceTicks()
-        UpdateEssenceDisplay(descriptor)
-        BCDM:CreateTicks(maximum)
-    elseif descriptor.kind == "DEVOURER_SOUL" then
-        BCDM:CreateTicks(C_SpellBook.IsSpellKnown(descriptor.soulGluttonSpellID) and 7 or 10)
-    elseif descriptor.tickCount then
-        BCDM:CreateTicks(descriptor.tickCount)
-    elseif descriptor.kind ~= "STAGGER" and descriptor.powerType ~= Enum.PowerType.Mana then
-        local maximum = UnitPowerMax("player", descriptor.powerType) or 0
-        if maximum > 0 then BCDM:CreateTicks(maximum) end
+    if settings.HideTicks or not descriptor then
+        ClearTickLayout()
+        return UpdatePowerValues()
     end
+    if tickLayoutResource and tickLayoutResource ~= descriptor.kind then ClearTickLayout() end
+    if descriptor.kind == "RUNES" then
+        if #runeBars == 0 then CreateRuneBars() end
+        LayoutRuneBars()
+        SetTickLayout("RUNES", descriptor.tickCount or 6, descriptor.kind)
+    elseif descriptor.kind == "ESSENCE" then
+        local maximum, state = GetPowerMaximum(descriptor.powerType)
+        if state == RENDER_READABLE and maximum > 0 then
+            if #essenceTicks ~= maximum then CreateEssenceTicks(maximum) end
+            LayoutEssenceTicks()
+            SetTickLayout("ESSENCE:" .. maximum, maximum, descriptor.kind)
+        end
+    elseif descriptor.powerType == Enum.PowerType.Mana then
+        ClearTickLayout()
+    else
+        local maximum, state = GetTickMaximum(descriptor)
+        if state == RENDER_READABLE and maximum > 0 then
+            local count = descriptor.kind == "DEVOURER_SOUL" and math.ceil(maximum / 5) or maximum
+            SetTickLayout(descriptor.kind .. ":" .. count, count, descriptor.kind)
+        end
+    end
+    return UpdatePowerValues()
 end
 
 local function UpdateBarWidth()
@@ -594,7 +778,7 @@ local function UpdateBarWidth()
             LayoutComboPoints()
         elseif descriptor and descriptor.kind == "ESSENCE" and #essenceTicks > 0 then
             LayoutEssenceTicks()
-            UpdateEssenceDisplay(descriptor)
+            UpdatePowerValues()
         end
 
         resizeTimer = nil
@@ -613,37 +797,98 @@ local function OnSecondaryPowerBarSizeChanged()
         LayoutComboPoints()
     elseif descriptor and descriptor.kind == "ESSENCE" and #essenceTicks > 0 then
         LayoutEssenceTicks()
-        UpdateEssenceDisplay(descriptor)
+        UpdatePowerValues()
     end
 end
 
+local RESOURCE_EVENTS = {
+    "UNIT_POWER_UPDATE",
+    "UNIT_POWER_FREQUENT",
+    "UNIT_POWER_POINT_CHARGE",
+    "UNIT_MAXPOWER",
+    "UNIT_HEALTH",
+    "UNIT_MAXHEALTH",
+    "UNIT_ABSORB_AMOUNT_CHANGED",
+    "RUNE_POWER_UPDATE",
+    "RUNE_TYPE_UPDATE",
+    "UNIT_AURA",
+}
+
+local function SetResourceEventRegistration(secondaryPowerBar, enabled)
+    if enabled then
+        secondaryPowerBar:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
+        secondaryPowerBar:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
+        secondaryPowerBar:RegisterUnitEvent("UNIT_POWER_POINT_CHARGE", "player")
+        secondaryPowerBar:RegisterUnitEvent("UNIT_MAXPOWER", "player")
+        secondaryPowerBar:RegisterUnitEvent("UNIT_HEALTH", "player")
+        secondaryPowerBar:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
+        secondaryPowerBar:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+        secondaryPowerBar:RegisterEvent("RUNE_POWER_UPDATE")
+        secondaryPowerBar:RegisterEvent("RUNE_TYPE_UPDATE")
+        secondaryPowerBar:RegisterUnitEvent("UNIT_AURA", "player")
+    else
+        for _, event in ipairs(RESOURCE_EVENTS) do secondaryPowerBar:UnregisterEvent(event) end
+    end
+end
+
+local function IsResourceEvent(event)
+    for _, resourceEvent in ipairs(RESOURCE_EVENTS) do
+        if event == resourceEvent then return true end
+    end
+    return false
+end
+
 local function OnSecondaryPowerBarEvent(self, event, ...)
+    if event == "PLAYER_SPECIALIZATION_CHANGED" then
+        local unit = ...
+        if unit and unit ~= "player" then return end
+        BCDM:UpdateSecondaryPowerBar()
+        return
+    elseif event == "PLAYER_ENTERING_WORLD" or event == "UPDATE_SHAPESHIFT_FORM"
+        or event == "PLAYER_TALENT_UPDATE" then
+        BCDM:UpdateSecondaryPowerBar()
+        return
+    end
+
     if event == "RUNE_POWER_UPDATE" or event == "RUNE_TYPE_UPDATE" then
         local descriptor = BCDM:GetCurrentSecondaryResource()
-        if descriptor and descriptor.kind == "RUNES" then
-            UpdateRuneDisplay(descriptor)
+        if not descriptor then
+            if self then SetResourceEventRegistration(self, false) end
+            UpdatePowerValues()
+        elseif descriptor.kind == "RUNES" then
+            if BCDM.db.profile.SecondaryPowerBar.HideTicks then
+                UpdatePowerValues()
+            else
+                UpdateRuneDisplay(descriptor)
+            end
         end
         return
     end
 
-    if event == "UNIT_AURA" then
-        UpdatePowerValues()
-        return
-    elseif event == "PLAYER_SPECIALIZATION_CHANGED" then
-        local unit = ...
-        if unit and unit ~= "player" then return end
-    elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_MAXPOWER" or event == "UNIT_HEALTH"
-        or event == "UNIT_MAXHEALTH" or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
+    if event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT"
+        or event == "UNIT_POWER_POINT_CHARGE" or event == "UNIT_MAXPOWER"
+        or event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH"
+        or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
         local unit = ...
         if unit and unit ~= "player" then return end
     end
 
-    if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED"
-        or event == "UPDATE_SHAPESHIFT_FORM" then
-        BCDM:UpdateSecondaryPowerBar()
+    if IsResourceEvent(event) and not BCDM:GetCurrentSecondaryResource() then
+        if self then SetResourceEventRegistration(self, false) end
+        UpdatePowerValues()
+        return
+    end
+
+    if event == "UNIT_AURA" then
+        if BCDM.db.profile.SecondaryPowerBar.HideTicks then
+            UpdatePowerValues()
+        else
+            CreateTicksBasedOnPowerType()
+        end
         return
     elseif event == "UNIT_MAXPOWER" then
         CreateTicksBasedOnPowerType()
+        return
     end
 
     UpdatePowerValues()
@@ -652,17 +897,11 @@ end
 BCDM._SecondaryPowerBarOnEvent = OnSecondaryPowerBarEvent
 
 local function RegisterSecondaryPowerBarEvents(secondaryPowerBar)
-    secondaryPowerBar:RegisterEvent("UNIT_POWER_UPDATE")
-    secondaryPowerBar:RegisterEvent("UNIT_MAXPOWER")
-    secondaryPowerBar:RegisterEvent("UNIT_HEALTH")
-    secondaryPowerBar:RegisterEvent("UNIT_MAXHEALTH")
-    secondaryPowerBar:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
     secondaryPowerBar:RegisterEvent("PLAYER_ENTERING_WORLD")
     secondaryPowerBar:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     secondaryPowerBar:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
-    secondaryPowerBar:RegisterEvent("RUNE_POWER_UPDATE")
-    secondaryPowerBar:RegisterEvent("RUNE_TYPE_UPDATE")
-    secondaryPowerBar:RegisterUnitEvent("UNIT_AURA", "player")
+    secondaryPowerBar:RegisterEvent("PLAYER_TALENT_UPDATE")
+    SetResourceEventRegistration(secondaryPowerBar, BCDM:GetCurrentSecondaryResource() ~= nil)
     secondaryPowerBar:SetScript("OnEvent", OnSecondaryPowerBarEvent)
     secondaryPowerBar.Status:SetScript("OnSizeChanged", OnSecondaryPowerBarSizeChanged)
 end
@@ -750,10 +989,10 @@ function BCDM:CreateSecondaryPowerBar()
 
     if secondaryPowerBarDB.Enabled then
         RegisterSecondaryPowerBarEvents(secondaryPowerBar)
-        UpdatePowerValues()
-        CreateTicksBasedOnPowerType()
+        local renderState = UpdatePowerValues()
+        renderState = CreateTicksBasedOnPowerType() or renderState
         NudgeSecondaryPowerBar("BCDM_SecondaryPowerBar", -0.1, 0)
-        if BCDM:GetCurrentSecondaryResource() then
+        if renderState ~= RENDER_UNAVAILABLE and BCDM:GetCurrentSecondaryResource() then
             secondaryPowerBar:Show()
         else
             secondaryPowerBar:Hide()
@@ -775,7 +1014,11 @@ function BCDM:UpdateSecondaryPowerBar()
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize
 
     if not descriptor then
-        if BCDM.SecondaryPowerBar then BCDM.SecondaryPowerBar:Hide() end
+        if BCDM.SecondaryPowerBar then
+            SetResourceEventRegistration(BCDM.SecondaryPowerBar, false)
+            HideAllResourceDisplays()
+            BCDM.SecondaryPowerBar:Hide()
+        end
         if powerBarDB.Enabled and BCDM.PowerBar and BCDM:ShouldShowOwnedFrame(powerBarDB) then BCDM.PowerBar:Show() end
         return
     end
@@ -811,8 +1054,6 @@ function BCDM:UpdateSecondaryPowerBar()
     secondaryPowerBar.Spark:SetHeight(secondaryPowerBar:GetHeight())
     secondaryPowerBar.Spark:SetShown(secondaryPowerBarDB.ShowSpark == true)
     secondaryPowerBar.Status:SetStatusBarColor(GetPowerBarColor(descriptor))
-    secondaryPowerBar.Status:SetMinMaxValues(0, UnitPowerMax("player"))
-    secondaryPowerBar.Status:SetValue(UnitPower("player"))
     secondaryPowerBar.Text:SetFont(BCDM.Media.Font, secondaryPowerBarDB.Text.FontSize, generalDB.Fonts.FontFlag)
     secondaryPowerBar.Text:SetTextColor(secondaryPowerBarDB.Text.Colour[1], secondaryPowerBarDB.Text.Colour[2], secondaryPowerBarDB.Text.Colour[3], 1)
     secondaryPowerBar.Text:ClearAllPoints()
@@ -828,10 +1069,12 @@ function BCDM:UpdateSecondaryPowerBar()
     if secondaryPowerBarDB.Text.Enabled then secondaryPowerBar.Text:Show() else secondaryPowerBar.Text:Hide() end
     if secondaryPowerBarDB.Enabled then
         RegisterSecondaryPowerBarEvents(secondaryPowerBar)
-        UpdatePowerValues()
-        CreateTicksBasedOnPowerType()
+        local renderState = UpdatePowerValues()
+        renderState = CreateTicksBasedOnPowerType() or renderState
         NudgeSecondaryPowerBar("BCDM_SecondaryPowerBar", -0.1, 0)
-        secondaryPowerBar:Show()
+        local shouldShow = renderState ~= RENDER_UNAVAILABLE
+        if BCDM.ShouldShowOwnedFrame then shouldShow = shouldShow and BCDM:ShouldShowOwnedFrame(secondaryPowerBarDB) end
+        if shouldShow then secondaryPowerBar:Show() else secondaryPowerBar:Hide() end
     else
         secondaryPowerBar:Hide()
         UnregisterSecondaryPowerBarEvents(secondaryPowerBar)

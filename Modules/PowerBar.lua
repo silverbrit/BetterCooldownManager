@@ -38,10 +38,17 @@ local function UpdatePowerValues()
     local powerMax = UnitPowerMax("player", powerType)
     if PowerBar and PowerBar.Status and powerType then
         local textMode = BCDM.db.profile.PowerBar.Text.Mode or "AUTO"
-        if textMode ~= "AUTO" then
+        if BCDM:IsSecretValue(powerCurrent) or BCDM:IsSecretValue(powerMax) then
+            PowerBar.Text:SetText("")
+        elseif textMode ~= "AUTO" then
             PowerBar.Text:SetText(BCDM:FormatResourceText(powerCurrent, powerMax, textMode))
         elseif powerType == 0 then
-           PowerBar.Text:SetText(string.format("%.0f%%", UnitPowerPercent("player", 0, false, CurveConstants.ScaleTo100)))
+            local percent = UnitPowerPercent("player", 0, false, CurveConstants.ScaleTo100)
+            if BCDM:IsSecretValue(percent) then
+                PowerBar.Text:SetText("")
+            else
+                PowerBar.Text:SetText(string.format("%.0f%%", percent))
+            end
         else
             PowerBar.Text:SetText(tostring(powerCurrent))
         end
