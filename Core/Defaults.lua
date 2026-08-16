@@ -33,6 +33,10 @@ local Defaults = {
             Height = 760,
             ShowSelectedElementHighlight = true,
         },
+        MinimapButton = {
+            hide = false,
+            minimapPos = 225,
+        },
         EditModeManager = {
             SwapOnInstanceDifficulty = false,
             RaidLayouts = {

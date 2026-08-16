@@ -150,6 +150,16 @@ local function CreateGeneralPanel()
         end, {
             description = L("Show a blue outline around the element configured by the current settings page."),
         })
+    U.Checkbox(controls, general, "Show Minimap Button", function()
+        local settings = BCDM.db.global.MinimapButton or {}
+        return settings.hide ~= true
+    end, function(shown)
+        BCDM.db.global.MinimapButton = BCDM.db.global.MinimapButton or {}
+        BCDM.db.global.MinimapButton.hide = not shown
+        BCDM:UpdateMinimapButton()
+    end, {
+        description = L("Show a minimap launcher that opens Better Cooldown Manager settings."),
+    })
 
     BCDM:AddVisibilityPolicySettings(panel, controls, "Shared Visibility", ProfileRoot,
         { "Visibility" }, nil, function() BCDM:RefreshOwnedFrameVisibility() end)

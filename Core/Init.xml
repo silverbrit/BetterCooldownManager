@@ -2,6 +2,7 @@
     <Script file="Globals.lua"/>
     <Script file="Anchors.lua"/>
     <Script file="Defaults.lua"/>
+    <Script file="MinimapButton.lua"/>
     <Script file="Visibility.lua"/>
     <Script file="BarBehavior.lua"/>
     <Script file="ResourceCatalog.lua"/>
