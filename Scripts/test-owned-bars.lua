@@ -15,6 +15,7 @@ local oldSetShown = BCDM.SetOwnedFrameShown
 local oldGetResource = BCDM.GetCurrentSecondaryResource
 local oldPowerBar = BCDM.PowerBar
 local oldSecondaryPowerBar = BCDM.SecondaryPowerBar
+local oldState = BCDM._SecondaryResourceState
 local oldRenderable = BCDM._SecondaryResourceRenderable
 local oldDisplayVisible = BCDM._SecondaryDisplayVisible
 local oldOwner = BCDM._SecondaryOwnsPrimaryPosition
@@ -38,40 +39,48 @@ BCDM.SetOwnedFrameShown = function(_, target, _, shown)
 end
 BCDM.PowerBar, BCDM.SecondaryPowerBar = powerBar, secondaryPowerBar
 
-local function apply(renderable)
-    return BCDM:ApplyPowerBarOwnership(renderable)
+local function apply(state)
+    return BCDM:ApplyPowerBarOwnership(state)
 end
 
+local RENDER_UNAVAILABLE = BCDM.RENDER_UNAVAILABLE
+local RENDER_READABLE = BCDM.RENDER_READABLE
+local RENDER_WIDGET = BCDM.RENDER_WIDGET
+Check(not BCDM:IsResourceRenderable(RENDER_UNAVAILABLE)
+    and BCDM:IsResourceRenderable(RENDER_READABLE)
+    and BCDM:IsResourceRenderable(RENDER_WIDGET),
+    "tri-state resource results map to ownership safely")
+
 profile.SecondaryPowerBar.Enabled = false
-apply(true)
+apply(RENDER_READABLE)
 Check(powerBar.shown and not secondaryPowerBar.shown,
     "swap does not hide the primary when secondary is disabled")
 
 profile.SecondaryPowerBar.Enabled = true
 profile.SecondaryPowerBar.Visible = false
-apply(true)
+apply(RENDER_READABLE)
 Check(powerBar.shown and not secondaryPowerBar.shown,
     "swap does not hide the primary when secondary visibility policy vetoes display")
 
 profile.SecondaryPowerBar.Visible = true
-apply(true)
+apply(RENDER_WIDGET)
 Check(not powerBar.shown and secondaryPowerBar.shown,
     "supported visible secondary owns the primary position")
 
 BCDM.GetCurrentSecondaryResource = function() return nil end
-apply(false)
+apply(RENDER_UNAVAILABLE)
 Check(powerBar.shown and not secondaryPowerBar.shown,
     "unsupported resources hide secondary and restore primary")
 
 BCDM.GetCurrentSecondaryResource = function() return descriptor end
 profile.SecondaryPowerBar.SwapToPowerBarPosition = false
-apply(true)
+apply(RENDER_READABLE)
 Check(powerBar.shown and secondaryPowerBar.shown,
     "profile changes recompute bar ownership")
 
 profile.SecondaryPowerBar.SwapToPowerBarPosition = true
 profile.SecondaryPowerBar.Visible = false
-apply(true)
+apply(RENDER_READABLE)
 Check(powerBar.shown and not secondaryPowerBar.shown,
     "visibility changes apply without another world event")
 
@@ -121,6 +130,7 @@ function powerModule:ResolveBarFillColour(_, _, context)
     local colour = context.PowerTypeColour
     return colour[1], colour[2], colour[3], colour[4] or 1
 end
+function powerModule:IsSecretValue() return false end
 powerModule.ResolvePrimaryDisplayPowerType = function(_, powerType, class, specialization, formID)
     return BCDM:ResolvePrimaryDisplayPowerType(powerType, class, specialization, formID)
 end
@@ -197,6 +207,7 @@ C_Timer = savedTimer
 UIParent = savedUIParent
 _G.OwnedBarsTestAnchor = savedAnchor
 BCDM.db = oldDB
+BCDM._SecondaryResourceState = oldState
 BCDM.ShouldShowOwnedFrame = oldShouldShow
 BCDM.SetOwnedFrameShown = oldSetShown
 BCDM.GetCurrentSecondaryResource = oldGetResource
