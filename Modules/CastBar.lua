@@ -12,6 +12,86 @@ local function IsReadableCastBarID(value)
     return not IsSecretValue(value) and type(value) == "number"
 end
 
+local CAST_BAR_DB_KEYS = {
+    BCDM_CastBar = "CastBar",
+    BCDM_PowerBar = "PowerBar",
+    BCDM_SecondaryPowerBar = "SecondaryPowerBar",
+}
+
+local function GetCastBarLayoutTarget(frameName)
+    local dbKey = CAST_BAR_DB_KEYS[frameName]
+    if not dbKey then return nil, true end
+
+    local ok, layout = pcall(function()
+        local profile = BCDM.db and BCDM.db.profile
+        local barDB = profile and profile[dbKey]
+        return barDB and barDB.Layout
+    end)
+    if not ok or IsSecretValue(layout) then return nil, false end
+    if layout == nil then return nil, true end
+    if type(layout) ~= "table" then return nil, false end
+
+    ok, frameName = pcall(function() return layout[2] end)
+    if not ok or IsSecretValue(frameName) then return nil, false end
+    if frameName ~= nil and type(frameName) ~= "string" then return nil, false end
+    return frameName, true
+end
+
+local function IsSafeCastBarAnchor(frame)
+    if IsSecretValue(frame) then return false end
+    local ok, forbidden, accessible, isFrame = pcall(function()
+        return frame:IsForbidden(), frame:CanBeAccessedInContext(), frame:IsObjectType("Frame")
+    end)
+    if not ok or IsSecretValue(forbidden) or IsSecretValue(accessible) or IsSecretValue(isFrame) then return false end
+    return forbidden == false and accessible == true and isFrame == true
+end
+
+local function ResolveCastBarAnchor()
+    local targetName, readable = GetCastBarLayoutTarget("BCDM_CastBar")
+    if not readable or targetName == nil or targetName == "NONE" then return UIParent end
+
+    local directTargetName = targetName
+    local node = targetName
+    local visited = { BCDM_CastBar = true }
+    while CAST_BAR_DB_KEYS[node] do
+        if visited[node] then return UIParent end
+        visited[node] = true
+        local nextTarget, nextReadable = GetCastBarLayoutTarget(node)
+        if not nextReadable then return UIParent end
+        if nextTarget == nil or nextTarget == "NONE" then break end
+        node = nextTarget
+    end
+
+    local frame = _G[directTargetName]
+    if not IsSafeCastBarAnchor(frame) then return UIParent end
+    return frame
+end
+
+local function GetCastBarPointLayout(CastBarDB)
+    local point, relativePoint, offsetX, offsetY = "CENTER", "CENTER", 0, 0
+    local layout = CastBarDB and CastBarDB.Layout
+    if IsSecretValue(layout) or type(layout) ~= "table" then return point, relativePoint, offsetX, offsetY end
+
+    local ok, configuredPoint, configuredRelativePoint, configuredOffsetX, configuredOffsetY = pcall(function()
+        return layout[1], layout[3], layout[4], layout[5]
+    end)
+    if not ok then return point, relativePoint, offsetX, offsetY end
+    if not IsSecretValue(configuredPoint) and type(configuredPoint) == "string" then point = configuredPoint end
+    if not IsSecretValue(configuredRelativePoint) and type(configuredRelativePoint) == "string" then relativePoint = configuredRelativePoint end
+    if not IsSecretValue(configuredOffsetX) and type(configuredOffsetX) == "number" then offsetX = configuredOffsetX end
+    if not IsSecretValue(configuredOffsetY) and type(configuredOffsetY) == "number" then offsetY = configuredOffsetY end
+    return point, relativePoint, offsetX, offsetY
+end
+
+local function SetCastBarPoint(CastBar, CastBarDB)
+    local point, relativePoint, offsetX, offsetY = GetCastBarPointLayout(CastBarDB)
+    local anchor = ResolveCastBarAnchor()
+    local ok = pcall(CastBar.SetPoint, CastBar, point, anchor, relativePoint, offsetX, offsetY)
+    if not ok then
+        pcall(CastBar.SetPoint, CastBar, "CENTER", UIParent, "CENTER", 0, 0)
+    end
+end
+
 local function GetDisplayCastText(text, maxChars)
     if IsSecretValue(text) then return text end
     if type(text) ~= "string" then return "" end
@@ -404,7 +484,7 @@ local function ScheduleCastBarWidth(delay)
         CastBar.WidthTimer = nil
         local currentDB = BCDM.db and BCDM.db.profile and BCDM.db.profile.CastBar
         if not currentDB or currentDB.Enabled ~= true or not currentDB.MatchWidthOfAnchor then return end
-        local anchorFrame = BCDM:ResolveAnchorParent(currentDB.Layout[2])
+        local anchorFrame = ResolveCastBarAnchor()
         if not anchorFrame or type(anchorFrame.GetWidth) ~= "function" then return end
         local ok, anchorWidth = pcall(anchorFrame.GetWidth, anchorFrame)
         if ok and type(anchorWidth) == "number" then CastBar:SetWidth(anchorWidth) end
@@ -461,7 +541,7 @@ local function ApplyCastBarAppearance()
     CastBar:SetBackdropColor(CastBarDB.BackgroundColour[1], CastBarDB.BackgroundColour[2], CastBarDB.BackgroundColour[3], CastBarDB.BackgroundColour[4])
     CastBar:SetSize(CastBarDB.Width, CastBarDB.Height)
     CastBar:ClearAllPoints()
-    CastBar:SetPoint(CastBarDB.Layout[1], BCDM:ResolveAnchorParent(CastBarDB.Layout[2]), CastBarDB.Layout[3], CastBarDB.Layout[4], CastBarDB.Layout[5])
+    SetCastBarPoint(CastBar, CastBarDB)
     CastBar:SetFrameStrata(CastBarDB.FrameStrata or "LOW")
 
     CastBar.Status:SetStatusBarColor(FetchCastBarColour(CastBar.LastNotInterruptible))

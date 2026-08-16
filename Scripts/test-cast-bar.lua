@@ -18,6 +18,9 @@ local secretText = setmetatable({}, {
     __tostring = function() error("secret text was formatted") end,
     __index = function() error("secret text was read") end,
 })
+local secretAnchor = setmetatable({}, {
+    __index = function() error("secret anchor was read") end,
+})
 local castInfo, channelInfo
 local durations = {}
 
@@ -25,7 +28,10 @@ local function NewRegion(width, height)
     local region = { width = width or 200, height = height or 24, shown = true }
     function region:SetColorTexture(...) self.color = { ... } end
     function region:SetSize(widthValue, heightValue) self.width, self.height = widthValue, heightValue end
-    function region:SetPoint(...) self.point = { ... } end
+    function region:SetPoint(...)
+        if self.throwOnTarget == select(2, ...) then error("bad anchor") end
+        self.point = { ... }
+    end
     function region:ClearAllPoints() self.point = nil end
     function region:SetParent(parent) self.parent = parent end
     function region:Show() self.shown = true end
@@ -55,6 +61,9 @@ local function NewFrame(name, parent)
         end
     end
     function frame:GetScript(script) return self.scripts[script] end
+    function frame:IsObjectType(objectType) return objectType == "Frame" end
+    function frame:IsForbidden() return self.forbidden == true end
+    function frame:CanBeAccessedInContext() return self.accessible ~= false end
     function frame:IsShown() return self.shown end
     function frame:Show()
         local wasShown = self.shown
@@ -184,6 +193,13 @@ CreateFrame = function(_, name, parent)
     return frame
 end
 
+_G.BCDM_PowerBar = NewFrame("BCDM_PowerBar", UIParent)
+_G.BCDM_SecondaryPowerBar = NewFrame("BCDM_SecondaryPowerBar", UIParent)
+_G.BCDM_NonFrame = {}
+_G.BCDM_ForbiddenAnchor = NewFrame("BCDM_ForbiddenAnchor", UIParent)
+_G.BCDM_ForbiddenAnchor.forbidden = true
+_G.BCDM_ThrowingAnchor = NewFrame("BCDM_ThrowingAnchor", UIParent)
+
 local BCDM = {
     BACKDROP = {},
     Media = { Font = "font", Foreground = "foreground" },
@@ -207,7 +223,7 @@ local BCDM = {
 }
 _G.BCDM_TestAnchor = anchor
 function BCDM:IsSecretValue(value)
-    return value == secretDuration or value == secretStageList or value == secretText
+    return value == secretDuration or value == secretStageList or value == secretText or value == secretAnchor
 end
 function BCDM:ResolveBarFillColour() return 1, 1, 1, 1 end
 function BCDM:ApplyStatusBarDirection(statusBar, direction) statusBar.direction = direction end
@@ -217,6 +233,8 @@ function BCDM:RegisterOwnedFrameVisibility(frame, _, refresh)
         if refresh and self.CastActive and self.HasDuration then refresh(self) end
     end)
 end
+BCDM.db.profile.PowerBar = { Layout = { "TOP", "NONE", "BOTTOM", 0, 0 } }
+BCDM.db.profile.SecondaryPowerBar = { Layout = { "TOP", "NONE", "BOTTOM", 0, 0 } }
 
 _G.BCDM_CastBar = nil
 assert(loadfile(root .. "/Modules/CastBar.lua"))("BetterCooldownManager", BCDM)
@@ -396,5 +414,42 @@ BCDM:UpdateCastBarWidth()
 RunTimers()
 Check(bar.width == 240 and bar.widthWrites == 1,
     "only the newest delayed width callback applies current anchor settings")
+
+BCDM.db.profile.PowerBar.Layout[2] = "NONE"
+BCDM.db.profile.SecondaryPowerBar.Layout[2] = "NONE"
+BCDM.db.profile.CastBar.Layout = { "TOP", "BCDM_CastBar", "BOTTOM", 0, 0 }
+BCDM:UpdateCastBar()
+Check(bar.point[2] == UIParent, "a CastBar self-cycle falls back to UIParent")
+
+BCDM.db.profile.CastBar.Layout[2] = "BCDM_PowerBar"
+BCDM.db.profile.PowerBar.Layout[2] = "BCDM_CastBar"
+BCDM:UpdateCastBar()
+Check(bar.point[2] == UIParent, "a CastBar to PowerBar cycle falls back to UIParent")
+
+BCDM.db.profile.PowerBar.Layout[2] = "NONE"
+BCDM.db.profile.CastBar.Layout[2] = "BCDM_NonFrame"
+BCDM:UpdateCastBar()
+Check(bar.point[2] == UIParent, "a non-frame CastBar target falls back to UIParent")
+
+BCDM.db.profile.CastBar.Layout[2] = "BCDM_ForbiddenAnchor"
+BCDM:UpdateCastBar()
+Check(bar.point[2] == UIParent, "a forbidden CastBar target falls back to UIParent")
+
+BCDM.db.profile.CastBar.Layout[2] = secretAnchor
+BCDM:UpdateCastBar()
+Check(bar.point[2] == UIParent, "a secret CastBar target falls back to UIParent")
+
+BCDM.db.profile.CastBar.Layout[2] = "BCDM_ThrowingAnchor"
+bar.throwOnTarget = _G.BCDM_ThrowingAnchor
+local anchorUpdateOK = pcall(BCDM.UpdateCastBar, BCDM)
+bar.throwOnTarget = nil
+Check(anchorUpdateOK and bar.point[2] == UIParent, "a throwing CastBar SetPoint falls back without raising")
+
+BCDM.db.profile.CastBar.Layout[2] = "BCDM_CastBar"
+UIParent.width = 333
+bar.widthWrites = 0
+BCDM:UpdateCastBarWidth()
+RunTimers()
+Check(bar.width == UIParent.width, "CastBar width resolution falls back to UIParent for cycles")
 
 return failures == 0
