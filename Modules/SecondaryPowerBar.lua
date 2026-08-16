@@ -246,11 +246,24 @@ local function LayoutEssenceTicks()
     end
 end
 
+local function ReadRuneCooldown(runeIndex)
+    if type(GetRuneCooldown) ~= "function" then return nil, nil, nil end
+    local ok, startTime, duration, runeReady = pcall(GetRuneCooldown, runeIndex)
+    if not ok then return nil, nil, nil end
+    return startTime, duration, runeReady
+end
+
 local function StartRuneOnUpdate(runeBar, runeIndex, descriptor)
     local generalDB = BCDM.db.profile.General
 
     runeBar:SetScript("OnUpdate", function(self)
-        local runeStartTime, runeDuration, runeReady = GetRuneCooldown(runeIndex)
+        local runeStartTime, runeDuration, runeReady = ReadRuneCooldown(runeIndex)
+
+        if runeStartTime == nil and runeDuration == nil and runeReady == nil then
+            self:SetScript("OnUpdate", nil)
+            self:Hide()
+            return
+        end
 
         if runeReady then
             self:SetScript("OnUpdate", nil)
@@ -260,7 +273,7 @@ local function StartRuneOnUpdate(runeBar, runeIndex, descriptor)
             return
         end
 
-        if runeDuration and runeDuration > 0 then
+        if type(runeDuration) == "number" and runeDuration > 0 then
             local now = GetTime()
             local elapsed = now - runeStartTime
             local progress = math.min(1, elapsed / runeDuration)
@@ -281,14 +294,20 @@ local function UpdateRuneDisplay(descriptor)
 
     local runeReadyList = {}
     local runeOnCDList = {}
+    local runeStates = {}
+    local hasUsableData = false
 
     for i = 1, maxPower do
-        local runeStartTime, runeDuration, runeReady = GetRuneCooldown(i)
+        local runeStartTime, runeDuration, runeReady = ReadRuneCooldown(i)
+        runeStates[i] = { startTime = runeStartTime, duration = runeDuration, ready = runeReady }
+        if runeReady ~= nil or (type(runeStartTime) == "number" and type(runeDuration) == "number") then
+            hasUsableData = true
+        end
 
         if runeReady then
             table.insert(runeReadyList, { index = i })
         else
-            if runeStartTime and runeDuration and runeDuration > 0 then
+            if type(runeStartTime) == "number" and type(runeDuration) == "number" and runeDuration > 0 then
                 local elapsed = GetTime() - runeStartTime
                 local remain = math.max(0, runeDuration - elapsed)
                 table.insert(runeOnCDList, { index = i, remaining = remain })
@@ -296,6 +315,14 @@ local function UpdateRuneDisplay(descriptor)
                 table.insert(runeOnCDList, { index = i, remaining = 999 })
             end
         end
+    end
+
+    if not hasUsableData then
+        HideBars(runeBars)
+        if BCDM.ClearTicks then BCDM:ClearTicks() end
+        tickLayoutKey = false
+        tickLayoutResource = nil
+        return RENDER_UNAVAILABLE
     end
 
     table.sort(runeOnCDList, function(a, b) return a.remaining < b.remaining end)
@@ -317,8 +344,8 @@ local function UpdateRuneDisplay(descriptor)
 
         runeBar:Show()
 
-        local _, _, runeReady = GetRuneCooldown(i)
-        if runeReady then
+        local runeState = runeStates[i]
+        if runeState.ready then
             runeBar:SetValue(1)
             runeBar:SetStatusBarColor(r, g, b, a)
             runeBar:SetScript("OnUpdate", nil)
@@ -326,6 +353,7 @@ local function UpdateRuneDisplay(descriptor)
             StartRuneOnUpdate(runeBar, i, descriptor)
         end
     end
+    return RENDER_READABLE
 end
 
 local function GetChargedPowerPointLookup()
@@ -333,11 +361,13 @@ local function GetChargedPowerPointLookup()
     if type(GetUnitChargedPowerPoints) ~= "function" then return chargedLookup end
     local ok, charged = pcall(GetUnitChargedPowerPoints, "player")
     if not ok or BCDM:IsSecretValue(charged) or type(charged) ~= "table" then return chargedLookup end
-    for _, index in ipairs(charged) do
-        local point, state = ReadValue(index)
-        if state == RENDER_READABLE then chargedLookup[point] = true end
-    end
-    return chargedLookup
+    local iterationOK = pcall(function()
+        for _, index in ipairs(charged) do
+            local point, state = ReadValue(index)
+            if state == RENDER_READABLE then chargedLookup[point] = true end
+        end
+    end)
+    return iterationOK and chargedLookup or {}
 end
 
 local function UpdateComboDisplay(descriptor, powerCurrent, currentState, powerMax, maxState)
@@ -400,15 +430,24 @@ local function UpdateEssenceDisplay(descriptor, powerCurrent, currentState, powe
     local parent = BCDM.SecondaryPowerBar
     if not parent or #essenceTicks == 0 then return end
 
-    local partialProgress, partialState = GetEssencePartialProgress()
-    if currentState ~= RENDER_READABLE or maxState ~= RENDER_READABLE or partialState ~= RENDER_READABLE then
+    if currentState ~= RENDER_READABLE or maxState ~= RENDER_READABLE then
         HideEssenceBars()
         return
     end
 
+    local maxPoints = powerMax
+    local partialProgress
+    if powerCurrent < maxPoints then
+        local partialState
+        partialProgress, partialState = GetEssencePartialProgress()
+        if partialState ~= RENDER_READABLE then
+            HideEssenceBars()
+            return
+        end
+    end
+
     local r, g, b, a = GetPowerBarColor(descriptor)
     local rechargeColour = BCDM.db.profile.General.Colours.SecondaryPower["ESSENCE_RECHARGE"]
-    local maxPoints = powerMax
     lastReadableMaximum.ESSENCE = maxPoints
 
     for i = 1, #essenceTicks do
@@ -446,7 +485,6 @@ local function GetAuraStacks(spellId)
     if type(auraData) ~= "table" then return nil, false, false end
     local ok, applications = pcall(function() return auraData.applications end)
     if not ok then return nil, false, false end
-    if applications == nil then return 0, true, false end
     local value, state = ReadValue(applications)
     return value, state == RENDER_READABLE, state == RENDER_WIDGET
 end
@@ -516,6 +554,7 @@ BCDM._SecondaryResourceReaders = {
         return value, state == RENDER_READABLE, state == RENDER_WIDGET
     end,
     GetDevourerValues = GetDevourerValues,
+    GetChargedPowerPointLookup = GetChargedPowerPointLookup,
 }
 
 local RESOURCE_HANDLERS = {}
@@ -606,8 +645,9 @@ RESOURCE_HANDLERS.RUNES = function(descriptor, bar, settings)
         return current, 6, state, state == RENDER_READABLE and ReadableText(current, 6) or nil
     end
     bar.Status:Hide()
-    UpdateRuneDisplay(descriptor)
-    return 0, 6, RENDER_READABLE, ""
+    local state = UpdateRuneDisplay(descriptor)
+    if state == RENDER_UNAVAILABLE then return nil, nil, state end
+    return 0, 6, state, ""
 end
 RESOURCE_HANDLERS.STAGGER = function(descriptor, bar, settings)
     if BCDM.ClearTicks then BCDM:ClearTicks() end
@@ -859,18 +899,15 @@ local function OnSecondaryPowerBarEvent(self, event, ...)
             if BCDM.db.profile.SecondaryPowerBar.HideTicks then
                 UpdatePowerValues()
             else
-                UpdateRuneDisplay(descriptor)
+                local state = UpdateRuneDisplay(descriptor)
+                if state == RENDER_UNAVAILABLE then
+                    UpdatePowerValues()
+                elseif tickLayoutKey ~= "RUNES" then
+                    CreateTicksBasedOnPowerType()
+                end
             end
         end
         return
-    end
-
-    if event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT"
-        or event == "UNIT_POWER_POINT_CHARGE" or event == "UNIT_MAXPOWER"
-        or event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH"
-        or event == "UNIT_ABSORB_AMOUNT_CHANGED" then
-        local unit = ...
-        if unit and unit ~= "player" then return end
     end
 
     if IsResourceEvent(event) and not BCDM:GetCurrentSecondaryResource() then

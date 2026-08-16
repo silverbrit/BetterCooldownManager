@@ -15,6 +15,8 @@ wipe = wipeTable
 
 local secretValue = {}
 local secretMaximum = {}
+local secretApplications = {}
+local secretChargedPoint = {}
 local auraByID = {}
 local maxBySpell = {}
 local castCountResult = 3
@@ -22,7 +24,9 @@ local powerValues = {}
 local powerError = false
 local staggerSecret = false
 local partialPower = 0
+local partialCalls = 0
 local chargedPowerPoints
+local runeDataAvailable = true
 local currentDescriptor
 local collapsingStarCost = 40
 
@@ -52,14 +56,20 @@ UnitPowerMax = function(_, powerType)
     return powerValues.max and powerValues.max[powerType]
 end
 UnitPowerDisplayMod = function() return 1000 end
-UnitPartialPower = function() return partialPower end
+UnitPartialPower = function()
+    partialCalls = partialCalls + 1
+    return partialPower
+end
 UnitHealthMax = function() return powerValues.healthMax end
 UnitStagger = function()
     if powerError or staggerSecret then return secretValue end
     return powerValues.stagger or 0
 end
 GetUnitChargedPowerPoints = function() return chargedPowerPoints end
-GetRuneCooldown = function() return 0, 0, true end
+GetRuneCooldown = function()
+    if not runeDataAvailable then return end
+    return 0, 0, true
+end
 GetTime = function() return 0 end
 AbbreviateLargeNumbers = function(value) return tostring(value) end
 
@@ -142,6 +152,7 @@ local BCDM = {
 }
 function BCDM:IsSecretValue(value)
     return value == secretValue or value == secretMaximum
+        or value == secretApplications or value == secretChargedPoint
 end
 function BCDM:GetCurrentSecondaryResource() return currentDescriptor end
 function BCDM:ResolveBarFillColour() return 1, 1, 1, 1 end
@@ -161,9 +172,12 @@ Check(value == 0 and readable and not widget, "a readable missing aura produces 
 auraByID[100] = { applications = 4 }
 value, readable, widget = readers.GetAuraStacks(100)
 Check(value == 4 and readable and not widget, "readable aura applications are returned")
-auraByID[100] = { applications = secretValue }
+auraByID[100] = { applications = nil }
 value, readable, widget = readers.GetAuraStacks(100)
-Check(value == secretValue and not readable and widget, "secret aura applications reach the protected widget path")
+Check(value == nil and not readable and not widget, "nil applications on an existing aura fail closed")
+auraByID[100] = { applications = secretApplications }
+value, readable, widget = readers.GetAuraStacks(100)
+Check(value == secretApplications and not readable and widget, "secret aura applications reach the protected widget path")
 auraByID[100] = secretValue
 value, readable = readers.IsInMetamorphosis(100)
 Check(value == nil and not readable, "secret aura presence is not used as resource state")
@@ -263,8 +277,13 @@ powerValues[Enum.PowerType.ComboPoints] = 2
 powerValues.max[Enum.PowerType.ComboPoints] = 5
 chargedPowerPoints = secretValue
 BCDM.db.profile.SecondaryPowerBar.FillDirection = "LEFT"
-BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_POINT_CHARGE", "player")
-Check(statusValue == 2 and barShown, "UNIT_POWER_POINT_CHARGE refreshes combo points")
+local hostilePowerPayload = setmetatable({}, { __eq = function() error("UNIT_POWER_POINT_CHARGE payload was inspected") end })
+BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_POINT_CHARGE", hostilePowerPayload)
+Check(statusValue == 2 and barShown, "UNIT_POWER_POINT_CHARGE refreshes combo points without inspecting its payload")
+chargedPowerPoints = { 1, secretChargedPoint, 3 }
+local chargedPointLookup = readers.GetChargedPowerPointLookup()
+Check(chargedPointLookup[1] and chargedPointLookup[3] and not chargedPointLookup[2],
+    "a readable charged-point table ignores secret elements without indexing them")
 local comboBarsReversed = true
 for _, frame in ipairs(createdFrames) do
     if frame.value == 2 and frame.reverseFill ~= true then comboBarsReversed = false end
@@ -274,6 +293,7 @@ chargedPowerPoints = nil
 
 currentDescriptor = { kind = "RUNES", powerType = Enum.PowerType.Runes, tickCount = 6 }
 powerValues[Enum.PowerType.Runes] = 4
+runeDataAvailable = true
 BCDM.db.profile.SecondaryPowerBar.HideTicks = true
 BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_UPDATE", "player")
 Check(statusValue == 4 and statusMin == 0 and statusMax == 6 and statusShown,
@@ -286,6 +306,14 @@ for _, frame in ipairs(createdFrames) do
     if frame.reverseFill ~= true then runeBarsReversed = false end
 end
 Check(runeBarsReversed, "left fill applies to visible rune StatusBars")
+runeDataAvailable = false
+barHidden, barShown, statusShown = false, false, true
+BCDM._SecondaryPowerBarOnEvent(nil, "RUNE_POWER_UPDATE")
+Check(barHidden and not barShown and not statusShown,
+    "missing rune cooldown data clears stale rune state and hides the bar")
+runeDataAvailable = true
+BCDM._SecondaryPowerBarOnEvent(nil, "RUNE_POWER_UPDATE")
+Check(barShown and tickCount == 6, "rune display recovers after cooldown data returns")
 
 currentDescriptor = { kind = "ESSENCE", powerType = Enum.PowerType.Essence }
 powerValues[Enum.PowerType.Essence] = 2
@@ -294,8 +322,21 @@ partialPower = secretValue
 BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_FREQUENT", "player")
 Check(statusValue == 2, "secret UnitPartialPower does not enter Lua arithmetic")
 partialPower = 250
+local essenceFrameStart = #createdFrames + 1
 BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_MAXPOWER", "player")
+local essenceFrameEnd = #createdFrames
 Check(statusValue == 2, "Essence updates through the max-power refresh path")
+partialCalls = 0
+powerValues[Enum.PowerType.Essence] = 5
+partialPower = secretValue
+BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_FREQUENT", "player")
+local allEssenceBarsShown = true
+for index = essenceFrameStart, essenceFrameEnd do
+    if not createdFrames[index].shown then allEssenceBarsShown = false end
+end
+Check(partialCalls == 0 and allEssenceBarsShown,
+    "full readable Essence renders every child point without querying UnitPartialPower")
+partialPower = 250
 local essenceBarsReversed = true
 for _, frame in ipairs(createdFrames) do
     if frame.maxValue == 1 and frame.reverseFill ~= true then essenceBarsReversed = false end
