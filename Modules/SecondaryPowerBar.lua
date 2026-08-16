@@ -902,6 +902,10 @@ function BCDM:QueuePowerBarWidthUpdates()
 end
 end
 
+local function UpdateBarWidth()
+    if BCDM.QueuePowerBarWidthUpdates then BCDM:QueuePowerBarWidthUpdates() end
+end
+
 local function SetHooks()
     hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function() if InCombatLockdown() then return end UpdateBarWidth() end)
     hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() if InCombatLockdown() then return end UpdateBarWidth() end)
