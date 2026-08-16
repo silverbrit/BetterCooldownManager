@@ -727,6 +727,7 @@ local function CreateBarPanel(barType)
         if barType == "PowerBar" then BCDM:UpdatePowerBar()
         elseif barType == "SecondaryPowerBar" then BCDM:UpdateSecondaryPowerBar()
         else BCDM:UpdateCastBar() end
+        if BCDM.QueueCooldownViewerLayoutApply then BCDM:QueueCooldownViewerLayoutApply() end
         if RefreshBarHighlight then RefreshBarHighlight() end
     end
     local function UnsupportedSecondary()

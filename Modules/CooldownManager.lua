@@ -9,8 +9,13 @@ local EARLY_VIEWER_ANCHOR_NAMES = {
 function BCDM:EnsureCooldownViewerAnchorFrames()
     if not CreateFrame or not UIParent then return end
     for _, frameName in ipairs(EARLY_VIEWER_ANCHOR_NAMES) do
-        if not _G[frameName] then
-            CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
+        local frame = _G[frameName] or CreateFrame("Frame", frameName, UIParent, "BackdropTemplate")
+        if frame and frame.HookScript then
+            pcall(frame.HookScript, frame, "OnSizeChanged", function()
+                if BCDM.QueueCooldownViewerLayoutApply then
+                    BCDM:QueueCooldownViewerLayoutApply()
+                end
+            end)
         end
     end
 end
@@ -22,6 +27,10 @@ BCDM:EnsureCooldownViewerAnchorFrames()
 
 local function IsInCombat()
     return InCombatLockdown and InCombatLockdown()
+end
+
+local function IsReadableNumber(value)
+    return type(value) == "number" and not BCDM:IsSecretValue(value)
 end
 
 local function GetViewerItemFrames(viewer)
@@ -71,7 +80,18 @@ local function EnsureViewerLayoutEventFrame()
     viewerLayoutEventFrame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
     viewerLayoutEventFrame:RegisterEvent("COOLDOWN_VIEWER_DATA_LOADED")
     viewerLayoutEventFrame:RegisterEvent("COOLDOWN_VIEWER_TABLE_HOTFIXED")
-    viewerLayoutEventFrame:SetScript("OnEvent", function(_, event)
+    viewerLayoutEventFrame:RegisterEvent("ADDON_LOADED")
+    viewerLayoutEventFrame:RegisterEvent("UI_SCALE_CHANGED")
+    viewerLayoutEventFrame:RegisterEvent("DISPLAY_SIZE_CHANGED")
+    viewerLayoutEventFrame:SetScript("OnEvent", function(_, event, ...)
+        local addonName = ...
+        if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
+            BCDM:QueueCooldownViewerLayoutApply()
+        elseif event == "ADDON_LOADED" and addonName == "ElvUI" then
+            -- ElvUI creates the supported ElvUF_* anchors after BCM may have
+            -- already queued a layout with an unavailable relative frame.
+            BCDM:RetryPendingCooldownViewerLayoutApply()
+        end
         if viewerLayoutPending and TryApplyViewerLayouts then TryApplyViewerLayouts() end
         if (event == "COOLDOWN_VIEWER_DATA_LOADED" or event == "COOLDOWN_VIEWER_TABLE_HOTFIXED")
             and BCDM.QueueCooldownViewerStyleRefresh then
@@ -101,9 +121,6 @@ function BCDM.GetUIParentAnchorPosition(frame, point)
     local okFrameScale, frameScale = pcall(frame.GetEffectiveScale, frame)
     local okParentScale, parentScale = pcall(UIParent.GetEffectiveScale, UIParent)
     if not okRect or not okFrameScale or not okParentScale then return nil end
-    local function IsReadableNumber(value)
-        return not BCDM:IsSecretValue(value) and type(value) == "number"
-    end
     if not IsReadableNumber(left) or not IsReadableNumber(bottom)
         or not IsReadableNumber(width) or not IsReadableNumber(height)
         or not IsReadableNumber(frameScale) or not IsReadableNumber(parentScale) then
@@ -116,18 +133,30 @@ function BCDM.GetUIParentAnchorPosition(frame, point)
 end
 
 local function GetPersistentViewerAnchor(layout)
-    local anchorName = layout[2]
+    if type(layout) ~= "table" or BCDM:IsSecretValue(layout) then return nil end
+    local ok, point, anchorName, relativePoint, xOffset, yOffset = pcall(function()
+        return layout[1], layout[2], layout[3], layout[4], layout[5]
+    end)
+    if not ok or type(point) ~= "string" or type(relativePoint) ~= "string"
+        or BCDM:IsSecretValue(point) or BCDM:IsSecretValue(anchorName)
+        or BCDM:IsSecretValue(relativePoint) then
+        return nil
+    end
+    if xOffset == nil then xOffset = 0 end
+    if yOffset == nil then yOffset = 0 end
+    if not IsReadableNumber(xOffset) or not IsReadableNumber(yOffset) then return nil end
+
     local anchorParent = BCDM:ResolveAnchorParent(anchorName)
     local requiresStableAnchor = type(anchorName) == "string"
         and (anchorName:match("^BCDM_") or anchorName:match("^ElvUF_"))
     if not requiresStableAnchor then
-        return anchorParent, layout[3], layout[4] or 0, layout[5] or 0
+        return anchorParent, relativePoint, xOffset, yOffset
     end
 
     if not _G[anchorName] then return nil end
-    local anchorX, anchorY = BCDM.GetUIParentAnchorPosition(anchorParent, layout[3])
+    local anchorX, anchorY = BCDM.GetUIParentAnchorPosition(anchorParent, relativePoint)
     if not anchorX then return nil end
-    return UIParent, "BOTTOMLEFT", anchorX + (layout[4] or 0), anchorY + (layout[5] or 0)
+    return UIParent, "BOTTOMLEFT", anchorX + xOffset, anchorY + yOffset
 end
 
 local function GetSavedActiveLayout(layouts)
