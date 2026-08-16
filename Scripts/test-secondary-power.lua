@@ -19,12 +19,33 @@ C_Spell = {
 }
 
 local barHidden = false
+local barShown = false
+local statusValue
 local BCDM = {
-    db = { profile = { SecondaryPowerBar = {} } },
-    SecondaryPowerBar = { Hide = function() barHidden = true end },
+    db = { profile = {
+        General = { Colours = { PrimaryPower = {}, SecondaryPower = {} } },
+        SecondaryPowerBar = { Text = { Mode = "AUTO" } },
+    } },
+    SecondaryPowerBar = {
+        Hide = function() barHidden = true end,
+        Show = function() barShown = true end,
+        Status = {
+            SetMinMaxValues = function() end,
+            SetValue = function(_, value) statusValue = value end,
+            SetStatusBarColor = function() end,
+            Show = function() end,
+            Hide = function() end,
+        },
+        Text = { SetText = function() end },
+    },
 }
 function BCDM:IsSecretValue(value) return value == secretValue end
 function BCDM:GetCurrentSecondaryResource() return nil end
+function BCDM:ResolveBarFillColour() return 1, 1, 1, 1 end
+
+Enum = { PowerType = { Mana = 0 } }
+RAID_CLASS_COLORS = {}
+UnitClass = function() return "", "DEMONHUNTER" end
 
 assert(loadfile(root .. "/Modules/SecondaryPowerBar.lua"))("BetterCooldownManager", BCDM)
 
@@ -55,15 +76,28 @@ Check(value == 3 and readable, "readable spell cast counts are returned")
 
 castCountResult = secretValue
 value, readable = readers.GetSpellCharges(100)
-Check(value == nil and not readable, "secret spell cast counts fail closed")
+Check(value == secretValue and not readable, "secret spell cast counts remain available for protected widgets")
 
 C_Spell.GetSpellCastCount = function() error("restricted cooldown") end
 value, readable = readers.GetSpellCharges(100)
 Check(value == nil and not readable, "restricted spell cast counts fail closed")
 
+C_Spell.GetSpellCastCount = function() return secretValue end
+barHidden = false
+barShown = false
+statusValue = nil
+function BCDM:GetCurrentSecondaryResource()
+    return { kind = "SPELL_CHARGES", key = "SOUL_FRAGMENTS", sourceSpellID = 228477, maximum = 6 }
+end
+BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_AURA", "player")
+Check(statusValue == secretValue and barShown and not barHidden,
+    "secret Vengeance fragments render through the protected StatusBar without hiding the bar")
+
 local hostilePayload = setmetatable({}, {
     __eq = function() error("UNIT_AURA payload was inspected") end,
 })
+function BCDM:GetCurrentSecondaryResource() return nil end
+barHidden = false
 BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_AURA", hostilePayload)
 Check(barHidden, "UNIT_AURA refreshes without inspecting its secret payload")
 
