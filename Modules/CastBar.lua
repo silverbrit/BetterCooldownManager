@@ -205,9 +205,10 @@ local function BindCastDuration(kind)
     local duration = ReadCastDuration(kind)
     if IsMissingValue(duration) then return false end
     local direction = GetCastTimerDirection(kind)
-    if direction == nil then return false end
+    local interpolation = Enum and Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.Immediate
+    if direction == nil or interpolation == nil then return false end
 
-    local ok = pcall(CastBar.Status.SetTimerDuration, CastBar.Status, duration, nil, direction)
+    local ok = pcall(CastBar.Status.SetTimerDuration, CastBar.Status, duration, interpolation, direction)
     if not ok then return false end
     TryMethod(CastBar.Status, "SetToTargetValue")
     BindCastTimeText(duration)
@@ -314,6 +315,11 @@ local function GetCurrentCastKind()
     if HasValue(channelName) then return isEmpowered == true and "empower" or "channel" end
 end
 
+local function SyncCurrentCast()
+    local kind = GetCurrentCastKind()
+    if kind then StartCast(kind) else StopCastBar() end
+end
+
 local function EventCastBarID(event, payload4, payload5, payload6)
     if event == "UNIT_SPELLCAST_INTERRUPTED" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         return payload5
@@ -322,23 +328,25 @@ local function EventCastBarID(event, payload4, payload5, payload6)
     return payload4
 end
 
-local function MatchesActiveCast(CastBar, eventCastBarID)
+local function IsStaleCast(CastBar, eventCastBarID)
     return IsReadableCastBarID(eventCastBarID)
         and IsReadableCastBarID(CastBar.ActiveCastID)
-        and eventCastBarID == CastBar.ActiveCastID
+        and eventCastBarID ~= CastBar.ActiveCastID
 end
 
 local function UpdateCastBarValues(self, event, unit, payload2, payload3, payload4, payload5, payload6)
     local CastBar = BCDM.CastBar
     if not CastBar then return end
-    if unit and unit ~= "player" then return end
+    if event ~= "PLAYER_ENTERING_WORLD" and unit and unit ~= "player" then return end
 
     if event == "UNIT_SPELLCAST_INTERRUPTIBLE" or event == "UNIT_SPELLCAST_NOT_INTERRUPTIBLE" then
         UpdateCastBarColour(event == "UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
         return
     end
 
-    if event == "UNIT_SPELLCAST_START" then
+    if event == "PLAYER_ENTERING_WORLD" then
+        SyncCurrentCast()
+    elseif event == "UNIT_SPELLCAST_START" then
         StartCast("cast", EventCastBarID(event, payload4, payload5, payload6))
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         StartCast("channel", EventCastBarID(event, payload4, payload5, payload6))
@@ -353,11 +361,13 @@ local function UpdateCastBarValues(self, event, unit, payload2, payload3, payloa
     elseif event == "UNIT_SPELLCAST_STOP"
         or event == "UNIT_SPELLCAST_FAILED"
         or event == "UNIT_SPELLCAST_INTERRUPTED" then
-        if CastBar.ActiveKind == "cast" and MatchesActiveCast(CastBar, EventCastBarID(event, payload4, payload5, payload6)) then
+        if CastBar.ActiveKind == "cast"
+            and not IsStaleCast(CastBar, EventCastBarID(event, payload4, payload5, payload6)) then
             StopCastBar()
         end
     elseif (event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP")
-        and (CastBar.ActiveKind == "channel" or CastBar.ActiveKind == "empower") then
+        and (CastBar.ActiveKind == "channel" or CastBar.ActiveKind == "empower")
+        and not IsStaleCast(CastBar, EventCastBarID(event, payload4, payload5, payload6)) then
         StopCastBar()
     end
 end
@@ -366,6 +376,9 @@ local function SetNativePlayerCastBarShown(shown)
     local nativeCastBar = _G.PlayerCastingBarFrame
     if nativeCastBar and type(nativeCastBar.SetAndUpdateShowCastbar) == "function" then
         nativeCastBar:SetAndUpdateShowCastbar(shown)
+        if shown and type(nativeCastBar.OnEvent) == "function" then
+            nativeCastBar:OnEvent("PLAYER_ENTERING_WORLD")
+        end
     end
 end
 
@@ -496,6 +509,7 @@ local function RegisterCastBarEvents(CastBar)
     }) do
         CastBar:RegisterUnitEvent(event, "player")
     end
+    CastBar:RegisterEvent("PLAYER_ENTERING_WORLD")
     CastBar:SetScript("OnEvent", UpdateCastBarValues)
 end
 
@@ -504,8 +518,7 @@ local function EnableCastBar(CastBar, syncCurrentCast)
     CastBar.EventsEnabled = true
     SetNativePlayerCastBarShown(false)
     if syncCurrentCast then
-        local kind = GetCurrentCastKind()
-        if kind then StartCast(kind) else StopCastBar() end
+        SyncCurrentCast()
     elseif CastBar.CastActive then
         RebindActiveDuration(CastBar.ActiveKind)
     end

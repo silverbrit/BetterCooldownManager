@@ -44,6 +44,7 @@ local function NewFrame(name, parent)
     local frame = NewRegion(200, 24)
     frame.name, frame.parent, frame.events, frame.scripts = name, parent, {}, {}
     function frame:RegisterUnitEvent(event) self.events[event] = true end
+    function frame:RegisterEvent(event) self.events[event] = true end
     function frame:UnregisterAllEvents() self.events = {} end
     function frame:SetScript(script, callback) self.scripts[script] = callback end
     function frame:HookScript(script, callback)
@@ -88,10 +89,28 @@ end
 local anchor = NewFrame("Anchor", nil)
 anchor.width = 180
 UIParent = NewFrame("UIParent", nil)
-local nativeCastBar = { shown = true, calls = {} }
+local nativeCastBar = { shown = true, showCastbar = true, casting = false, channeling = false, calls = {} }
+function nativeCastBar:UpdateShownState(shown) self.shown = shown end
+function nativeCastBar:OnEvent(event)
+    if event == "UNIT_SPELLCAST_CHANNEL_START" then
+        self.channeling, self.casting = true, false
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        self.enteringWorldCalls = (self.enteringWorldCalls or 0) + 1
+        if channelInfo then
+            self.channeling, self.casting = true, false
+            self.shown = self.showCastbar
+        elseif castInfo then
+            self.channeling, self.casting = false, true
+            self.shown = self.showCastbar
+        else
+            self.channeling, self.casting, self.shown = false, false, false
+        end
+    end
+end
 function nativeCastBar:SetAndUpdateShowCastbar(shown)
-    self.shown = shown
+    self.showCastbar = shown
     self.calls[#self.calls + 1] = shown
+    if self.casting then self:OnEvent("PLAYER_ENTERING_WORLD") else self:UpdateShownState(false) end
 end
 PlayerCastingBarFrame = nativeCastBar
 
@@ -137,6 +156,7 @@ C_StringUtil = {
     end,
 }
 Enum = {
+    StatusBarInterpolation = { Immediate = "immediate" },
     StatusBarTimerDirection = { ElapsedTime = "elapsed", RemainingTime = "remaining" },
     SecondsFormatterInterval = { Seconds = 0 },
     SecondsFormatterAbbreviation = { None = 0 },
@@ -220,8 +240,8 @@ local secretTextOK = pcall(function() returnedSecretText = displayCastText(secre
 Check(secretTextOK and returnedSecretText == secretText, "secret cast text passes through without inspection")
 
 Check(nativeCastBar.shown == false, "enabling BCM hides the native cast bar through Blizzard's API")
-Check(bar.events.UNIT_SPELLCAST_DELAYED and bar.events.UNIT_SPELLCAST_CHANNEL_UPDATE
-    and bar.events.UNIT_SPELLCAST_EMPOWER_UPDATE, "timing update events are registered")
+Check(bar.events.PLAYER_ENTERING_WORLD and bar.events.UNIT_SPELLCAST_DELAYED and bar.events.UNIT_SPELLCAST_CHANNEL_UPDATE
+    and bar.events.UNIT_SPELLCAST_EMPOWER_UPDATE, "resync and timing update events are registered")
 
 local function StartNormal(id, duration)
     castInfo = { name = "Arcane Cast", displayName = "Arcane Cast", texture = 123,
@@ -235,8 +255,9 @@ local firstDuration = {}
 StartNormal(101, secretDuration)
 Check(bar.CastActive and bar.ActiveCastID == 101 and bar.HasDuration, "normal casts bind their duration object")
 Check(bar.Status.timerCalls[#bar.Status.timerCalls].duration == secretDuration
+    and bar.Status.timerCalls[#bar.Status.timerCalls].interpolation == Enum.StatusBarInterpolation.Immediate
     and bar.Status.timerCalls[#bar.Status.timerCalls].direction == Enum.StatusBarTimerDirection.ElapsedTime,
-    "normal casts use elapsed native duration fill")
+    "normal casts use immediate elapsed native duration fill")
 Check(bar.CastTimeBinding.duration == secretDuration and bar.scripts.OnUpdate == nil,
     "secret durations go directly to widgets without a Lua countdown")
 
@@ -247,17 +268,52 @@ end)
 Check(ok and bar.CastActive and not bar.HasDuration and not bar:IsShown(),
     "a nil cast duration fails closed without replacing the prior timer with nil")
 
+castInfo = { name = "World Cast", displayName = "World Cast", texture = 123,
+    guid = "world-cast-guid", notInterruptible = false, spellID = 4, id = 1501 }
+channelInfo = nil
+durations.cast = firstDuration
+handleEvent(bar, "PLAYER_ENTERING_WORLD", true, false)
+Check(bar.CastActive and bar.ActiveKind == "cast" and bar.ActiveCastID == 1501,
+    "PLAYER_ENTERING_WORLD resyncs a current cast without a start event")
+handleEvent(bar, "UNIT_SPELLCAST_STOP", "player", "guid", 4, 1501)
+
+castInfo = nil
+channelInfo = { name = "World Channel", displayName = "World Channel", texture = 456,
+    guid = "world-channel-guid", notInterruptible = true, spellID = 5, empowered = false, stages = nil, id = 1502 }
+durations.channel = firstDuration
+handleEvent(bar, "PLAYER_ENTERING_WORLD", false, true)
+Check(bar.CastActive and bar.ActiveKind == "channel" and bar.ActiveCastID == 1502,
+    "PLAYER_ENTERING_WORLD resyncs a current channel without a start event")
+handleEvent(bar, "UNIT_SPELLCAST_CHANNEL_STOP", "player", "guid", 5, nil, nil)
+
 StartNormal(201, firstDuration)
 local activeID = bar.ActiveCastID
 handleEvent(bar, "UNIT_SPELLCAST_FAILED", "player", "guid", 1, 200)
 Check(bar.CastActive and bar.ActiveCastID == activeID, "a stale failed cast ID leaves the current cast visible")
 handleEvent(bar, "UNIT_SPELLCAST_INTERRUPTED", "player", "guid", 1, "interrupting-guid", 200)
 Check(bar.CastActive, "a stale interrupted cast ID leaves the current cast visible")
-handleEvent(bar, "UNIT_SPELLCAST_STOP", "player", "guid", 1, activeID)
-Check(not bar.CastActive and bar.ActiveCastID == nil, "a matching stopped cast ID clears the active cast")
+handleEvent(bar, "UNIT_SPELLCAST_STOP", "player", "guid", 1, 200)
+Check(bar.CastActive, "a stale stopped cast ID leaves the current cast visible")
+handleEvent(bar, "UNIT_SPELLCAST_STOP", "player", "guid", 1, nil)
+Check(not bar.CastActive and bar.ActiveCastID == nil, "a missing stopped cast ID still clears the active cast")
 StartNormal(202, firstDuration)
-handleEvent(bar, "UNIT_SPELLCAST_FAILED", "player", "guid", 1, 202)
+handleEvent(bar, "UNIT_SPELLCAST_FAILED", "player", "guid", 1, nil)
+Check(not bar.CastActive and bar.ActiveCastID == nil, "a missing failed cast ID still clears the active cast")
+StartNormal(203, firstDuration)
+handleEvent(bar, "UNIT_SPELLCAST_INTERRUPTED", "player", "guid", 1, "interrupting-guid", nil)
+Check(not bar.CastActive and bar.ActiveCastID == nil, "a missing interrupted cast ID still clears the active cast")
+StartNormal(204, firstDuration)
+handleEvent(bar, "UNIT_SPELLCAST_FAILED", "player", "guid", 1, 204)
 Check(not bar.CastActive and bar.ActiveCastID == nil, "a matching failed cast ID clears the active cast")
+
+castInfo = { name = "No ID Cast", displayName = "No ID Cast", texture = 123,
+    guid = "no-id-guid", notInterruptible = false, spellID = 6, id = nil }
+channelInfo = nil
+durations.cast = firstDuration
+handleEvent(bar, "UNIT_SPELLCAST_START", "player", "guid", 6, nil)
+Check(bar.CastActive and bar.ActiveCastID == nil, "casts may remain active without a readable cast ID")
+handleEvent(bar, "UNIT_SPELLCAST_STOP", "player", "guid", 6, 999)
+Check(not bar.CastActive and bar.ActiveCastID == nil, "a numeric stop ID cannot stale-match a missing active ID")
 
 local channelDuration = {}
 channelInfo = { name = "Channel", displayName = "Channel", texture = 456,
@@ -276,8 +332,10 @@ Check(#bar.Status.timerCalls == channelCalls + 1 and bar.Status.timerCalls[#bar.
 durations.channel = nil
 Check(pcall(function() handleEvent(bar, "UNIT_SPELLCAST_CHANNEL_UPDATE", "player", "guid", 2, 301) end),
     "a nil channel duration is ignored safely")
+handleEvent(bar, "UNIT_SPELLCAST_CHANNEL_STOP", "player", "guid", 2, "interrupting-guid", 999)
+Check(bar.CastActive and bar.ActiveCastID == 301, "a stale channel stop ID leaves the current channel visible")
 handleEvent(bar, "UNIT_SPELLCAST_CHANNEL_STOP", "player", "guid", 2, nil, nil)
-Check(not bar.CastActive and bar.ActiveCastID == nil, "channel stop clears the active ID even when castBarID is nil")
+Check(not bar.CastActive and bar.ActiveCastID == nil, "channel stop clears the active ID when castBarID is nil")
 
 local empowerDuration = {}
 channelInfo = { name = "Empower", displayName = "Empower", texture = 789,
@@ -298,8 +356,10 @@ Check(#bar.Status.timerCalls == empowerCalls + 1 and bar.Status.timerCalls[#bar.
 durations.empower = nil
 Check(pcall(function() handleEvent(bar, "UNIT_SPELLCAST_EMPOWER_UPDATE", "player", "guid", 3, 401) end),
     "a nil empowered duration is ignored safely")
+handleEvent(bar, "UNIT_SPELLCAST_EMPOWER_STOP", "player", "guid", 3, false, nil, 999)
+Check(bar.CastActive and bar.ActiveCastID == 401, "a stale empower stop ID leaves the current empower visible")
 handleEvent(bar, "UNIT_SPELLCAST_EMPOWER_STOP", "player", "guid", 3, false, nil, nil)
-Check(not bar.CastActive and bar.ActiveCastID == nil, "empower stop clears the active ID when the event ID is nil")
+Check(not bar.CastActive and bar.ActiveCastID == nil, "empower stop clears the active ID when castBarID is nil")
 
 StartNormal(501, {})
 local delayedCalls = #bar.Status.timerCalls
@@ -308,17 +368,24 @@ handleEvent(bar, "UNIT_SPELLCAST_DELAYED", "player", "guid", 1, 501)
 Check(#bar.Status.timerCalls == delayedCalls + 1 and bar.Status.timerCalls[#bar.Status.timerCalls].duration == durations.cast,
     "delayed cast updates rebind the current duration")
 
-channelInfo = nil
-StartNormal(601, {})
+castInfo = nil
+channelInfo = { name = "Native Channel", displayName = "Native Channel", texture = 456,
+    guid = "native-channel-guid", notInterruptible = true, spellID = 7, empowered = false, stages = nil, id = 601 }
+durations.channel = {}
+handleEvent(bar, "UNIT_SPELLCAST_CHANNEL_START", "player", "guid", 7, 601)
+nativeCastBar:OnEvent("UNIT_SPELLCAST_CHANNEL_START")
 local oldNativeCallCount = #nativeCastBar.calls
+local oldNativeResyncCount = nativeCastBar.enteringWorldCalls or 0
 BCDM.db.profile.CastBar.Enabled = false
 BCDM:UpdateCastBar()
-Check(nativeCastBar.shown == true and #nativeCastBar.calls > oldNativeCallCount,
-    "disabling BCM immediately restores Blizzard's cast bar")
+Check(nativeCastBar.shown == true and #nativeCastBar.calls > oldNativeCallCount
+    and (nativeCastBar.enteringWorldCalls or 0) > oldNativeResyncCount,
+    "disabling BCM restores an active channel through Blizzard's entering-world resync")
 Check(not bar.CastActive and bar.ActiveCastID == nil and bar.scripts.OnEvent == nil
     and bar.scripts.OnUpdate == nil and next(bar.events) == nil and not bar.CastTimeBinding.enabled,
     "disabling BCM clears events, duration bindings, IDs, and updater scripts")
 
+channelInfo = nil
 BCDM.db.profile.CastBar.Enabled = true
 BCDM:UpdateCastBar()
 bar.widthWrites = 0
