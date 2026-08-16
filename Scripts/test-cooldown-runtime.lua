@@ -85,6 +85,8 @@ CreateFrame = function(_, name, parent)
 end
 
 hooksecurefunc = function(object, method, callback)
+    object.hookInstallCounts = object.hookInstallCounts or {}
+    object.hookInstallCounts[method] = (object.hookInstallCounts[method] or 0) + 1
     if failHookMethod == method then error("hooksecurefunc failure") end
     local original = object[method]
     object[method] = function(...)
@@ -139,6 +141,8 @@ UtilityCooldownViewer.system, UtilityCooldownViewer.systemIndex = 7, 2
 viewer.system, viewer.systemIndex = 7, 3
 local savedViewerUpdates, managerViewerRebinds = 0, 0
 local failViewerUpdateSource, failManagerAnchorSync = nil, false
+local failManagerAnchorSyncOnce = false
+local failSaveOnly = false
 local function UpdateViewerSystem(self, systemInfo)
     if failViewerUpdateSource == systemInfo.source then error("UpdateSystem failure") end
     self.lastSystemInfo = systemInfo
@@ -204,6 +208,18 @@ EditModePresetLayoutManager = {
 securecallfunction = function(callback, ...)
     return callback(...)
 end
+function CopyTable(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local copy = {}
+    seen[value] = copy
+    for key, child in pairs(value) do
+        copy[CopyTable(key, seen)] = CopyTable(child, seen)
+    end
+    return copy
+end
+CooldownViewerBuffIconItemMixin = { OnCooldownIDSet = function() end }
 EditModeManagerFrame = {
     ExitEditMode = function() end,
     GetActiveLayoutSystemInfo = function(_, system, systemIndex)
@@ -211,9 +227,16 @@ EditModeManagerFrame = {
     end,
     UpdateSystemAnchorInfo = function(_, frame)
         managerAnchorSyncs = managerAnchorSyncs + 1
-        if failManagerAnchorSync then error("UpdateSystemAnchorInfo failure") end
         local managerInfo = FindSystem(managerSystems, frame.system, frame.systemIndex)
-        managerInfo.anchorInfo = frame.lastSystemInfo.anchorInfo
+        if failManagerAnchorSync or failManagerAnchorSyncOnce then
+            managerInfo.anchorInfo = {
+                point = "MUTATED", relativeTo = "MUTATED", relativePoint = "MUTATED",
+                offsetX = 99, offsetY = 99,
+            }
+            failManagerAnchorSyncOnce = false
+            error("UpdateSystemAnchorInfo failure")
+        end
+        managerInfo.anchorInfo = CopyTable(frame.lastSystemInfo.anchorInfo)
         return true
     end,
 }
@@ -248,7 +271,10 @@ function LEMO:ReanchorFrame(frame, ...)
     layoutCalls.reanchor = layoutCalls.reanchor + 1
     layoutCalls.anchors[frame] = { ... }
 end
-function LEMO:SaveOnly() layoutCalls.save = layoutCalls.save + 1 end
+function LEMO:SaveOnly()
+    layoutCalls.save = layoutCalls.save + 1
+    if failSaveOnly then error("SaveOnly failure") end
+end
 function LEMO:ApplyChanges()
     layoutCalls.apply = layoutCalls.apply + 1
     if simulateEditModeApply then
@@ -396,6 +422,9 @@ nativeRefreshLayoutCalls = 0
 BCDM.db.profile.CooldownManager.Enable = true
 failHookMethod = "ReleaseAll"
 BCDM:SkinCooldownManager()
+local unhookedOwner = createdFrames[#createdFrames - 1]
+Check(first.point[2] == viewer and not unhookedOwner:IsShown(),
+    "tracked-buff centering stays disabled until every pool hook is installed")
 failHookMethod = nil
 BCDM:UpdateCooldownViewer("Buffs")
 RunTimers()
@@ -446,10 +475,20 @@ BCDM:UpdateCooldownViewer("Buffs")
 RunTimers()
 RunTimers()
 RunTimers()
+RunTimers()
 Check(pandemicReanchors > pandemicAttemptsBeforeFailure
-    and pandemicReanchors <= pandemicAttemptsBeforeFailure + 4 and #timers == 0,
+    and pandemicReanchors <= pandemicAttemptsBeforeFailure + 6 and #timers == 0,
     "native Pandemic anchor failures use a bounded retry")
+local exhaustedPandemicAttempts = pandemicReanchors
+failPandemicAnchor = true
+BCDM:QueueCooldownViewerStyleRefresh()
+RunTimers()
+local resetRetryScheduled = #timers
 failPandemicAnchor = false
+RunTimers()
+RunTimers()
+Check(resetRetryScheduled > 0 and pandemicReanchors > exhaustedPandemicAttempts and #timers == 0,
+    "a new external style pass resets an exhausted Pandemic retry budget")
 BCDM:UpdateCooldownViewer("Buffs")
 RunTimers()
 Check(pandemicFrame.pandemicPoints[1][2] == first and pandemicFrame.pandemicPoints[2][2] == first,
@@ -511,6 +550,21 @@ RunFrameUpdates()
 RunFrameUpdates()
 Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
     "a failed tracked-buff batch gets one bounded retry")
+
+second.failSetPoint = true
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+Check(centeredOwner:IsShown(),
+    "a failed tracked-buff restoration retains its claim and keeps the owner visible")
+second.failSetPoint = false
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+RunFrameUpdates()
+RunFrameUpdates()
+Check(first.point[2] == centeredOwner and second.point[2] == centeredOwner,
+    "tracked-buff restoration retries after the failed row recovers")
 
 BCDM.db.profile.CooldownManager.Buffs.CenterBuffs = false
 BCDM:UpdateCooldownViewer("Buffs")
@@ -655,26 +709,40 @@ BetterCooldownManagerSettingsWindow = nil
 BCDM:RetryPendingCooldownViewerLayoutApply()
 Check(#timers == 0, "closing settings without pending positions does not apply Edit Mode layouts")
 
+local savesBeforeSaveFailure = layoutCalls.save
+failSaveOnly = true
+BCDM:QueueCooldownViewerLayoutApply()
+RunTimers()
+Check(layoutCalls.save == savesBeforeSaveFailure + 1 and #timers == 1,
+    "SaveOnly failures keep the layout pending and schedule one coalesced retry")
+failSaveOnly = false
+RunTimers()
+Check(layoutCalls.save == savesBeforeSaveFailure + 2 and #timers == 0,
+    "a transient SaveOnly failure recovers without a manual queue")
+
 local managerRebindsBeforeFailure = managerViewerRebinds
-failManagerAnchorSync = true
+local managerAnchorBeforeFailure = CopyTable(managerSystems[1].anchorInfo)
+failManagerAnchorSyncOnce = true
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
-failManagerAnchorSync = false
-Check(managerViewerRebinds == managerRebindsBeforeFailure + 1
-    and EssentialCooldownViewer.lastSystemInfo == managerSystems[1],
-    "failed native anchor synchronization still restores the manager system reference")
-BCDM:QueueCooldownViewerLayoutApply()
+Check(managerViewerRebinds == managerRebindsBeforeFailure + 2
+    and EssentialCooldownViewer.lastSystemInfo == managerSystems[1]
+    and managerSystems[1].anchorInfo.point == managerAnchorBeforeFailure.point
+    and managerSystems[1].anchorInfo.offsetX == managerAnchorBeforeFailure.offsetX,
+    "mutation-then-error restores from an untouched snapshot and repairs the shared manager record")
 RunTimers()
+Check(managerViewerRebinds == managerRebindsBeforeFailure + 5 and #timers == 0,
+    "a repaired native sync retries automatically without another queue")
 
 local managerRebindsBeforeRollbackFailure = managerViewerRebinds
 failViewerUpdateSource = "saved"
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
 failViewerUpdateSource = nil
-Check(managerViewerRebinds == managerRebindsBeforeRollbackFailure + 1,
-    "failed temporary saved system updates still attempt manager rollback")
-BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
+Check(managerViewerRebinds == managerRebindsBeforeRollbackFailure + 3
+    and EssentialCooldownViewer.lastSystemInfo == managerSystems[1],
+    "failed temporary saved system updates keep pending and retry native rollback")
 
 local lateSpell = NewItem(6, 12, 12, false)
 viewer.items = { second, first, lateSpell }
@@ -683,6 +751,19 @@ viewer:RefreshData()
 RunTimers()
 Check(lateSpell.bcdmStyleCount == 1 and lateSpell.width == 30 and lateSpell.height == 20,
     "spell rows acquired after login are styled after viewer data refreshes")
+
+local partialHookItem = NewItem(8, 30, 20, false)
+partialHookItem:SetPoint("TOPLEFT", viewer, "TOPLEFT", 0, 0)
+viewer.items = { second, first, partialHookItem }
+failHookMethod = "OnActiveStateChanged"
+BCDM:UpdateCooldownViewer("Buffs")
+failHookMethod = nil
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+Check(partialHookItem.hookInstallCounts.SetPoint == 1
+    and partialHookItem.hookInstallCounts.OnActiveStateChanged == 2,
+    "partial tracked-buff frame hook failures retry only the missing hook")
+viewer.items = { second, first }
 
 local essentialFirst = NewItem(11, 64, 64, false)
 local essentialSecond = NewItem(12, 91, 73, false)
@@ -757,6 +838,23 @@ Check(essentialFirst.point[4] == -22 and essentialSecond.point[4] == 12
     and essentialSecond.point[5] == -10 and essentialThird.point[4] == 0
     and essentialThird.point[5] == -33,
     "wrapped rows center variable native icon sizes on both axes")
+
+essentialSecond.failClearAllPoints = true
+BCDM:QueueCooldownViewerStyleRefresh()
+RunTimers()
+RunTimers()
+RunTimers()
+RunTimers()
+Check(essentialSecond.point ~= nil and #timers == 0,
+    "wrapped-row rollback failures use a bounded style retry")
+essentialSecond.failClearAllPoints = false
+essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
+essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 24, 0)
+essentialThird:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 68, 0)
+BCDM:QueueCooldownViewerStyleRefresh()
+RunTimers()
+Check(essentialFirst.point[1] == "TOP" and essentialSecond.point[1] == "TOP",
+    "wrapped rows recover on a later external style pass")
 
 EssentialCooldownViewer.isHorizontal = false
 EssentialCooldownViewer.layoutFramesGoingRight = true
