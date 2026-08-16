@@ -3,15 +3,18 @@ local _, BCDM = ...
 local runeBars = {}
 local comboPoints = {}
 local essenceTicks = {}
-local resizeTimer = nil
-local resizeGeneration = 0
+local widthTimer
+local widthGeneration = 0
 local tickLayoutKey
 local tickLayoutResource
 local lastReadableMaximum = {}
 
-local RENDER_UNAVAILABLE = 0
-local RENDER_READABLE = 1
-local RENDER_WIDGET = 2
+local RENDER_UNAVAILABLE = BCDM.RENDER_UNAVAILABLE or 0
+local RENDER_READABLE = BCDM.RENDER_READABLE or 1
+local RENDER_WIDGET = BCDM.RENDER_WIDGET or 2
+BCDM.RENDER_UNAVAILABLE = RENDER_UNAVAILABLE
+BCDM.RENDER_READABLE = RENDER_READABLE
+BCDM.RENDER_WIDGET = RENDER_WIDGET
 
 local function ReadValue(value)
     if BCDM:IsSecretValue(value) then return value, RENDER_WIDGET end
@@ -705,35 +708,47 @@ local function HideAllResourceDisplays()
     if BCDM.ClearTicks and BCDM.SecondaryPowerBar then BCDM:ClearTicks() end
 end
 
-local function UpdatePowerValues()
+local function FinishResourceUpdate(bar, state, deferOwnership)
+    if (deferOwnership or BCDM._UpdatingPowerBars) and BCDM.ApplyPowerBarOwnership then return end
+    if BCDM.ApplyPowerBarOwnership then
+        BCDM:ApplyPowerBarOwnership(state)
+    elseif bar then
+        if state == RENDER_UNAVAILABLE then bar:Hide() else bar:Show() end
+    end
+end
+
+local function UpdatePowerValues(deferOwnership)
     local descriptor = BCDM:GetCurrentSecondaryResource()
     local bar = BCDM.SecondaryPowerBar
     local settings = BCDM.db.profile.SecondaryPowerBar
-    if not descriptor then
+    local state = RENDER_UNAVAILABLE
+    BCDM._SecondaryResourceState = state
+    BCDM._SecondaryResourceRenderable = false
+    if not descriptor or not bar or settings.Enabled == false then
+        if bar and bar.Status then bar.Status:Hide() end
+        if bar then SetBarText(bar, "") end
         HideAllResourceDisplays()
-        if bar then
-            bar.Status:Hide()
-            SetBarText(bar, "")
-            bar:Hide()
-        end
-        return RENDER_UNAVAILABLE
+        FinishResourceUpdate(bar, state, deferOwnership)
+        return state
     end
-    if not bar then return RENDER_UNAVAILABLE end
     local handler = RESOURCE_HANDLERS[descriptor.kind]
     if not handler then
         HideAllResourceDisplays()
         bar.Status:Hide()
         SetBarText(bar, "")
-        bar:Hide()
-        return RENDER_UNAVAILABLE
+        FinishResourceUpdate(bar, state, deferOwnership)
+        return state
     end
 
     HideInactiveResourceDisplays(descriptor.kind)
-    local current, maximum, state, text, colourApplied = handler(descriptor, bar, settings)
+    local current, maximum, renderState, text, colourApplied = handler(descriptor, bar, settings)
+    state = renderState or RENDER_UNAVAILABLE
+    BCDM._SecondaryResourceState = state
+    BCDM._SecondaryResourceRenderable = state ~= RENDER_UNAVAILABLE
     if state == RENDER_UNAVAILABLE then
         bar.Status:Hide()
         SetBarText(bar, "")
-        bar:Hide()
+        FinishResourceUpdate(bar, state, deferOwnership)
         return state
     end
     if not colourApplied then bar.Status:SetStatusBarColor(GetPowerBarColor(descriptor)) end
@@ -743,7 +758,7 @@ local function UpdatePowerValues()
         text = nil
     end
     SetBarText(bar, text)
-    bar:Show()
+    FinishResourceUpdate(bar, state, deferOwnership)
     return state
 end
 
@@ -777,12 +792,12 @@ local function GetTickMaximum(descriptor)
     return descriptor.tickCount, descriptor.tickCount and RENDER_READABLE or RENDER_UNAVAILABLE
 end
 
-local function CreateTicksBasedOnPowerType()
+local function CreateTicksBasedOnPowerType(deferOwnership)
     local settings = BCDM.db.profile.SecondaryPowerBar
     local descriptor = BCDM:GetCurrentSecondaryResource()
     if settings.HideTicks or not descriptor then
         ClearTickLayout()
-        return UpdatePowerValues()
+        return UpdatePowerValues(deferOwnership)
     end
     if tickLayoutResource and tickLayoutResource ~= descriptor.kind then ClearTickLayout() end
     if descriptor.kind == "RUNES" then
@@ -805,52 +820,86 @@ local function CreateTicksBasedOnPowerType()
             SetTickLayout(descriptor.kind .. ":" .. count, count, descriptor.kind)
         end
     end
-    return UpdatePowerValues()
+    return UpdatePowerValues(deferOwnership)
 end
 
-local function UpdateBarWidth()
-    resizeGeneration = resizeGeneration + 1
-    local generation = resizeGeneration
-    if resizeTimer then
-        resizeTimer:Cancel()
-        resizeTimer = nil
-    end
+local function SecondaryOwnsPrimary(resourceState)
+    local descriptor = BCDM:GetCurrentSecondaryResource()
+    return BCDM.SecondaryPowerBar ~= nil and BCDM.ShouldSecondaryOwnPrimaryPosition
+        and BCDM:ShouldSecondaryOwnPrimaryPosition(
+            descriptor, BCDM.db.profile.SecondaryPowerBar, resourceState) or false
+end
 
-    local secondaryPowerBarDB = BCDM.db.profile.SecondaryPowerBar
-    local secondaryPowerBar = BCDM.SecondaryPowerBar
-    if not secondaryPowerBar or not secondaryPowerBarDB.MatchWidthOfAnchor then return end
-
-    local anchorFrame = BCDM:ResolveAnchorParent(secondaryPowerBarDB.Layout[2])
-    if not anchorFrame then return end
-
-    local function ApplyWidth()
-        if generation ~= resizeGeneration then return end
-        resizeTimer = nil
-        local currentDB = BCDM.db.profile.SecondaryPowerBar
-        local currentBar = BCDM.SecondaryPowerBar
-        if not currentBar or not currentDB.MatchWidthOfAnchor then return end
-        local currentAnchor = BCDM:ResolveAnchorParent(currentDB.Layout[2])
-        if not currentAnchor then return end
-        local ok, anchorWidth = pcall(currentAnchor.GetWidth, currentAnchor)
-        if not ok or BCDM:IsSecretValue(anchorWidth) or type(anchorWidth) ~= "number" or anchorWidth <= 0 then return end
-        currentBar:SetWidth(anchorWidth)
-        local descriptor = BCDM:GetCurrentSecondaryResource()
-
-        if descriptor and descriptor.kind == "RUNES" and #runeBars > 0 then
-            LayoutRuneBars()
-        elseif descriptor and descriptor.kind == "COMBO_POINTS" and #comboPoints > 0 then
-            LayoutComboPoints()
-        elseif descriptor and descriptor.kind == "ESSENCE" and #essenceTicks > 0 then
-            LayoutEssenceTicks()
-            UpdatePowerValues()
+local function RefreshSecondaryPowerValues(refreshTicks)
+    local previousOwner = BCDM._SecondaryOwnsPrimaryPosition == true
+    local state = refreshTicks and CreateTicksBasedOnPowerType(true) or UpdatePowerValues(true)
+    if BCDM.ApplyPowerBarOwnership and not BCDM._UpdatingPowerBars then
+        if BCDM.UpdatePowerBars and SecondaryOwnsPrimary(state) ~= previousOwner then
+            BCDM:UpdatePowerBars()
+        else
+            BCDM:ApplyPowerBarOwnership(state)
         end
     end
+    return state
+end
 
-    if C_Timer and type(C_Timer.NewTimer) == "function" then
-        resizeTimer = C_Timer.NewTimer(0.5, ApplyWidth)
-    elseif C_Timer and type(C_Timer.After) == "function" then
-        C_Timer.After(0.5, ApplyWidth)
+local function LayoutWidthDependentChildren()
+    local descriptor = BCDM:GetCurrentSecondaryResource()
+    if descriptor and descriptor.kind == "RUNES" and #runeBars > 0 then
+        LayoutRuneBars()
+    elseif descriptor and descriptor.kind == "COMBO_POINTS" and #comboPoints > 0 then
+        LayoutComboPoints()
+    elseif descriptor and descriptor.kind == "ESSENCE" and #essenceTicks > 0 then
+        LayoutEssenceTicks()
+        UpdatePowerValues(true)
     end
+end
+
+local function ApplyPowerBarWidth(barType, secondaryOwnsPrimary)
+    local profile = BCDM.db and BCDM.db.profile
+    local settings = profile and profile[barType]
+    local frame = BCDM[barType == "PowerBar" and "PowerBar" or "SecondaryPowerBar"]
+    if not settings or not frame then return end
+    local _, anchor = BCDM:GetPowerBarLayout(barType, secondaryOwnsPrimary)
+    if settings.MatchWidthOfAnchor == true then
+        local width
+        local primarySettings = profile.PowerBar
+        if barType == "SecondaryPowerBar" and secondaryOwnsPrimary
+            and primarySettings and primarySettings.MatchWidthOfAnchor ~= true
+            and BCDM.PowerBar and BCDM.PowerBar.GetWidth then
+            width = BCDM.PowerBar:GetWidth()
+        else
+            width = anchor and anchor.GetWidth and anchor:GetWidth()
+        end
+        if type(width) == "number" and not BCDM:IsSecretValue(width) and width > 0 then
+            frame:SetWidth(width)
+        end
+    else
+        frame:SetWidth(settings.Width)
+    end
+end
+
+function BCDM:QueuePowerBarWidthUpdates()
+    widthGeneration = widthGeneration + 1
+    local generation = widthGeneration
+    local profile = self.db and self.db.profile
+    if widthTimer then
+        widthTimer:Cancel()
+        widthTimer = nil
+    end
+    if not profile or not C_Timer then return end
+
+    local function Apply()
+        if generation ~= widthGeneration or not self.db or self.db.profile ~= profile then return end
+        widthTimer = nil
+        local secondaryOwnsPrimary = self._SecondaryOwnsPrimaryPosition == true
+        ApplyPowerBarWidth("PowerBar", secondaryOwnsPrimary)
+        ApplyPowerBarWidth("SecondaryPowerBar", secondaryOwnsPrimary)
+        LayoutWidthDependentChildren()
+    end
+
+    if C_Timer.NewTimer then widthTimer = C_Timer.NewTimer(0.5, Apply) end
+end
 end
 
 local function SetHooks()
@@ -859,13 +908,16 @@ local function SetHooks()
 end
 
 local function OnSecondaryPowerBarSizeChanged()
-    CreateTicksBasedOnPowerType()
+    local deferOwnership = BCDM._UpdatingPowerBars or BCDM.ApplyPowerBarOwnership ~= nil
+    local state = CreateTicksBasedOnPowerType(deferOwnership)
     local descriptor = BCDM:GetCurrentSecondaryResource()
     if descriptor and descriptor.kind == "COMBO_POINTS" and #comboPoints > 0 then
         LayoutComboPoints()
     elseif descriptor and descriptor.kind == "ESSENCE" and #essenceTicks > 0 then
         LayoutEssenceTicks()
-        UpdatePowerValues()
+    end
+    if BCDM.ApplyPowerBarOwnership and not BCDM._UpdatingPowerBars then
+        BCDM:ApplyPowerBarOwnership(state)
     end
 end
 
@@ -910,53 +962,36 @@ local function OnSecondaryPowerBarEvent(self, event, ...)
     if event == "PLAYER_SPECIALIZATION_CHANGED" then
         local unit = ...
         if unit and unit ~= "player" then return end
-        BCDM:UpdateSecondaryPowerBar()
+        if BCDM.UpdatePowerBars then BCDM:UpdatePowerBars() else BCDM:UpdateSecondaryPowerBar() end
         return
     elseif event == "PLAYER_ENTERING_WORLD" or event == "UPDATE_SHAPESHIFT_FORM"
         or event == "PLAYER_TALENT_UPDATE" then
-        BCDM:UpdateSecondaryPowerBar()
+        if BCDM.UpdatePowerBars then BCDM:UpdatePowerBars() else BCDM:UpdateSecondaryPowerBar() end
         return
     end
 
     if event == "RUNE_POWER_UPDATE" or event == "RUNE_TYPE_UPDATE" then
         local descriptor = BCDM:GetCurrentSecondaryResource()
-        if not descriptor then
-            if self then SetResourceEventRegistration(self, false) end
-            UpdatePowerValues()
-        elseif descriptor.kind == "RUNES" then
-            if BCDM.db.profile.SecondaryPowerBar.HideTicks then
-                UpdatePowerValues()
-            else
-                local state = UpdateRuneDisplay(descriptor)
-                if state == RENDER_UNAVAILABLE then
-                    UpdatePowerValues()
-                elseif tickLayoutKey ~= "RUNES" then
-                    CreateTicksBasedOnPowerType()
-                end
-            end
-        end
+        if not descriptor and self then SetResourceEventRegistration(self, false) end
+        RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
         return
     end
 
     if IsResourceEvent(event) and not BCDM:GetCurrentSecondaryResource() then
         if self then SetResourceEventRegistration(self, false) end
-        UpdatePowerValues()
+        RefreshSecondaryPowerValues(false)
         return
     end
 
     if event == "UNIT_AURA" then
-        if BCDM.db.profile.SecondaryPowerBar.HideTicks then
-            UpdatePowerValues()
-        else
-            CreateTicksBasedOnPowerType()
-        end
+        RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
         return
     elseif event == "UNIT_MAXPOWER" then
-        CreateTicksBasedOnPowerType()
+        RefreshSecondaryPowerValues(true)
         return
     end
 
-    UpdatePowerValues()
+    RefreshSecondaryPowerValues(false)
 end
 
 BCDM._SecondaryPowerBarOnEvent = OnSecondaryPowerBarEvent
@@ -979,7 +1014,6 @@ end
 
 function BCDM:CreateSecondaryPowerBar()
     local generalDB = BCDM.db.profile.General
-    local powerBarDB = BCDM.db.profile.PowerBar
     local secondaryPowerBarDB = BCDM.db.profile.SecondaryPowerBar
 
     SetHooks()
@@ -996,18 +1030,9 @@ function BCDM:CreateSecondaryPowerBar()
     end
     secondaryPowerBar:SetBackdropColor(secondaryPowerBarDB.BackgroundColour[1], secondaryPowerBarDB.BackgroundColour[2], secondaryPowerBarDB.BackgroundColour[3], secondaryPowerBarDB.BackgroundColour[4])
     secondaryPowerBar:SetSize(secondaryPowerBarDB.Width, secondaryPowerBarDB.Height)
-
-    if BCDM:CanSwapSecondaryResourceToPrimary() and secondaryPowerBarDB.SwapToPowerBarPosition then
-        if BCDM.PowerBar then BCDM.PowerBar:Hide() end
-        secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(powerBarDB.Layout[1], BCDM:ResolveAnchorParent(powerBarDB.Layout[2]), powerBarDB.Layout[3], powerBarDB.Layout[4], powerBarDB.Layout[5])
-        secondaryPowerBar:SetHeight(secondaryPowerBarDB.HeightWithoutPrimary)
-    else
-        secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(secondaryPowerBarDB.Layout[1], BCDM:ResolveAnchorParent(secondaryPowerBarDB.Layout[2]), secondaryPowerBarDB.Layout[3], secondaryPowerBarDB.Layout[4], secondaryPowerBarDB.Layout[5])
-        secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
-        if powerBarDB.Enabled then BCDM.PowerBar:Show() end
-    end
+    local secondaryLayout, secondaryAnchor = BCDM:GetPowerBarLayout("SecondaryPowerBar", false)
+    secondaryPowerBar:ClearAllPoints()
+    secondaryPowerBar:SetPoint(secondaryLayout[1], secondaryAnchor, secondaryLayout[3], secondaryLayout[4], secondaryLayout[5])
 
     secondaryPowerBar:SetFrameStrata(secondaryPowerBarDB.FrameStrata)
     secondaryPowerBar.Status = CreateFrame("StatusBar", nil, secondaryPowerBar)
@@ -1031,6 +1056,7 @@ function BCDM:CreateSecondaryPowerBar()
     secondaryPowerBar.Text = secondaryPowerBar.Status:CreateFontString(nil, "OVERLAY")
     secondaryPowerBar.Text:SetFont(BCDM.Media.Font, secondaryPowerBarDB.Text.FontSize, generalDB.Fonts.FontFlag)
     secondaryPowerBar.Text:SetTextColor(secondaryPowerBarDB.Text.Colour[1], secondaryPowerBarDB.Text.Colour[2], secondaryPowerBarDB.Text.Colour[3], 1)
+    secondaryPowerBar.Text:ClearAllPoints()
     secondaryPowerBar.Text:SetPoint(secondaryPowerBarDB.Text.Layout[1], secondaryPowerBar, secondaryPowerBarDB.Text.Layout[2], secondaryPowerBarDB.Text.Layout[3], secondaryPowerBarDB.Text.Layout[4])
 
     if generalDB.Fonts.Shadow.Enabled then
@@ -1050,46 +1076,34 @@ function BCDM:CreateSecondaryPowerBar()
 
     BCDM.SecondaryPowerBar = secondaryPowerBar
     BCDM:RegisterOwnedFrameVisibility(secondaryPowerBar, function() return BCDM.db.profile.SecondaryPowerBar end,
-        function() BCDM:UpdateSecondaryPowerBar() end)
+        function() BCDM:UpdatePowerBars() end)
 
     if secondaryPowerBarDB.Enabled then
         RegisterSecondaryPowerBarEvents(secondaryPowerBar)
-        local renderState = UpdatePowerValues()
-        renderState = CreateTicksBasedOnPowerType() or renderState
         NudgeSecondaryPowerBar("BCDM_SecondaryPowerBar", -0.1, 0)
-        if renderState ~= RENDER_UNAVAILABLE and BCDM:GetCurrentSecondaryResource() then
-            secondaryPowerBar:Show()
-        else
-            secondaryPowerBar:Hide()
-        end
     else
-        secondaryPowerBar:Hide()
         UnregisterSecondaryPowerBarEvents(secondaryPowerBar)
     end
-
-    UpdateBarWidth()
+    if BCDM.UpdatePowerBars then
+        BCDM:UpdatePowerBars()
+    else
+        local renderState = CreateTicksBasedOnPowerType()
+        if renderState ~= RENDER_UNAVAILABLE then secondaryPowerBar:Show() else secondaryPowerBar:Hide() end
+    end
 end
 
-function BCDM:UpdateSecondaryPowerBar()
+function BCDM:UpdateSecondaryPowerBarAppearance()
     local cooldownManagerDB = BCDM.db.profile
     local generalDB = cooldownManagerDB.General
-    local powerBarDB = cooldownManagerDB.PowerBar
     local secondaryPowerBarDB = BCDM.db.profile.SecondaryPowerBar
-    local descriptor = BCDM:GetCurrentSecondaryResource()
     local borderSize = BCDM.db.profile.CooldownManager.General.BorderSize
-
-    if not descriptor then
-        if BCDM.SecondaryPowerBar then
-            SetResourceEventRegistration(BCDM.SecondaryPowerBar, false)
-            HideAllResourceDisplays()
-            BCDM.SecondaryPowerBar:Hide()
-        end
-        if powerBarDB.Enabled and BCDM.PowerBar and BCDM:ShouldShowOwnedFrame(powerBarDB) then BCDM.PowerBar:Show() end
-        return
-    end
-
     local secondaryPowerBar = BCDM.SecondaryPowerBar
-    if not secondaryPowerBar then return end
+    if not secondaryPowerBar then
+        BCDM._SecondaryResourceState = RENDER_UNAVAILABLE
+        BCDM._SecondaryResourceRenderable = false
+        BCDM._SecondaryDisplayVisible = false
+        return RENDER_UNAVAILABLE
+    end
     secondaryPowerBar:SetBackdrop(BCDM.BACKDROP)
     if borderSize > 0 then
         secondaryPowerBar:SetBackdropBorderColor(0, 0, 0, 1)
@@ -1102,18 +1116,13 @@ function BCDM:UpdateSecondaryPowerBar()
     end
     secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
 
-    if descriptor.swapToPrimaryEligible and secondaryPowerBarDB.SwapToPowerBarPosition then
-        if BCDM.PowerBar then BCDM.PowerBar:Hide() end
-        secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(powerBarDB.Layout[1], BCDM:ResolveAnchorParent(powerBarDB.Layout[2]), powerBarDB.Layout[3], powerBarDB.Layout[4], powerBarDB.Layout[5])
-        secondaryPowerBar:SetHeight(secondaryPowerBarDB.HeightWithoutPrimary)
-    else
-        secondaryPowerBar:ClearAllPoints()
-        secondaryPowerBar:SetPoint(secondaryPowerBarDB.Layout[1], BCDM:ResolveAnchorParent(secondaryPowerBarDB.Layout[2]), secondaryPowerBarDB.Layout[3], secondaryPowerBarDB.Layout[4], secondaryPowerBarDB.Layout[5])
-        secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
-        if powerBarDB.Enabled then BCDM.PowerBar:Show() end
-    end
+    secondaryPowerBar:ClearAllPoints()
+    local secondaryLayout, secondaryAnchor = BCDM:GetPowerBarLayout("SecondaryPowerBar", false)
+    secondaryPowerBar:SetPoint(secondaryLayout[1], secondaryAnchor,
+        secondaryLayout[3], secondaryLayout[4], secondaryLayout[5])
+    secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
     secondaryPowerBar:SetFrameStrata(secondaryPowerBarDB.FrameStrata)
+    secondaryPowerBar.Status:ClearAllPoints()
     secondaryPowerBar.Status:SetPoint("TOPLEFT", secondaryPowerBar, "TOPLEFT", borderSize, -borderSize)
     secondaryPowerBar.Status:SetPoint("BOTTOMRIGHT", secondaryPowerBar, "BOTTOMRIGHT", -borderSize, borderSize)
     secondaryPowerBar.Status:SetStatusBarTexture(BCDM.Media.Foreground)
@@ -1121,7 +1130,6 @@ function BCDM:UpdateSecondaryPowerBar()
     BCDM:AnchorStatusBarSpark(secondaryPowerBar.Spark, secondaryPowerBar.Status, secondaryPowerBarDB.FillDirection)
     secondaryPowerBar.Spark:SetHeight(secondaryPowerBar:GetHeight())
     secondaryPowerBar.Spark:SetShown(secondaryPowerBarDB.ShowSpark == true)
-    secondaryPowerBar.Status:SetStatusBarColor(GetPowerBarColor(descriptor))
     secondaryPowerBar.Text:SetFont(BCDM.Media.Font, secondaryPowerBarDB.Text.FontSize, generalDB.Fonts.FontFlag)
     secondaryPowerBar.Text:SetTextColor(secondaryPowerBarDB.Text.Colour[1], secondaryPowerBarDB.Text.Colour[2], secondaryPowerBarDB.Text.Colour[3], 1)
     secondaryPowerBar.Text:ClearAllPoints()
@@ -1135,21 +1143,56 @@ function BCDM:UpdateSecondaryPowerBar()
     end
     secondaryPowerBar.Text:SetText("")
     if secondaryPowerBarDB.Text.Enabled then secondaryPowerBar.Text:Show() else secondaryPowerBar.Text:Hide() end
-    if secondaryPowerBarDB.Enabled then
-        RegisterSecondaryPowerBarEvents(secondaryPowerBar)
-        local renderState = UpdatePowerValues()
-        renderState = CreateTicksBasedOnPowerType() or renderState
-        NudgeSecondaryPowerBar("BCDM_SecondaryPowerBar", -0.1, 0)
-        local shouldShow = renderState ~= RENDER_UNAVAILABLE
-        if BCDM.ShouldShowOwnedFrame then shouldShow = shouldShow and BCDM:ShouldShowOwnedFrame(secondaryPowerBarDB) end
-        if shouldShow then secondaryPowerBar:Show() else secondaryPowerBar:Hide() end
-    else
-        secondaryPowerBar:Hide()
+    if secondaryPowerBarDB.Enabled ~= true then
+        BCDM._SecondaryResourceState = RENDER_UNAVAILABLE
+        BCDM._SecondaryResourceRenderable = false
+        BCDM._SecondaryDisplayVisible = false
+        secondaryPowerBar.Status:Hide()
+        SetBarText(secondaryPowerBar, "")
         UnregisterSecondaryPowerBarEvents(secondaryPowerBar)
+        return RENDER_UNAVAILABLE
     end
-    UpdateBarWidth()
+
+    RegisterSecondaryPowerBarEvents(secondaryPowerBar)
+    local renderState = CreateTicksBasedOnPowerType(true)
+    local descriptor = BCDM:GetCurrentSecondaryResource()
+    local secondaryPolicyVisible = true
+    if BCDM.ShouldShowOwnedFrame then
+        secondaryPolicyVisible = BCDM:ShouldShowOwnedFrame(secondaryPowerBarDB)
+    end
+    local ownsPrimary = BCDM:ShouldSecondaryOwnPrimaryPosition(
+        descriptor, secondaryPowerBarDB, renderState, secondaryPolicyVisible)
+    BCDM._SecondaryResourceState = renderState
+    BCDM._SecondaryResourceRenderable = renderState ~= RENDER_UNAVAILABLE
+    BCDM._SecondaryDisplayVisible = BCDM._SecondaryResourceRenderable and secondaryPolicyVisible
+    BCDM._SecondaryOwnsPrimaryPosition = ownsPrimary
+    secondaryLayout, secondaryAnchor = BCDM:GetPowerBarLayout("SecondaryPowerBar", ownsPrimary)
+    secondaryPowerBar:ClearAllPoints()
+    secondaryPowerBar:SetPoint(secondaryLayout[1], secondaryAnchor,
+        secondaryLayout[3], secondaryLayout[4], secondaryLayout[5])
+    secondaryPowerBar:SetHeight(ownsPrimary
+        and secondaryPowerBarDB.HeightWithoutPrimary or secondaryPowerBarDB.Height)
+    if secondaryPowerBarDB.Text.Enabled then secondaryPowerBar.Text:Show() else secondaryPowerBar.Text:Hide() end
+    return renderState
+end
+
+function BCDM:UpdatePowerBars()
+    if self._UpdatingPowerBars then return end
+    self._UpdatingPowerBars = true
+    local renderState = self:UpdateSecondaryPowerBarAppearance()
+    self:UpdatePowerBarAppearance()
+    self._UpdatingPowerBars = false
+    self:ApplyPowerBarOwnership(renderState)
+    self:QueuePowerBarWidthUpdates()
+end
+
+function BCDM:UpdateSecondaryPowerBar()
+    if self.UpdatePowerBars and not self._UpdatingPowerBars then
+        return self:UpdatePowerBars()
+    end
+    return self:UpdateSecondaryPowerBarAppearance()
 end
 
 function BCDM:UpdateSecondaryPowerBarWidth()
-    UpdateBarWidth()
+    if self.QueuePowerBarWidthUpdates then self:QueuePowerBarWidthUpdates() end
 end

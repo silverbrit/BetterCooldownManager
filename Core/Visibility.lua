@@ -59,6 +59,16 @@ function BCDM:ShouldShowOwnedFrame(config)
     return self:EvaluateVisibilityState(self:GetOwnedFrameVisibilityPolicy(config), CurrentState())
 end
 
+function BCDM:SetOwnedFrameShown(frame, config, shown)
+    if not frame then return false end
+    local policyVisible = self:ShouldShowOwnedFrame(config)
+    local registration = registrations[frame]
+    if registration then registration.PolicyVisible = policyVisible end
+    local visible = shown == true and policyVisible
+    if visible then frame:Show() else frame:Hide() end
+    return visible
+end
+
 function BCDM:RegisterOwnedFrameVisibility(frame, configProvider, refresh)
     if not frame or registrations[frame] then return end
     registrations[frame] = {
@@ -80,11 +90,8 @@ function BCDM:RefreshOwnedFrameVisibility()
         local policyVisible = self:ShouldShowOwnedFrame(config)
         if policyVisible ~= registration.PolicyVisible then
             registration.PolicyVisible = policyVisible
-            if not policyVisible then
-                frame:Hide()
-            elseif registration.Refresh then
-                registration.Refresh(frame)
-            end
+            if not policyVisible then frame:Hide() end
+            if registration.Refresh then registration.Refresh(frame) end
         elseif frame:IsShown() and not policyVisible then
             frame:Hide()
         end

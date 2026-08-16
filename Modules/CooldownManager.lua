@@ -1112,8 +1112,7 @@ function BCDM:UpdateCooldownViewer(viewerType)
         QueueCenteredTrackedBuffs()
     end
 
-    BCDM:UpdatePowerBarWidth()
-    BCDM:UpdateSecondaryPowerBarWidth()
+    if BCDM.QueuePowerBarWidthUpdates then BCDM:QueuePowerBarWidthUpdates() end
     BCDM:UpdateCastBarWidth()
 end
 
@@ -1123,7 +1122,6 @@ function BCDM:UpdateCooldownViewers()
     BCDM:UpdateCooldownViewer("Buffs")
     BCDM:RefreshCustomTrackers()
     BCDM:UpdateTrinketBar()
-    BCDM:UpdatePowerBar()
-    BCDM:UpdateSecondaryPowerBar()
+    BCDM:UpdatePowerBars()
     BCDM:UpdateCastBar()
 end

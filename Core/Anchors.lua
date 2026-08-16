@@ -47,6 +47,53 @@ function BCDM:ResolveAnchorParent(frameName)
     return _G[frameName] or UIParent
 end
 
+local POWER_BAR_FRAMES = {
+    PowerBar = "BCDM_PowerBar",
+    SecondaryPowerBar = "BCDM_SecondaryPowerBar",
+}
+
+local POWER_BAR_TYPES = {
+    BCDM_PowerBar = "PowerBar",
+    BCDM_SecondaryPowerBar = "SecondaryPowerBar",
+    BCDM_CastBar = "CastBar",
+}
+
+local function ConfiguredPowerBarTarget(self, frameName, secondaryOwnsPrimary)
+    local barType = POWER_BAR_TYPES[frameName]
+    if not barType then return end
+    if secondaryOwnsPrimary and barType == "SecondaryPowerBar" then barType = "PowerBar" end
+    local profile = self.db and self.db.profile
+    local settings = profile and profile[barType]
+    local layout = settings and settings.Layout
+    return layout and layout[2]
+end
+
+function BCDM:ResolvePowerBarAnchorParent(barType, layout, secondaryOwnsPrimary)
+    local targetName = layout and layout[2]
+    local originalTarget = targetName
+    local sourceFrame = POWER_BAR_FRAMES[barType]
+    if sourceFrame and targetName then
+        local visited = { [sourceFrame] = true }
+        while POWER_BAR_TYPES[targetName] do
+            if visited[targetName] then return UIParent end
+            visited[targetName] = true
+            targetName = ConfiguredPowerBarTarget(self, targetName, secondaryOwnsPrimary)
+            if not targetName then break end
+        end
+    end
+    return self:ResolveAnchorParent(originalTarget)
+end
+
+function BCDM:GetPowerBarLayout(barType, secondaryOwnsPrimary)
+    local profile = self.db and self.db.profile
+    local settings = profile and profile[barType]
+    if barType == "SecondaryPowerBar" and secondaryOwnsPrimary then
+        settings = profile and profile.PowerBar
+    end
+    local layout = settings and settings.Layout or {}
+    return layout, self:ResolvePowerBarAnchorParent(barType, layout, secondaryOwnsPrimary)
+end
+
 function BCDM:NormalizeEssentialAnchorProfile(profile)
     local cooldownManager = type(profile) == "table" and profile.CooldownManager
     local essential = type(cooldownManager) == "table" and cooldownManager.Essential
