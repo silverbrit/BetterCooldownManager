@@ -245,7 +245,7 @@ local BCDM = {
         CooldownManager = {
             Enable = false,
             General = { IconZoom = 0, BorderSize = 1, CooldownText = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
-            Essential = { Layout = { "CENTER", "CENTER", 0, 0 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
+            Essential = { Layout = { "CENTER", "NONE", "CENTER", 0, 0 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
             Utility = { Layout = { "TOP", "EssentialCooldownViewer", "BOTTOM", 0, -1 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
             Buffs = { CenterBuffs = true, Layout = { "BOTTOM", "UIParent", "TOP", 0, 1 }, Text = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "CENTER", "CENTER", 0, 0 } } },
         },
@@ -276,32 +276,62 @@ Check(layoutCalls.load == 1 and layoutCalls.reanchor == 3 and layoutCalls.save =
     and managerAnchorSyncs == 3 and compactFrameRefreshes == 0,
     "the layout queue securely refreshes only Cooldown Viewer systems")
 
+local savesBeforeSettle = layoutCalls.save
+BCDM:QueueCooldownViewerLayoutSettle()
+BCDM:QueueCooldownViewerLayoutSettle()
+RunTimers()
+RunTimers()
+RunTimers()
+Check(layoutCalls.save == savesBeforeSettle + 2 and #timers == 0,
+    "a single typed viewer change gets one bounded dependent-layout settle pass")
+
 function BCDM_PowerBar:GetRect() return 100, 200, 300, 20 end
+BCDM.db.profile.CooldownManager.Essential.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 2, 3 }
 BCDM.db.profile.CooldownManager.Buffs.Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 4, 5 }
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
+local persistedEssentialAnchor = layoutCalls.anchors[EssentialCooldownViewer]
+Check(persistedEssentialAnchor[2] == UIParent and persistedEssentialAnchor[3] == "BOTTOMLEFT",
+    "Essential Cooldowns support persistent addon-owned anchor parents")
+Check(persistedEssentialAnchor[4] == 252 and persistedEssentialAnchor[5] == 223,
+    "Essential Cooldowns preserve their visual position relative to addon anchors")
 local persistedBuffAnchor = layoutCalls.anchors[BuffIconCooldownViewer]
 Check(persistedBuffAnchor[2] == UIParent and persistedBuffAnchor[3] == "BOTTOMLEFT",
     "addon-owned anchors are persisted relative to UIParent for safe login replay")
 Check(persistedBuffAnchor[4] == 254 and persistedBuffAnchor[5] == 225,
     "the UIParent anchor preserves the addon frame's visual position")
 
+BCDM.db.profile.CooldownManager.Utility.Layout = { "TOP", "ElvUF_Player", "BOTTOM", 6, 7 }
+local savesBeforeLateAnchor = layoutCalls.save
+BCDM:QueueCooldownViewerLayoutApply()
+RunTimers()
+Check(layoutCalls.save == savesBeforeLateAnchor,
+    "viewer layout persistence waits for a late-loading anchor frame")
+ElvUF_Player = NewFrame(UIParent)
+function ElvUF_Player:GetRect() return 400, 300, 200, 80 end
+viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "PLAYER_ENTERING_WORLD")
+local persistedUtilityAnchor = layoutCalls.anchors[UtilityCooldownViewer]
+Check(persistedUtilityAnchor[2] == UIParent and persistedUtilityAnchor[3] == "BOTTOMLEFT",
+    "late-bound ElvUI anchors are persisted relative to UIParent")
+Check(persistedUtilityAnchor[4] == 506 and persistedUtilityAnchor[5] == 307,
+    "ElvUI anchors preserve the viewer's visual position")
+
 combat = true
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
-Check(layoutCalls.apply == 0 and layoutCalls.save == 2,
+Check(layoutCalls.apply == 0 and layoutCalls.save == 5,
     "viewer layouts are not applied during combat")
 combat = false
 viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "PLAYER_REGEN_ENABLED")
-Check(layoutCalls.save == 3, "a combat-deferred viewer layout applies after combat")
+Check(layoutCalls.save == 6, "a combat-deferred viewer layout applies after combat")
 
 editable = false
 BCDM:QueueCooldownViewerLayoutApply()
 RunTimers()
-Check(layoutCalls.save == 3, "preset Edit Mode layouts are left unchanged")
+Check(layoutCalls.save == 6, "preset Edit Mode layouts are left unchanged")
 editable = true
 viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "EDIT_MODE_LAYOUTS_UPDATED")
-Check(layoutCalls.save == 4, "a pending viewer layout retries after leaving a preset layout")
+Check(layoutCalls.save == 7, "a pending viewer layout retries after leaving a preset layout")
 
 viewer:RefreshLayout()
 nativeRefreshLayoutCalls = 0
@@ -406,6 +436,36 @@ viewer:RefreshData()
 RunTimers()
 Check(lateSpell.bcdmStyleCount == 1 and lateSpell.width == 30 and lateSpell.height == 20,
     "spell rows acquired after login are styled after viewer data refreshes")
+
+local essentialFirst = NewItem(11, 64, 64, false)
+local essentialSecond = NewItem(12, 91, 73, false)
+EssentialCooldownViewer.items = { essentialFirst, essentialSecond }
+function EssentialCooldownViewer:GetItemFrames() return self.items end
+local essentialLayoutCalls = 0
+function EssentialCooldownViewer:Layout()
+    essentialLayoutCalls = essentialLayoutCalls + 1
+    local x = 0
+    for _, item in ipairs(self.items) do
+        item:ClearAllPoints()
+        item:SetPoint("TOPLEFT", self, "TOPLEFT", x, 0)
+        x = x + item.width + 4
+    end
+end
+essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
+essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 10, 0)
+local defaultIsAddOnLoaded = C_AddOns.IsAddOnLoaded
+C_AddOns.IsAddOnLoaded = function(name) return name == "MasqueBlizzBars" end
+BCDM:UpdateCooldownViewer("Essential")
+RunTimers()
+Check(essentialLayoutCalls == 0 and essentialFirst.width == 64 and essentialSecond.width == 91,
+    "externally skinned viewers are not resized or relaid out by BCM")
+C_AddOns.IsAddOnLoaded = defaultIsAddOnLoaded
+BCDM:UpdateCooldownViewer("Essential")
+RunTimers()
+Check(essentialLayoutCalls > 0 and essentialFirst.width == 30 and essentialSecond.width == 30,
+    "BCM icon-size changes immediately rerun the existing native grid")
+Check(essentialFirst.point[4] == 0 and essentialSecond.point[4] == 34,
+    "BCM icon-size changes update positions without opening Edit Mode")
 
 combat = true
 viewer:RefreshLayout()

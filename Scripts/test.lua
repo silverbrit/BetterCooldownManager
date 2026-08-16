@@ -51,6 +51,20 @@ Check(defaults.profile.CooldownManager.Buffs.CenterBuffs == true
     and defaults.profile.CooldownManager.Buffs.Layout[2] == "BCDM_PowerBar"
     and defaults.profile.CooldownManager.Trinket.Enabled == true,
     "tracked buffs center on the power bar and trinkets are enabled by default")
+Check(defaults.profile.CooldownManager.Essential.Layout[2] == "NONE"
+    and defaults.profile.CooldownManager.Essential.Layout[3] == "CENTER",
+    "Essential Cooldowns use the shared anchor-parent layout schema")
+local legacyEssentialProfile = {
+    CooldownManager = { Essential = { Layout = { "CENTER", "CENTER", 12, -34 } } },
+}
+Check(BCDM:NormalizeEssentialAnchorProfile(legacyEssentialProfile)
+    and legacyEssentialProfile.CooldownManager.Essential.Layout[2] == "NONE"
+    and legacyEssentialProfile.CooldownManager.Essential.Layout[3] == "CENTER"
+    and legacyEssentialProfile.CooldownManager.Essential.Layout[4] == 12
+    and legacyEssentialProfile.CooldownManager.Essential.Layout[5] == -34,
+    "legacy Essential Cooldown positions migrate without moving the viewer")
+Check(not BCDM:NormalizeEssentialAnchorProfile(legacyEssentialProfile),
+    "Essential Cooldown anchor migration is idempotent")
 Check(defaults.profile.CooldownManager.Trinket.IconSize == 32
     and defaults.profile.CooldownManager.Trinket.IconWidth == 32
     and defaults.profile.CooldownManager.Trinket.IconHeight == 32

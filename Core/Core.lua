@@ -3,6 +3,7 @@ local BetterCooldownManager = LibStub("AceAddon-3.0"):NewAddon("BetterCooldownMa
 
 function BetterCooldownManager:OnInitialize()
     BCDM.db = LibStub("AceDB-3.0"):New("BCDMDB", BCDM:GetDefaultDB(), true)
+    BCDM:NormalizeEssentialAnchorProfiles(BCDM.db)
     BCDM:NormalizeBarColourProfiles(BCDM.db)
     BCDM:NormalizeRemovedSettingsProfiles(BCDM.db)
     BCDM:MigrateCustomTrackerProfiles(BCDM.db)

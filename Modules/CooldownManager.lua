@@ -52,6 +52,7 @@ local viewerLayoutPending = false
 local viewerLayoutScheduled = false
 local viewerLayoutApplying = false
 local viewerLayoutErrorReported = false
+local viewerLayoutSettleGeneration = 0
 local TryApplyViewerLayouts
 local TryApplyViewerStyles
 local CenterWrappedIcons
@@ -117,7 +118,9 @@ end
 local function GetPersistentViewerAnchor(layout)
     local anchorName = layout[2]
     local anchorParent = BCDM:ResolveAnchorParent(anchorName)
-    if type(anchorName) ~= "string" or not anchorName:match("^BCDM_") then
+    local requiresStableAnchor = type(anchorName) == "string"
+        and (anchorName:match("^BCDM_") or anchorName:match("^ElvUF_"))
+    if not requiresStableAnchor then
         return anchorParent, layout[3], layout[4] or 0, layout[5] or 0
     end
 
@@ -199,13 +202,9 @@ local function ApplyViewerLayouts()
             local viewerSettings = settings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
             local layout = viewerSettings and viewerSettings.Layout
             if viewer and layout then
-                if viewerName == "EssentialCooldownViewer" then
-                    LEMO:ReanchorFrame(viewer, layout[1], UIParent, layout[2], layout[3], layout[4])
-                else
-                    local anchorParent, relativePoint, xOffset, yOffset = GetPersistentViewerAnchor(layout)
-                    if not anchorParent then return "anchor-not-ready" end
-                    LEMO:ReanchorFrame(viewer, layout[1], anchorParent, relativePoint, xOffset, yOffset)
-                end
+                local anchorParent, relativePoint, xOffset, yOffset = GetPersistentViewerAnchor(layout)
+                if not anchorParent then return "anchor-not-ready" end
+                LEMO:ReanchorFrame(viewer, layout[1], anchorParent, relativePoint, xOffset, yOffset)
             end
         end
         -- Save, then securely update only native Cooldown Viewer systems. Never
@@ -281,6 +280,18 @@ function BCDM:QueueCooldownViewerLayoutApply()
     C_Timer.After(0, function()
         viewerLayoutScheduled = false
         TryApplyViewerLayouts()
+    end)
+end
+
+function BCDM:QueueCooldownViewerLayoutSettle()
+    self:QueueCooldownViewerLayoutApply()
+    viewerLayoutSettleGeneration = viewerLayoutSettleGeneration + 1
+    local generation = viewerLayoutSettleGeneration
+    C_Timer.After(0.05, function()
+        if generation == viewerLayoutSettleGeneration then
+            BCDM:QueueCooldownViewerLayoutApply()
+            BCDM:QueueCooldownViewerStyleRefresh()
+        end
     end)
 end
 
@@ -1044,10 +1055,10 @@ function BCDM:UpdateCooldownViewer(viewerType)
     local viewerSettings = cooldownManagerSettings[viewerType]
     local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
     if viewerType == "Trinket" then BCDM:UpdateTrinketBar() return end
-    if not IsInCombat() then
+    if not IsInCombat() and ShouldSkin() then
         for _, childFrame in ipairs(GetViewerItemFrames(cooldownViewerFrame)) do
             if BCDM:IsCustomizableCooldownViewerItem(childFrame) then
-            if childFrame.Icon and ShouldSkin() then
+            if childFrame.Icon then
                 BCDM:StripTextures(childFrame.Icon)
                 BCDM:ApplyIconTexCoord(childFrame.Icon, iconWidth, iconHeight, cooldownManagerSettings.General.IconZoom)
             end

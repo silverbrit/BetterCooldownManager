@@ -372,11 +372,16 @@ local function CreateViewerPanel(viewerType)
     end
     local function ViewerChanged()
         if viewerType == "Trinket" then BCDM:UpdateTrinketBar()
-        else BCDM:UpdateCooldownViewer(viewerType) end
+        else
+            BCDM:UpdateCooldownViewer(viewerType)
+            if BCDM.QueueCooldownViewerLayoutSettle then
+                BCDM:QueueCooldownViewerLayoutSettle()
+            end
+        end
         if RefreshViewerHighlight then RefreshViewerHighlight() end
     end
     local isCustom = viewerType == "Trinket"
-    local hasAnchorParent = viewerType ~= "Essential"
+    local hasAnchorParent = true
     if viewerType == "Trinket" then
         local trinkets = U.Section(controls, "Trinkets", true)
         PathCheckbox(controls, trinkets, "Enable Trinket Viewer", ProfileRoot,
