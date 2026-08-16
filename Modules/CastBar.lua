@@ -345,9 +345,8 @@ local function UpdateCastBarValues(self, event, unit, payload2, payload3, payloa
         if CastBar.ActiveKind == "cast" and MatchesActiveCast(CastBar, EventCastBarID(event, payload4, payload5, payload6)) then
             StopCastBar()
         end
-    elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" and CastBar.ActiveKind == "channel" then
-        StopCastBar()
-    elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" and CastBar.ActiveKind == "empower" then
+    elseif (event == "UNIT_SPELLCAST_CHANNEL_STOP" or event == "UNIT_SPELLCAST_EMPOWER_STOP")
+        and (CastBar.ActiveKind == "channel" or CastBar.ActiveKind == "empower") then
         StopCastBar()
     end
 end
