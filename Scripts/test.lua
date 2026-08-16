@@ -396,6 +396,8 @@ Check(store.BarOrder[#store.BarOrder] == recycledID, "new bars append without re
 Check(assert(loadfile(root .. "/Scripts/test-glows.lua"))(root), "custom glow lifecycle tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-cooldown-runtime.lua"))(root),
     "Cooldown Manager runtime safety tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-owned-bars.lua"))(root, BCDM, Check),
+    "owned bar visibility, anchoring, and width tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-secondary-power.lua"))(root),
     "secondary-resource secret-value tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-trinket-candidates.lua"))(root),
