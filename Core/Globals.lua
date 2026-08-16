@@ -431,6 +431,15 @@ function BCDM:CreatePrompt(title, text, onAccept, onCancel, acceptText, cancelTe
 end
 
 BCDM.AnchorParents = {
+    ["Essential"] = {
+        {
+            ["UtilityCooldownViewer"] = "|cFF00AEF7Blizzard|r: Utility Cooldown Viewer",
+            ["BCDM_PowerBar"] = "|cFF8080FFBCDM|r: Power Bar",
+            ["BCDM_SecondaryPowerBar"] = "|cFF8080FFBCDM|r: Secondary Power Bar",
+            ["NONE"] = "|cFF00AEF7Blizzard|r: UIParent",
+        },
+        { "NONE", "UtilityCooldownViewer", "BCDM_PowerBar", "BCDM_SecondaryPowerBar" },
+    },
     ["Utility"] = {
         {
             ["EssentialCooldownViewer"] = "|cFF00AEF7Blizzard|r: Essential Cooldown Viewer",
