@@ -27,6 +27,7 @@ end
 
 function BetterCooldownManager:OnEnable()
     BCDM:Init()
+    BCDM:SetupMinimapButton()
     BCDM:SetupEventManager()
     BCDM:SetupVisibilityEvents()
     BCDM:SkinCooldownManager()

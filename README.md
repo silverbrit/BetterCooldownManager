@@ -12,6 +12,7 @@
 
 ## Features
 - Clean, Pixel Border Skinning. Borders can be adjusted.
+- Standard LibDataBroker/LibDBIcon minimap launcher for opening the Better Cooldown Manager settings window.
 - Custom Cooldown Text & Tweaks.
 - Clickable custom, power-type, class, specialization, and cast-state fill-colour swatches without conflicting toggles.
 - Power Bar, Secondary Power Bar & Cast Bar with anchoring, automatic width matching, fill direction, and display controls.
@@ -32,6 +33,8 @@
 - [LibDualSpec](https://github.com/AdiAddons/LibDualSpec-1.0.git): Handles specialization profiles.
 - [LibSharedMedia](https://www.curseforge.com/wow/addons/libsharedmedia-3-0): Handles all additional media for the AddOn.
 - [LibEditModeOverride](https://github.com/plusmouse/LibEditModeOverride): Helps manage EditMode securely.
+- [LibDataBroker-1.1](https://www.curseforge.com/wow/addons/libdatabroker-1-1): Exposes the minimap launcher to addon managers.
+- [LibDBIcon-1.0](https://www.curseforge.com/wow/addons/libdbicon-1-0): Registers the standard minimap button.
 
 All of these libraries contribute to the success of BetterCooldownManager & are highly appreciated by myself.
 

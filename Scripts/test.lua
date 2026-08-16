@@ -18,6 +18,7 @@ Enum = { PowerType = {
 } }
 assert(loadfile(root .. "/Core/Visibility.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/Anchors.lua"))("BetterCooldownManager", BCDM)
+assert(loadfile(root .. "/Core/MinimapButton.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/BarBehavior.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/ResourceCatalog.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
@@ -28,6 +29,10 @@ assert(loadfile(root .. "/Scripts/test-cooldown-manager.lua"))(BCDM, Check)
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,
     "selected element highlights default to enabled")
+Check(defaults.global.MinimapButton.hide == false and defaults.global.MinimapButton.minimapPos == 225,
+    "the minimap launcher uses LibDBIcon's default storage")
+Check(assert(loadfile(root .. "/Scripts/test-minimap-button.lua"))(BCDM, Check),
+    "minimap button runtime tests pass")
 Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == true,
     "trinket viewer shows on-use equipment by default")
 Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,
