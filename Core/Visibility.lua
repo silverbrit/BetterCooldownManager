@@ -106,8 +106,11 @@ function BCDM:SetupVisibilityEvents()
         "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_IS_GLIDING_CHANGED", "PLAYER_ALIVE", "PLAYER_DEAD", "PLAYER_UNGHOST",
         "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_UPDATE_RESTING",
     }) do frame:RegisterEvent(event) end
-    frame:SetScript("OnEvent", function(_, _, unit)
-        if unit and unit ~= "player" then return end
+    frame:SetScript("OnEvent", function(_, event, unit)
+        if (event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE")
+            and unit ~= "player" then
+            return
+        end
         BCDM:RefreshOwnedFrameVisibility()
     end)
     self.VisibilityEventFrame = frame
