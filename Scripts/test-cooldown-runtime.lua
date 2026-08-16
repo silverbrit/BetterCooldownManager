@@ -411,6 +411,17 @@ Check(centeredOwner.point[2] == BCDM_PowerBar and centeredOwner.point[3] == "TOP
     "Tracked Buff centering keeps a live relative anchor to its selected parent")
 Check(first.point[4] == 0 and second.point[4] == 34,
     "native Tracked Buff rows preserve sorted layout order and spacing")
+local pandemicReanchors, pandemicWidth = 0, nil
+function viewer:AnchorPandemicStateFrame(_, item)
+    pandemicReanchors = pandemicReanchors + 1
+    pandemicWidth = item:GetWidth()
+end
+first.PandemicIcon = {}
+BCDM:UpdateCooldownViewer("Buffs")
+RunTimers()
+Check(pandemicReanchors > 0 and pandemicWidth == 30,
+    "native Pandemic frames are re-anchored after BCM icon sizing")
+first.PandemicIcon = nil
 viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "PLAYER_ENTERING_WORLD")
 RunFrameUpdates()
 RunFrameUpdates()

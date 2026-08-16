@@ -371,16 +371,24 @@ local function ApplyCooldownText(cooldownViewer)
     end
 end
 
+local function RefreshPandemicStateFrame(viewer, itemFrame)
+    if not viewer or not itemFrame or type(viewer.AnchorPandemicStateFrame) ~= "function" then return end
+    local ok, pandemicFrame = pcall(function() return itemFrame.PandemicIcon end)
+    if not ok or not pandemicFrame or BCDM:IsSecretValue(pandemicFrame) then return end
+    pcall(viewer.AnchorPandemicStateFrame, viewer, pandemicFrame, itemFrame)
+end
+
 local function StyleIcons(onlyViewerName)
     if IsInCombat() then return end
     if not ShouldSkin() then return end
     local cooldownManagerSettings = BCDM.db.profile.CooldownManager
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
         if not onlyViewerName or viewerName == onlyViewerName then
+        local viewer = _G[viewerName]
         local viewerSettings = cooldownManagerSettings[BCDM.CooldownManagerViewerToDBViewer[viewerName]]
         local iconWidth, iconHeight = BCDM:GetIconDimensions(viewerSettings)
         local preserveNativeSize = onlyViewerName == "BuffIconCooldownViewer"
-        for _, childFrame in ipairs(GetViewerItemFrames(_G[viewerName])) do
+        for _, childFrame in ipairs(GetViewerItemFrames(viewer)) do
             if BCDM:IsCustomizableCooldownViewerItem(childFrame) then
                 if childFrame.Icon then
                     BCDM:StripTextures(childFrame.Icon)
@@ -411,6 +419,7 @@ local function StyleIcons(onlyViewerName)
                 if childFrame.CooldownFlash then childFrame.CooldownFlash:SetAlpha(0) end
                 if childFrame.DebuffBorder then childFrame.DebuffBorder:SetAlpha(0) end
                 if not preserveNativeSize then childFrame:SetSize(iconWidth, iconHeight) end
+                RefreshPandemicStateFrame(viewer, childFrame)
                 BCDM:AddBorder(childFrame)
             end
         end
