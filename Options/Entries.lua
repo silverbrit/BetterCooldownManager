@@ -387,7 +387,8 @@ local function SetupFilterMenu(button, entry, panel)
     if type(button.SetupMenu) ~= "function" then return end
     button:SetupMenu(function(_, root)
         root:SetScrollMode(420)
-        for _, classEntry in ipairs(BCDM:GetClassSpecCatalog(entry.FilterClass)) do
+        local targetClass = entry.Source and entry.Source.Type == "timer" and entry.FilterClass
+        for _, classEntry in ipairs(BCDM:GetClassSpecCatalog(targetClass)) do
             local submenu = root:CreateButton(classEntry.className or classEntry.classToken)
             for _, specEntry in ipairs(classEntry.specs or {}) do
                 local value = specEntry.specID

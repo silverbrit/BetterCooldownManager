@@ -350,6 +350,10 @@ Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry],
     "numeric specialization filters match directly")
 Check(not BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry], 63, "MAGE", "Fire"),
     "numeric specialization filters reject other specs")
+local sharedRacial = { Source = { Type = "spell", ID = 20594 }, FilterClass = "MAGE",
+    SpecFilters = { [62] = true, [267] = true } }
+Check(BCDM:EntryMatchesSpecialization(sharedRacial, 267, "WARLOCK", "Destruction"),
+    "spell filters can target a specialization outside the source character class")
 local order = store.Bars[newBar].EntryOrder
 Check(BCDM:ReorderCustomTrackerEntry(newBar, filteredEntry, 1) and order[1] == filteredEntry,
     "entry can be dragged to the first position")
