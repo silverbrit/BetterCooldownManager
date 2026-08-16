@@ -47,10 +47,12 @@ svn export https://repos.curseforge.com/wow/ace3/trunk/AceDB-3.0 "${staged_libra
 svn export https://repos.curseforge.com/wow/ace3/trunk/AceLocale-3.0 "${staged_libraries}/Ace3/AceLocale-3.0"
 svn export https://repos.curseforge.com/wow/ace3/trunk/AceSerializer-3.0 "${staged_libraries}/Ace3/AceSerializer-3.0"
 svn export https://repos.curseforge.com/wow/callbackhandler/trunk/CallbackHandler-1.0 "${staged_libraries}/CallbackHandler-1.0"
+svn export https://repos.curseforge.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0 "${staged_libraries}/LibDBIcon-1.0"
 svn export https://repos.curseforge.com/wow/libstub/trunk "${staged_libraries}/LibStub"
 svn export https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0 "${staged_libraries}/LibSharedMedia-3.0"
 
 git clone --depth 1 https://github.com/SafeteeWoW/LibDeflate.git "${staged_libraries}/LibDeflate"
+git clone --depth 1 https://github.com/tekkub/libdatabroker-1-1.git "${staged_libraries}/LibDataBroker-1.1"
 git clone --depth 1 --branch master https://github.com/Stanzilla/LibCustomGlow.git "${staged_libraries}/LibCustomGlow-1.0"
 git clone --depth 1 --branch master https://github.com/AdiAddons/LibDualSpec-1.0.git "${staged_libraries}/LibDualSpec-1.0"
 git clone --depth 1 --branch main https://github.com/plusmouse/LibEditModeOverride.git "${staged_libraries}/LibEditModeOverride"

@@ -34,8 +34,8 @@ local Defaults = {
             ShowSelectedElementHighlight = true,
         },
         MinimapButton = {
-            Show = true,
-            Angle = 225,
+            hide = false,
+            minimapPos = 225,
         },
         EditModeManager = {
             SwapOnInstanceDifficulty = false,

@@ -29,11 +29,8 @@ assert(loadfile(root .. "/Scripts/test-cooldown-manager.lua"))(BCDM, Check)
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,
     "selected element highlights default to enabled")
-Check(defaults.global.MinimapButton.Show == true and defaults.global.MinimapButton.Angle == 225,
-    "the minimap button is visible by default at a stable angle")
-local minimapX, minimapY = BCDM.GetMinimapButtonOffset(90, 10)
-Check(math.abs(minimapX) < 0.0001 and math.abs(minimapY - 10) < 0.0001,
-    "minimap button angles resolve to stable circular offsets")
+Check(defaults.global.MinimapButton.hide == false and defaults.global.MinimapButton.minimapPos == 225,
+    "the minimap launcher uses LibDBIcon's default storage")
 Check(assert(loadfile(root .. "/Scripts/test-minimap-button.lua"))(BCDM, Check),
     "minimap button runtime tests pass")
 Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == true,
