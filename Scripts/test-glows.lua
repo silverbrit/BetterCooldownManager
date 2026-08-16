@@ -188,6 +188,38 @@ end
 
 assert(loadfile(root .. "/Modules/CustomGlows.lua"))("BetterCooldownManager", BCDM)
 
+local savedProfile = BCDM.db.profile
+local legacyGlow = {
+    GlowType = "Proc",
+    Type = "Button",
+    Button = { Color = { 0.2, 0.3, 0.4, 0.5 }, UseColor = false },
+}
+setmetatable(legacyGlow, {
+    __index = {
+        Button = { Color = { 0.95, 0.95, 0, 0.9 }, UseColor = false, Frequency = 0.3 },
+    },
+})
+BCDM.db.profile = { CooldownManager = { General = { Glow = legacyGlow } } }
+local migratedGlow = BCDM:GetCustomGlowSettings()
+Check(migratedGlow.Type == "Proc" and migratedGlow.GlowType == nil,
+    "legacy GlowType wins over AceDB's materialized Button default")
+Check(migratedGlow.Button.UseColor == true and migratedGlow.Button.Color[1] == 0.2,
+    "legacy customized Button colours remain enabled")
+
+local defaultButtonGlow = { Type = "Button", Button = { Color = { 0.95, 0.95, 0, 0.9 } } }
+BCDM.db.profile = { CooldownManager = { General = { Glow = defaultButtonGlow } } }
+local defaultedGlow = BCDM:GetCustomGlowSettings()
+Check(defaultedGlow.Button.UseColor == false, "new Button defaults keep custom colours opt-in")
+
+local explicitButtonGlow = {
+    Type = "Button",
+    Button = { Color = { 0.2, 0.3, 0.4, 0.5 }, UseColor = false },
+}
+BCDM.db.profile = { CooldownManager = { General = { Glow = explicitButtonGlow } } }
+Check(BCDM:GetCustomGlowSettings().Button.UseColor == false,
+    "an explicit Button colour opt-out is preserved")
+BCDM.db.profile = savedProfile
+
 Check(BCDM:SetupCustomGlows() == false, "glow hooks wait for Blizzard's alert manager")
 local retryFrame = createdFrames[#createdFrames]
 Check(retryFrame and retryFrame.events.ADDON_LOADED, "glow hooks register a late-load retry event")

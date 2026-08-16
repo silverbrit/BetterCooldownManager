@@ -37,6 +37,14 @@ local function NormalizeColor(color, fallback)
     }
 end
 
+local function IsColor(color, expected)
+    return type(color) == "table" and color[1] == expected[1] and color[2] == expected[2]
+        and color[3] == expected[3] and color[4] == expected[4]
+end
+
+local LEGACY_BUTTON_COLOR = { 1, 1, 1, 1 }
+local DEFAULT_BUTTON_COLOR = { 0.95, 0.95, 0, 0.9 }
+
 local function NormalizeGlowType(glowType)
     if not glowType then
         return nil
@@ -67,9 +75,11 @@ function BCDM:NormalizeGlowSettings()
 
     local glow = general.Glow
 
-    local legacyType = glow.GlowType
-    if glow.Type == nil and legacyType ~= nil then
-        glow.Type = NormalizeGlowType(legacyType)
+    local legacyType = rawget(glow, "GlowType")
+    local normalizedLegacyType = NormalizeGlowType(legacyType)
+    if normalizedLegacyType then
+        glow.Type = normalizedLegacyType
+        glow.GlowType = nil
     end
 
     glow.Enabled = NormalizeValue(glow.Enabled, true)
@@ -101,8 +111,24 @@ function BCDM:NormalizeGlowSettings()
     glow.Proc.XOffset = NormalizeValue(glow.Proc.XOffset, 0)
     glow.Proc.YOffset = NormalizeValue(glow.Proc.YOffset, 0)
 
+    local storedButton = rawget(glow, "Button")
     glow.Button = glow.Button or {}
-    glow.Button.Color = NormalizeColor(glow.Button.Color or legacyColor, { 0.95, 0.95, 0, 0.9 })
+    local storedButtonColor = type(storedButton) == "table" and rawget(storedButton, "Color")
+    local storedUseColor = type(storedButton) == "table" and rawget(storedButton, "UseColor")
+    local legacyColour = rawget(glow, "Colour")
+    local hasLegacyCustomColor = storedButtonColor ~= nil
+        and not IsColor(storedButtonColor, LEGACY_BUTTON_COLOR)
+        and not IsColor(storedButtonColor, DEFAULT_BUTTON_COLOR)
+    if type(legacyColour) == "table"
+        and not IsColor(legacyColour, LEGACY_BUTTON_COLOR)
+        and not IsColor(legacyColour, DEFAULT_BUTTON_COLOR) then
+        hasLegacyCustomColor = true
+    end
+    local hasLegacyGlowSettings = legacyType ~= nil or rawget(glow, "Colour") ~= nil
+    if hasLegacyCustomColor and (storedUseColor == nil or hasLegacyGlowSettings) then
+        glow.Button.UseColor = true
+    end
+    glow.Button.Color = NormalizeColor(glow.Button.Color or legacyColor, DEFAULT_BUTTON_COLOR)
     glow.Button.UseColor = NormalizeValue(glow.Button.UseColor, false)
     glow.Button.Frequency = NormalizeValue(glow.Button.Frequency, 0.3)
 
