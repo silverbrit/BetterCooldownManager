@@ -349,13 +349,14 @@ local function ApplyCooldownText(cooldownViewer)
         if BCDM:IsCustomizableCooldownViewerItem(icon) and icon.Cooldown then
             local textRegion = FetchCooldownTextRegion(icon.Cooldown)
             if textRegion then
+                local fontSize = CooldownTextDB.FontSize
                 if CooldownTextDB.ScaleByIconSize then
-                    local iconWidth = icon:GetWidth()
-                    local scaleFactor = iconWidth / 36
-                    textRegion:SetFont(BCDM.Media.Font, CooldownTextDB.FontSize * scaleFactor, GeneralDB.Fonts.FontFlag)
-                else
-                    textRegion:SetFont(BCDM.Media.Font, CooldownTextDB.FontSize, GeneralDB.Fonts.FontFlag)
+                    local okWidth, iconWidth = pcall(icon.GetWidth, icon)
+                    if okWidth and IsReadableNumber(iconWidth) and iconWidth > 0 then
+                        fontSize = fontSize * iconWidth / 36
+                    end
                 end
+                textRegion:SetFont(BCDM.Media.Font, fontSize, GeneralDB.Fonts.FontFlag)
                 textRegion:SetTextColor(CooldownTextDB.Colour[1], CooldownTextDB.Colour[2], CooldownTextDB.Colour[3], 1)
                 textRegion:ClearAllPoints()
                 textRegion:SetPoint(CooldownTextDB.Layout[1], icon, CooldownTextDB.Layout[2], CooldownTextDB.Layout[3], CooldownTextDB.Layout[4])
@@ -1017,6 +1018,7 @@ TryApplyViewerStyles = function()
     end
     if not nativeSettingsOpen then
         if CenterWrappedIcons then CenterWrappedIcons() end
+        if BCDM.RefreshCustomGlows then BCDM:RefreshCustomGlows() end
         QueueCenteredTrackedBuffs()
     end
 end
@@ -1094,60 +1096,114 @@ end
 
 local function CenterWrappedRows(viewerName)
     local viewer = _G[viewerName]
-    if not viewer or IsInCombat() then return end
+    if not viewer or IsInCombat() or nativeSettingsOpen or editModeOpen then return end
 
-    local iconLimit = viewer.iconLimit
-    if not iconLimit or iconLimit <= 0 then return end
+    local okLimit, iconLimit = pcall(function() return viewer.iconLimit end)
+    if not okLimit or not IsReadableNumber(iconLimit) or iconLimit < 1
+        or iconLimit ~= math.floor(iconLimit) then
+        return
+    end
+    local isHorizontal = ReadTrackedBuffBoolean(viewer, "IsHorizontal", "isHorizontal")
+    local growsRight = ReadTrackedBuffBoolean(viewer, nil, "layoutFramesGoingRight")
+    local growsUp = ReadTrackedBuffBoolean(viewer, nil, "layoutFramesGoingUp")
+    if isHorizontal ~= true or growsRight == nil or growsUp == nil then return end
 
+    local okSpacingX, iconSpacing = pcall(function() return viewer.childXPadding end)
+    local okSpacingY, rowSpacing = pcall(function() return viewer.childYPadding end)
+    if not okSpacingX or not okSpacingY or not IsReadableNumber(iconSpacing)
+        or not IsReadableNumber(rowSpacing) then
+        return
+    end
+
+    local itemFrames, framesReady = GetViewerItemFrames(viewer)
+    if not framesReady then return end
     local visibleIcons = {}
-    for _, childFrame in ipairs(GetViewerItemFrames(viewer)) do
-        if childFrame and childFrame.layoutIndex
-            and not BCDM:IsCustomizableCooldownViewerItem(childFrame) then
-            return
-        end
-        local okShown, shown = false, false
-        if childFrame and childFrame.IsShown then okShown, shown = pcall(childFrame.IsShown, childFrame) end
-        if childFrame and childFrame.layoutIndex and okShown
-            and not BCDM:IsSecretValue(shown) and shown == true then
-            table.insert(visibleIcons, childFrame)
+    for order, childFrame in ipairs(itemFrames) do
+        if childFrame and BCDM:IsSecretValue(childFrame) then return end
+        local okIndex, layoutIndex = pcall(function() return childFrame and childFrame.layoutIndex end)
+        if not okIndex or BCDM:IsSecretValue(layoutIndex) then return end
+        if layoutIndex ~= nil then
+            if not IsReadableNumber(layoutIndex)
+                or not BCDM:IsCustomizableCooldownViewerItem(childFrame) then
+                return
+            end
+            local okShownMethod, isShown = pcall(function() return childFrame.IsShown end)
+            if not okShownMethod or type(isShown) ~= "function" then return end
+            local okShown, shown = pcall(isShown, childFrame)
+            if not okShown or BCDM:IsSecretValue(shown) or type(shown) ~= "boolean" then return end
+            if shown then
+                local width = ReadTrackedBuffNumber(childFrame, "GetWidth")
+                local height = ReadTrackedBuffNumber(childFrame, "GetHeight")
+                local point = ReadTrackedBuffPoint(childFrame, 1)
+                if not width or not height or not point then return end
+                visibleIcons[#visibleIcons + 1] = {
+                    frame = childFrame,
+                    layoutIndex = layoutIndex,
+                    order = order,
+                    width = width,
+                    height = height,
+                    point = point,
+                }
+            end
         end
     end
+    if #visibleIcons == 0 then return end
 
-    table.sort(visibleIcons, function(a, b) return (a.layoutIndex or 0) < (b.layoutIndex or 0) end)
+    table.sort(visibleIcons, function(left, right)
+        if left.layoutIndex == right.layoutIndex then return left.order < right.order end
+        return left.layoutIndex < right.layoutIndex
+    end)
 
-    local visibleCount = #visibleIcons
-    if visibleCount == 0 then return end
-
-    local iconWidth = visibleIcons[1]:GetWidth()
-    local iconHeight = visibleIcons[1]:GetHeight()
-    local iconSpacing = viewer.childXPadding or 0
-    local rowSpacing = viewer.childYPadding or 0
-    local rowHeight = (iconHeight > 0 and iconHeight or iconWidth) + rowSpacing
-
-    local basePoint, _, _, _, baseY = visibleIcons[1]:GetPoint(1)
-    if not basePoint or not baseY then return end
-    local anchorPoint = "TOP"
-    local relativePoint = "TOP"
-    local yDirection = -1
-    if basePoint and basePoint:find("BOTTOM") then
-        anchorPoint = "BOTTOM"
-        relativePoint = "BOTTOM"
-        yDirection = 1
-    end
-
-    local rowCount = math.ceil(visibleCount / iconLimit)
+    local rowCount = math.ceil(#visibleIcons / iconLimit)
+    local rows = {}
     for rowIndex = 1, rowCount do
         local rowStart = (rowIndex - 1) * iconLimit + 1
-        local rowEnd = math.min(rowStart + iconLimit - 1, visibleCount)
-        local rowIcons = rowEnd - rowStart + 1
-        local rowWidth = (rowIcons * iconWidth) + ((rowIcons - 1) * iconSpacing)
-        local startX = -rowWidth / 2 + iconWidth / 2
-        local rowY = baseY + yDirection * (rowIndex - 1) * rowHeight
-
+        local rowEnd = math.min(rowStart + iconLimit - 1, #visibleIcons)
+        local rowWidth, rowHeight = 0, 0
         for index = rowStart, rowEnd do
-            local iconFrame = visibleIcons[index]
-            iconFrame:ClearAllPoints()
-            iconFrame:SetPoint(anchorPoint, viewer, relativePoint, startX + (index - rowStart) * (iconWidth + iconSpacing), rowY)
+            local icon = visibleIcons[index]
+            rowWidth = rowWidth + icon.width + (index > rowStart and iconSpacing or 0)
+            rowHeight = math.max(rowHeight, icon.height)
+        end
+        rows[rowIndex] = { startIndex = rowStart, endIndex = rowEnd,
+            width = rowWidth, height = rowHeight }
+    end
+
+    local verticalPoint = growsUp and "BOTTOM" or "TOP"
+    local baseY = visibleIcons[1].point[5]
+    local positions, rowOffset = {}, 0
+    for _, row in ipairs(rows) do
+        local cursor = growsRight and -row.width / 2 or row.width / 2
+        for index = row.startIndex, row.endIndex do
+            local icon = visibleIcons[index]
+            local x
+            if growsRight then
+                x = cursor + icon.width / 2
+                cursor = cursor + icon.width + iconSpacing
+            else
+                x = cursor - icon.width / 2
+                cursor = cursor - icon.width - iconSpacing
+            end
+            positions[index] = { verticalPoint, x,
+                baseY + (growsUp and 1 or -1) * rowOffset }
+        end
+        rowOffset = rowOffset + row.height + rowSpacing
+    end
+
+    local function RestoreIcon(icon)
+        local point = icon.point
+        pcall(icon.frame.ClearAllPoints, icon.frame)
+        pcall(icon.frame.SetPoint, icon.frame, unpack(point))
+    end
+    for index, icon in ipairs(visibleIcons) do
+        local position = positions[index]
+        local okClear = pcall(icon.frame.ClearAllPoints, icon.frame)
+        local okSet = okClear and pcall(icon.frame.SetPoint, icon.frame,
+            position[1], viewer, position[1], position[2], position[3])
+        if not okSet then
+            RestoreIcon(icon)
+            for previous = 1, index - 1 do RestoreIcon(visibleIcons[previous]) end
+            return
         end
     end
 end
