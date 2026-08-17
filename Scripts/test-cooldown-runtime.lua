@@ -114,14 +114,20 @@ end
 local first = NewItem(1, 30, 20)
 local second = NewItem(2, 30, 20)
 local viewer = NewFrame(nil)
+local viewerItemContainer = NewFrame(viewer)
 viewer.items = { second, first }
-viewer.childXPadding = 4
-viewer.childYPadding = 3
-viewer.layoutFramesGoingRight = true
-viewer.layoutFramesGoingUp = false
+viewerItemContainer.isHorizontal = true
+viewerItemContainer.layoutFramesGoingRight = true
+viewerItemContainer.layoutFramesGoingUp = false
+viewerItemContainer.childXPadding = 4
+viewerItemContainer.childYPadding = 3
+viewerItemContainer.stride = 1
 viewer.horizontal = true
-function viewer:GetItemFrames() return self.items end
-viewer.isHorizontal = true
+function viewer:IsHorizontal() return self.horizontal end
+function viewer:GetItemContainerFrame() return viewerItemContainer end
+function viewerItemContainer:GetLayoutChildren() return viewer.items end
+function viewerItemContainer:Layout() end
+function viewer:GetItemFrames() return self:GetItemContainerFrame():GetLayoutChildren() end
 function viewer:GetFrameStrata() return "MEDIUM" end
 function viewer:GetFrameLevel() return 5 end
 local nativeRefreshLayoutCalls = 0
@@ -135,6 +141,26 @@ function viewer:OnAcquireItemFrame() end
 
 EssentialCooldownViewer = NewFrame(nil)
 UtilityCooldownViewer = NewFrame(nil)
+local essentialItemContainer = NewFrame(EssentialCooldownViewer)
+local utilityItemContainer = NewFrame(UtilityCooldownViewer)
+for _, itemContainer in ipairs({ essentialItemContainer, utilityItemContainer }) do
+    itemContainer.isHorizontal = true
+    itemContainer.layoutFramesGoingRight = true
+    itemContainer.layoutFramesGoingUp = false
+    itemContainer.childXPadding = 4
+    itemContainer.childYPadding = 3
+    itemContainer.stride = 1
+end
+EssentialCooldownViewer.horizontal = true
+UtilityCooldownViewer.horizontal = true
+function EssentialCooldownViewer:IsHorizontal() return self.horizontal end
+function UtilityCooldownViewer:IsHorizontal() return self.horizontal end
+function EssentialCooldownViewer:GetItemContainerFrame() return essentialItemContainer end
+function UtilityCooldownViewer:GetItemContainerFrame() return utilityItemContainer end
+function essentialItemContainer:GetLayoutChildren() return EssentialCooldownViewer.items or {} end
+function utilityItemContainer:GetLayoutChildren() return UtilityCooldownViewer.items or {} end
+function essentialItemContainer:Layout() return EssentialCooldownViewer:Layout() end
+function utilityItemContainer:Layout() end
 BuffIconCooldownViewer = viewer
 EssentialCooldownViewer.system, EssentialCooldownViewer.systemIndex = 7, 1
 UtilityCooldownViewer.system, UtilityCooldownViewer.systemIndex = 7, 2
@@ -164,8 +190,8 @@ function viewer.itemFramePool:ReleaseAll()
     for _, item in ipairs(viewer.items) do item:ClearAllPoints() end
 end
 function viewer.itemFramePool:Acquire() return viewer.items[1] end
-function EssentialCooldownViewer:GetItemFrames() return {} end
-function UtilityCooldownViewer:GetItemFrames() return {} end
+function EssentialCooldownViewer:GetItemFrames() return self:GetItemContainerFrame():GetLayoutChildren() end
+function UtilityCooldownViewer:GetItemFrames() return self:GetItemContainerFrame():GetLayoutChildren() end
 function EssentialCooldownViewer:RefreshData() end
 function UtilityCooldownViewer:RefreshData() end
 local function NewSystemInfo(frame, source)
@@ -318,6 +344,23 @@ function BCDM:UpdateCastBarWidth() end
 assert(loadfile(root .. "/Modules/CooldownManager.lua"))("BetterCooldownManager", BCDM)
 Check(BCDM_PowerBar ~= nil and BCDM_SecondaryPowerBar ~= nil and BCDM_CastBar ~= nil,
     "BCM viewer anchor names exist before addon enablement for Edit Mode replay")
+Check(viewer:GetItemContainerFrame() == viewerItemContainer
+    and EssentialCooldownViewer:GetItemContainerFrame() == essentialItemContainer
+    and UtilityCooldownViewer:GetItemContainerFrame() == utilityItemContainer
+    and viewerItemContainer ~= viewer and essentialItemContainer ~= EssentialCooldownViewer
+    and utilityItemContainer ~= UtilityCooldownViewer,
+    "each Cooldown Viewer exposes a distinct item container")
+Check(viewer.isHorizontal == nil and viewer.childXPadding == nil
+    and viewer.layoutFramesGoingRight == nil and viewer.layoutFramesGoingUp == nil
+    and EssentialCooldownViewer.isHorizontal == nil
+    and EssentialCooldownViewer.childXPadding == nil
+    and EssentialCooldownViewer.layoutFramesGoingRight == nil
+    and EssentialCooldownViewer.layoutFramesGoingUp == nil
+    and UtilityCooldownViewer.isHorizontal == nil
+    and UtilityCooldownViewer.childXPadding == nil
+    and UtilityCooldownViewer.layoutFramesGoingRight == nil
+    and UtilityCooldownViewer.layoutFramesGoingUp == nil,
+    "viewer layout fields are absent outside their item containers")
 
 BCDM:QueueCooldownViewerLayoutApply()
 BCDM:QueueCooldownViewerLayoutApply()
@@ -426,6 +469,10 @@ local unhookedOwner = createdFrames[#createdFrames - 1]
 Check(first.point[2] == viewer and not unhookedOwner:IsShown(),
     "tracked-buff centering stays disabled until every pool hook is installed")
 failHookMethod = nil
+viewer.layoutFramesGoingRight = false
+viewer.layoutFramesGoingUp = true
+viewer.childXPadding = 999
+viewer.childYPadding = 999
 BCDM:UpdateCooldownViewer("Buffs")
 RunTimers()
 RunFrameUpdates()
@@ -444,6 +491,10 @@ Check(centeredOwner.point[2] == BCDM_PowerBar and centeredOwner.point[3] == "TOP
     "Tracked Buff centering keeps a live relative anchor to its selected parent")
 Check(first.point[4] == 0 and second.point[4] == 34,
     "native Tracked Buff rows preserve sorted layout order and spacing")
+viewer.layoutFramesGoingRight = nil
+viewer.layoutFramesGoingUp = nil
+viewer.childXPadding = nil
+viewer.childYPadding = nil
 local pandemicReanchors, pandemicWidth = 0, nil
 local failPandemicAnchor = false
 local pandemicFrame = NewFrame(first)
@@ -769,7 +820,7 @@ local essentialFirst = NewItem(11, 64, 64, false)
 local essentialSecond = NewItem(12, 91, 73, false)
 local essentialThird = NewItem(13, 52, 47, false)
 EssentialCooldownViewer.items = { essentialFirst, essentialSecond, essentialThird }
-function EssentialCooldownViewer:GetItemFrames() return self.items end
+function EssentialCooldownViewer:GetItemFrames() return self:GetItemContainerFrame():GetLayoutChildren() end
 local essentialLayoutCalls = 0
 function EssentialCooldownViewer:Layout()
     essentialLayoutCalls = essentialLayoutCalls + 1
@@ -799,12 +850,17 @@ Check(essentialFirst.point[4] == 0 and essentialSecond.point[4] == 34,
     "BCM icon-size changes update positions without opening Edit Mode")
 
 BCDM.db.profile.CooldownManager.Essential.CenterHorizontally = true
-EssentialCooldownViewer.iconLimit = 2
-EssentialCooldownViewer.isHorizontal = true
-EssentialCooldownViewer.layoutFramesGoingRight = false
-EssentialCooldownViewer.layoutFramesGoingUp = false
-EssentialCooldownViewer.childXPadding = 4
-EssentialCooldownViewer.childYPadding = 3
+essentialItemContainer.stride = 2
+EssentialCooldownViewer.horizontal = true
+essentialItemContainer.layoutFramesGoingRight = false
+essentialItemContainer.layoutFramesGoingUp = false
+essentialItemContainer.childXPadding = 4
+essentialItemContainer.childYPadding = 3
+EssentialCooldownViewer.isHorizontal = false
+EssentialCooldownViewer.layoutFramesGoingRight = true
+EssentialCooldownViewer.layoutFramesGoingUp = true
+EssentialCooldownViewer.childXPadding = 999
+EssentialCooldownViewer.childYPadding = 999
 essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
 essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 34, 0)
 essentialThird:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 68, 0)
@@ -814,9 +870,14 @@ Check(essentialFirst.point[1] == "TOP" and essentialFirst.point[4] == 17
     and essentialSecond.point[4] == -17 and essentialThird.point[4] == 0
     and essentialThird.point[5] == -23,
     "left-growing wrapped rows preserve layoutIndex order and top-down row growth")
+EssentialCooldownViewer.isHorizontal = nil
+EssentialCooldownViewer.layoutFramesGoingRight = nil
+EssentialCooldownViewer.layoutFramesGoingUp = nil
+EssentialCooldownViewer.childXPadding = nil
+EssentialCooldownViewer.childYPadding = nil
 
 BCDM.db.profile.CooldownManager.Enable = false
-EssentialCooldownViewer.layoutFramesGoingRight = true
+essentialItemContainer.layoutFramesGoingRight = true
 essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
 essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 34, 0)
 essentialThird:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 68, 0)
@@ -856,9 +917,9 @@ RunTimers()
 Check(essentialFirst.point[1] == "TOP" and essentialSecond.point[1] == "TOP",
     "wrapped rows recover on a later external style pass")
 
-EssentialCooldownViewer.isHorizontal = false
-EssentialCooldownViewer.layoutFramesGoingRight = true
-EssentialCooldownViewer.layoutFramesGoingUp = false
+EssentialCooldownViewer.horizontal = false
+essentialItemContainer.layoutFramesGoingRight = true
+essentialItemContainer.layoutFramesGoingUp = false
 essentialFirst:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, 0)
 essentialSecond:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, -33)
 essentialThird:SetPoint("TOPLEFT", EssentialCooldownViewer, "TOPLEFT", 0, -66)
@@ -868,14 +929,14 @@ Check(essentialFirst.point[1] == "TOP" and essentialFirst.point[4] == -22
     and essentialSecond.point[4] == 17 and essentialThird.point[5] == -33,
     "vertical down-growing columns preserve native order and cross-axis centering")
 
-EssentialCooldownViewer.layoutFramesGoingUp = true
+essentialItemContainer.layoutFramesGoingUp = true
 BCDM:QueueCooldownViewerStyleRefresh()
 RunTimers()
 Check(essentialFirst.point[1] == "BOTTOM" and essentialThird.point[5] == 33,
     "vertical up-growing columns preserve variable primary spacing")
 
-EssentialCooldownViewer.layoutFramesGoingRight = false
-EssentialCooldownViewer.layoutFramesGoingUp = false
+essentialItemContainer.layoutFramesGoingRight = false
+essentialItemContainer.layoutFramesGoingUp = false
 BCDM:QueueCooldownViewerStyleRefresh()
 RunTimers()
 Check(essentialFirst.point[1] == "TOP" and essentialFirst.point[4] == 22
@@ -885,9 +946,9 @@ Check(essentialFirst.point[1] == "TOP" and essentialFirst.point[4] == 22
 essentialFirst.width, essentialFirst.height = 30, 20
 essentialSecond.width, essentialSecond.height = 30, 20
 essentialThird.width, essentialThird.height = 30, 20
-EssentialCooldownViewer.isHorizontal = true
-EssentialCooldownViewer.layoutFramesGoingRight = false
-EssentialCooldownViewer.layoutFramesGoingUp = false
+EssentialCooldownViewer.horizontal = true
+essentialItemContainer.layoutFramesGoingRight = false
+essentialItemContainer.layoutFramesGoingUp = false
 BCDM.db.profile.CooldownManager.Enable = true
 BCDM:QueueCooldownViewerStyleRefresh()
 RunTimers()
@@ -911,21 +972,21 @@ Check(essentialFirst.point[4] == wrappedPoint[4] and essentialFirst.point[5] == 
     "secret wrapped-row width and height leave Blizzard layout untouched")
 essentialFirst.width, essentialFirst.height = 30, 20
 local beforeSecretDirection = { unpack(essentialFirst.point) }
-EssentialCooldownViewer.childXPadding = secretGeometry
+essentialItemContainer.childXPadding = secretGeometry
 BCDM:QueueCooldownViewerStyleRefresh()
 RunTimers()
 Check(essentialFirst.point[4] == beforeSecretDirection[4]
     and essentialFirst.point[5] == beforeSecretDirection[5],
     "secret wrapped-row padding leaves Blizzard layout untouched")
-EssentialCooldownViewer.childXPadding = 4
-EssentialCooldownViewer.layoutFramesGoingRight = secretGeometry
+essentialItemContainer.childXPadding = 4
+essentialItemContainer.layoutFramesGoingRight = secretGeometry
 BCDM:QueueCooldownViewerStyleRefresh()
 RunTimers()
 Check(essentialFirst.point[4] == beforeSecretDirection[4]
     and essentialFirst.point[5] == beforeSecretDirection[5],
     "secret wrapped-row direction leaves Blizzard layout untouched")
 BCDM.secretValue = nil
-EssentialCooldownViewer.layoutFramesGoingRight = false
+essentialItemContainer.layoutFramesGoingRight = false
 BCDM.db.profile.CooldownManager.Enable = true
 
 combat = true

@@ -40,6 +40,14 @@ local function GetViewerItemFrames(viewer)
     return frames, true
 end
 
+local function GetReadableItemContainer(viewer)
+    local okMethod, method = pcall(function() return viewer and viewer.GetItemContainerFrame end)
+    if not okMethod or type(method) ~= "function" then return nil end
+    local ok, container = pcall(method, viewer)
+    if not ok or not container or BCDM:IsSecretValue(container) then return nil end
+    return container
+end
+
 function BCDM:IsCustomizableCooldownViewerItem(itemFrame)
     if not itemFrame or not itemFrame.IsItem then return false end
     if itemFrame.IsForbidden then
@@ -926,6 +934,7 @@ local function ReadTrackedBuffBoolean(frame, methodName, fieldName)
             return nil
         end
     end
+    if not fieldName then return nil end
     local okField, value = pcall(function() return frame and frame[fieldName] end)
     if okField and type(value) == "boolean" and not BCDM:IsSecretValue(value) then
         return value
@@ -933,15 +942,18 @@ local function ReadTrackedBuffBoolean(frame, methodName, fieldName)
 end
 
 local function GetTrackedBuffViewerSettings(viewer)
-    local isHorizontal = ReadTrackedBuffBoolean(viewer, "IsHorizontal", "isHorizontal")
+    local itemContainer = GetReadableItemContainer(viewer)
+    if not itemContainer then return nil end
+
+    local isHorizontal = ReadTrackedBuffBoolean(viewer, "IsHorizontal")
     if isHorizontal == nil then return nil end
 
     local directionField = isHorizontal and "layoutFramesGoingRight" or "layoutFramesGoingUp"
-    local growsForward = ReadTrackedBuffBoolean(viewer, nil, directionField)
+    local growsForward = ReadTrackedBuffBoolean(itemContainer, nil, directionField)
     if growsForward == nil then return nil end
 
     local spacingField = isHorizontal and "childXPadding" or "childYPadding"
-    local okSpacing, spacing = pcall(function() return viewer[spacingField] end)
+    local okSpacing, spacing = pcall(function() return itemContainer[spacingField] end)
     if not okSpacing or not IsReadableNumber(spacing) then return nil end
     return isHorizontal, growsForward, spacing
 end
@@ -1518,22 +1530,27 @@ local function CenterWrappedRows(viewerName)
         if QueueCooldownViewerStyleRetry then QueueCooldownViewerStyleRetry() end
     end
 
-    local okLimit, iconLimit = pcall(function() return viewer.iconLimit end)
+    local itemContainer = GetReadableItemContainer(viewer)
+    if not itemContainer then
+        FailWrappedRows()
+        return
+    end
+    local okLimit, iconLimit = pcall(function() return itemContainer.stride end)
     if not okLimit or not IsReadableNumber(iconLimit) or iconLimit < 1
         or iconLimit ~= math.floor(iconLimit) then
         FailWrappedRows()
         return
     end
-    local isHorizontal = ReadTrackedBuffBoolean(viewer, "IsHorizontal", "isHorizontal")
-    local growsRight = ReadTrackedBuffBoolean(viewer, nil, "layoutFramesGoingRight")
-    local growsUp = ReadTrackedBuffBoolean(viewer, nil, "layoutFramesGoingUp")
+    local isHorizontal = ReadTrackedBuffBoolean(viewer, "IsHorizontal")
+    local growsRight = ReadTrackedBuffBoolean(itemContainer, nil, "layoutFramesGoingRight")
+    local growsUp = ReadTrackedBuffBoolean(itemContainer, nil, "layoutFramesGoingUp")
     if isHorizontal == nil or growsRight == nil or growsUp == nil then
         FailWrappedRows()
         return
     end
 
-    local okSpacingX, iconSpacing = pcall(function() return viewer.childXPadding end)
-    local okSpacingY, rowSpacing = pcall(function() return viewer.childYPadding end)
+    local okSpacingX, iconSpacing = pcall(function() return itemContainer.childXPadding end)
+    local okSpacingY, rowSpacing = pcall(function() return itemContainer.childYPadding end)
     if not okSpacingX or not okSpacingY or not IsReadableNumber(iconSpacing)
         or not IsReadableNumber(rowSpacing) then
         FailWrappedRows()
