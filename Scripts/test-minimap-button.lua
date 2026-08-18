@@ -32,13 +32,13 @@ BCDM.MinimapDataObject = nil
 BCDM.ToggleSettings = function() toggles = toggles + 1 end
 BCDM:SetupMinimapButton()
 
-local registration = dbIcon.registered.BetterCooldownManager
+local registration = dbIcon.registered["Better Cooldown Manager"]
 Check(registration and registration.object.type == "launcher" and registration.object.icon,
     "the minimap launcher is registered through LibDataBroker and LibDBIcon")
 Check(registration.settings.minimapPos == 225 and registration.settings.hide == false
     and registration.settings.Show == nil and registration.settings.Angle == nil,
     "legacy minimap visibility and angle settings migrate to LibDBIcon storage")
-Check(dbIcon.shown.BetterCooldownManager == 1,
+Check(dbIcon.shown["Better Cooldown Manager"] == 1,
     "the default minimap launcher is shown through LibDBIcon")
 
 registration.object.OnClick(registration.object, "LeftButton")
@@ -51,9 +51,9 @@ Check(#tooltip.lines == 2, "the LibDataBroker launcher provides its tooltip cont
 
 BCDM.db.global.MinimapButton.hide = true
 BCDM:UpdateMinimapButton()
-Check(dbIcon.hidden.BetterCooldownManager == 1,
+Check(dbIcon.hidden["Better Cooldown Manager"] == 1,
     "the global setting hides the launcher through LibDBIcon")
-Check(dataBroker.created.BetterCooldownManager == registration.object,
+Check(dataBroker.created["Better Cooldown Manager"] == registration.object,
     "refreshing visibility does not recreate the LibDataBroker object")
 
 local sourceFile = assert(io.open("Core/MinimapButton.lua", "r"))
