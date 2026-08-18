@@ -40,6 +40,7 @@ local function NewRegion(width, height)
     function region:SetTexCoord(...) self.texCoord = { ... } end
     function region:SetFont(...) self.font = { ... } end
     function region:SetTextColor(...) self.textColor = { ... } end
+    function region:SetJustifyH(value) self.justifyH = value end
     function region:SetShadowColor(...) self.shadowColor = { ... } end
     function region:SetShadowOffset(...) self.shadowOffset = { ... } end
     function region:SetText(text)
@@ -265,8 +266,9 @@ Check(secretTextOK and returnedSecretText == secretText, "secret cast text passe
 Check(nativeCastBar.shown == false, "enabling BCM hides the native cast bar through Blizzard's API")
 Check(bar.SpellNameText.font[1] == STANDARD_TEXT_FONT and bar.CastTimeText.font[1] == STANDARD_TEXT_FONT,
     "cast text falls back to the standard font when media font is unavailable")
-Check(bar.SpellNameText.wordWrap == false and bar.SpellNameText.nonSpaceWrap == false
-    and bar.SpellNameText.maxLines == 1, "cast names are single-line")
+Check(bar.SpellNameText.justifyH == "LEFT" and bar.SpellNameText.wordWrap == false
+    and bar.SpellNameText.nonSpaceWrap == false and bar.SpellNameText.maxLines == 1,
+    "cast names are left-aligned and single-line")
 Check(bar.SpellNameText.point[1] == "RIGHT" and bar.SpellNameText.point[2] == bar.CastTimeText
     and bar.SpellNameText.point[3] == "LEFT", "cast names stop before the duration timer")
 Check(bar.events.PLAYER_ENTERING_WORLD and bar.events.UNIT_SPELLCAST_DELAYED and bar.events.UNIT_SPELLCAST_CHANNEL_UPDATE

@@ -560,6 +560,7 @@ local function ApplyCastBarAppearance()
 
     SetFontStyle(CastBar.SpellNameText, CastBarDB.Text.SpellName, GeneralDB)
     SetFontStyle(CastBar.CastTimeText, CastBarDB.Text.CastTime, GeneralDB)
+    if CastBar.SpellNameText.SetJustifyH then CastBar.SpellNameText:SetJustifyH("LEFT") end
     if CastBar.SpellNameText.SetWordWrap then CastBar.SpellNameText:SetWordWrap(false) end
     if CastBar.SpellNameText.SetNonSpaceWrap then CastBar.SpellNameText:SetNonSpaceWrap(false) end
     if CastBar.SpellNameText.SetMaxLines then CastBar.SpellNameText:SetMaxLines(1) end
