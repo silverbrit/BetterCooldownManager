@@ -4,6 +4,7 @@ local runeBars = {}
 local comboPoints = {}
 local essenceTicks = {}
 local resizeTimer = nil
+local resizeGeneration = 0
 local tickLayoutKey
 local tickLayoutResource
 local lastReadableMaximum = {}
@@ -253,18 +254,17 @@ local function ReadRuneCooldown(runeIndex)
     return startTime, duration, runeReady
 end
 
-local function ReadRuneStates()
-    local states, readyCount = {}, 0
+local function GetRuneReadyCount()
+    local readyCount = 0
     for i = 1, 6 do
-        local startTime, duration, runeReady = ReadRuneCooldown(i)
-        if BCDM:IsSecretValue(startTime) or BCDM:IsSecretValue(duration) or BCDM:IsSecretValue(runeReady)
+        local _, _, runeReady = ReadRuneCooldown(i)
+        if BCDM:IsSecretValue(runeReady)
             or (runeReady ~= true and runeReady ~= false) then
-            return nil, nil, RENDER_UNAVAILABLE
+            return nil, RENDER_UNAVAILABLE
         end
-        states[i] = { startTime = startTime, duration = duration, ready = runeReady }
-        if runeReady then readyCount = readyCount + 1 end
+        if runeReady == true then readyCount = readyCount + 1 end
     end
-    return states, readyCount, RENDER_READABLE
+    return readyCount, RENDER_READABLE
 end
 
 local function StartRuneOnUpdate(runeBar, runeIndex, descriptor)
@@ -305,28 +305,38 @@ local function UpdateRuneDisplay(descriptor)
 
     local maxPower = 6
     local r, g, b, a = GetPowerBarColor(descriptor)
-    local runeStates, _, state = ReadRuneStates()
-    if state == RENDER_UNAVAILABLE then
+
+    local runeReadyList = {}
+    local runeOnCDList = {}
+    local runeStates = {}
+    local hasUsableData = false
+
+    for i = 1, maxPower do
+        local runeStartTime, runeDuration, runeReady = ReadRuneCooldown(i)
+        runeStates[i] = { startTime = runeStartTime, duration = runeDuration, ready = runeReady }
+        if runeReady ~= nil or (type(runeStartTime) == "number" and type(runeDuration) == "number") then
+            hasUsableData = true
+        end
+
+        if runeReady then
+            table.insert(runeReadyList, { index = i })
+        else
+            if type(runeStartTime) == "number" and type(runeDuration) == "number" and runeDuration > 0 then
+                local elapsed = GetTime() - runeStartTime
+                local remain = math.max(0, runeDuration - elapsed)
+                table.insert(runeOnCDList, { index = i, remaining = remain })
+            else
+                table.insert(runeOnCDList, { index = i, remaining = 999 })
+            end
+        end
+    end
+
+    if not hasUsableData then
         HideBars(runeBars)
         if BCDM.ClearTicks then BCDM:ClearTicks() end
         tickLayoutKey = false
         tickLayoutResource = nil
-        return state
-    end
-
-    local runeReadyList = {}
-    local runeOnCDList = {}
-    for i = 1, maxPower do
-        local runeState = runeStates[i]
-        if runeState.ready then
-            table.insert(runeReadyList, { index = i })
-        elseif type(runeState.startTime) == "number" and type(runeState.duration) == "number"
-            and runeState.duration > 0 then
-            local remain = math.max(0, runeState.duration - (GetTime() - runeState.startTime))
-            table.insert(runeOnCDList, { index = i, remaining = remain })
-        else
-            table.insert(runeOnCDList, { index = i, remaining = 999 })
-        end
+        return RENDER_UNAVAILABLE
     end
 
     table.sort(runeOnCDList, function(a, b) return a.remaining < b.remaining end)
@@ -643,7 +653,7 @@ end
 RESOURCE_HANDLERS.RUNES = function(descriptor, bar, settings)
     if settings.HideTicks then
         HideBars(runeBars)
-        local _, current, state = ReadRuneStates()
+        local current, state = GetRuneReadyCount()
         if state == RENDER_UNAVAILABLE then return nil, nil, state end
         SetResourceStatus(bar, current, 6)
         return current, 6, state, ReadableText(current, 6)
@@ -799,21 +809,31 @@ local function CreateTicksBasedOnPowerType()
 end
 
 local function UpdateBarWidth()
+    resizeGeneration = resizeGeneration + 1
+    local generation = resizeGeneration
+    if resizeTimer then
+        resizeTimer:Cancel()
+        resizeTimer = nil
+    end
+
     local secondaryPowerBarDB = BCDM.db.profile.SecondaryPowerBar
     local secondaryPowerBar = BCDM.SecondaryPowerBar
-
     if not secondaryPowerBar or not secondaryPowerBarDB.MatchWidthOfAnchor then return end
 
     local anchorFrame = BCDM:ResolveAnchorParent(secondaryPowerBarDB.Layout[2])
     if not anchorFrame then return end
 
-    if resizeTimer then
-        resizeTimer:Cancel()
-    end
-
-    resizeTimer = C_Timer.After(0.5, function()
-        local anchorWidth = anchorFrame:GetWidth()
-        secondaryPowerBar:SetWidth(anchorWidth)
+    local function ApplyWidth()
+        if generation ~= resizeGeneration then return end
+        resizeTimer = nil
+        local currentDB = BCDM.db.profile.SecondaryPowerBar
+        local currentBar = BCDM.SecondaryPowerBar
+        if not currentBar or not currentDB.MatchWidthOfAnchor then return end
+        local currentAnchor = BCDM:ResolveAnchorParent(currentDB.Layout[2])
+        if not currentAnchor then return end
+        local ok, anchorWidth = pcall(currentAnchor.GetWidth, currentAnchor)
+        if not ok or BCDM:IsSecretValue(anchorWidth) or type(anchorWidth) ~= "number" or anchorWidth <= 0 then return end
+        currentBar:SetWidth(anchorWidth)
         local descriptor = BCDM:GetCurrentSecondaryResource()
 
         if descriptor and descriptor.kind == "RUNES" and #runeBars > 0 then
@@ -824,9 +844,13 @@ local function UpdateBarWidth()
             LayoutEssenceTicks()
             UpdatePowerValues()
         end
+    end
 
-        resizeTimer = nil
-    end)
+    if C_Timer and type(C_Timer.NewTimer) == "function" then
+        resizeTimer = C_Timer.NewTimer(0.5, ApplyWidth)
+    elseif C_Timer and type(C_Timer.After) == "function" then
+        C_Timer.After(0.5, ApplyWidth)
+    end
 end
 
 local function SetHooks()
@@ -1073,7 +1097,10 @@ function BCDM:UpdateSecondaryPowerBar()
         secondaryPowerBar:SetBackdropBorderColor(0, 0, 0, 0)
     end
     secondaryPowerBar:SetBackdropColor(secondaryPowerBarDB.BackgroundColour[1], secondaryPowerBarDB.BackgroundColour[2], secondaryPowerBarDB.BackgroundColour[3], secondaryPowerBarDB.BackgroundColour[4])
-    secondaryPowerBar:SetSize(secondaryPowerBarDB.Width, secondaryPowerBarDB.Height)
+    if not secondaryPowerBarDB.MatchWidthOfAnchor then
+        secondaryPowerBar:SetWidth(secondaryPowerBarDB.Width)
+    end
+    secondaryPowerBar:SetHeight(secondaryPowerBarDB.Height)
 
     if descriptor.swapToPrimaryEligible and secondaryPowerBarDB.SwapToPowerBarPosition then
         if BCDM.PowerBar then BCDM.PowerBar:Hide() end
