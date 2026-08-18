@@ -533,10 +533,13 @@ function BCDM:ScheduleCustomTrackerTimerRefresh()
         if expiration <= now then Runtime.TimerStates[entry] = nil
         elseif not nextExpiration or expiration < nextExpiration then nextExpiration = expiration end
     end
+    if nextExpiration == Runtime.TimerWakeupExpiration and Runtime.TimerWakeup then return end
     if Runtime.TimerWakeup then Runtime.TimerWakeup:Cancel() Runtime.TimerWakeup = nil end
+    Runtime.TimerWakeupExpiration = nextExpiration
     if nextExpiration and C_Timer.NewTimer then
         Runtime.TimerWakeup = C_Timer.NewTimer(math.max(0.01, nextExpiration - now), function()
             Runtime.TimerWakeup = nil
+            Runtime.TimerWakeupExpiration = nil
             BCDM:QueueCustomTrackerStateRefresh()
         end)
     end
