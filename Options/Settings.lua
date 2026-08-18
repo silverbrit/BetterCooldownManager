@@ -942,11 +942,6 @@ local function CreateBarPanel(barType)
                 { "CastBar", "Text", textType, "FontSize" }, update, { min = 6, max = 72, step = 1, disabled = EnabledDisabled })
             PathColor(controls, text, "Colour", ProfileRoot,
                 { "CastBar", "Text", textType, "Colour" }, update, false, { disabled = EnabledDisabled })
-            if textType == "SpellName" then
-                PathSlider(controls, text, "Max Characters", ProfileRoot,
-                    { "CastBar", "Text", "SpellName", "MaxCharacters" }, update,
-                    { min = 0, max = 100, step = 1, disabled = EnabledDisabled })
-            end
         end
         function panel:OnSettingsActivated()
             BCDM.CAST_BAR_TEST_MODE = true

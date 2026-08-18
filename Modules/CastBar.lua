@@ -92,23 +92,10 @@ local function SetCastBarPoint(CastBar, CastBarDB)
     end
 end
 
-local function GetDisplayCastText(text, maxChars)
+local function GetDisplayCastText(text)
     if IsSecretValue(text) then return text end
     if type(text) ~= "string" then return "" end
-
-    text = text:gsub("\226\128\152", "'"):gsub("\226\128\153", "'"):gsub("`", "'")
-    if type(maxChars) ~= "number" then return text end
-    maxChars = math.floor(maxChars)
-    if maxChars < 1 then return "" end
-
-    local position, characters = 1, 0
-    while position <= #text and characters < maxChars do
-        local byte = string.byte(text, position)
-        local width = byte < 128 and 1 or byte < 224 and 2 or byte < 240 and 3 or 4
-        position = position + width
-        characters = characters + 1
-    end
-    return string.sub(text, 1, position - 1)
+    return text:gsub("\226\128\152", "'"):gsub("\226\128\153", "'"):gsub("`", "'")
 end
 
 local function FetchCastBarColour(notInterruptible)
@@ -361,7 +348,7 @@ local function StartCast(kind, eventCastBarID)
         CastBar.ActiveCastID = nil
     end
     CastBar.EmpoweredStages = nil
-    CastBar.SpellNameText:SetText(GetDisplayCastText(name, BCDM.db.profile.CastBar.Text.SpellName.MaxCharacters))
+    CastBar.SpellNameText:SetText(GetDisplayCastText(name))
     SetCastIcon(texture)
     UpdateCastBarColour(notInterruptible)
 
@@ -572,6 +559,10 @@ local function ApplyCastBarAppearance()
 
     SetFontStyle(CastBar.SpellNameText, CastBarDB.Text.SpellName, GeneralDB)
     SetFontStyle(CastBar.CastTimeText, CastBarDB.Text.CastTime, GeneralDB)
+    if CastBar.SpellNameText.SetWordWrap then CastBar.SpellNameText:SetWordWrap(false) end
+    if CastBar.SpellNameText.SetNonSpaceWrap then CastBar.SpellNameText:SetNonSpaceWrap(false) end
+    if CastBar.SpellNameText.SetMaxLines then CastBar.SpellNameText:SetMaxLines(1) end
+    CastBar.SpellNameText:SetPoint("RIGHT", CastBar.CastTimeText, "LEFT", -3, 0)
     if CastBarDB.Icon.Enabled then CastBar.Icon:Show() else CastBar.Icon:Hide() end
 
     if CastBar.CastActive and CastBar.ActiveKind == "empower" then
@@ -687,7 +678,7 @@ function BCDM:CreateTestCastBar()
     ApplyCastBarAppearance()
     local CastBarDB = BCDM.db.profile.CastBar
     local testState = BCDM.CAST_BAR_TEST_STATE or "NORMAL"
-    CastBar.SpellNameText:SetText(string.sub("Ethereal Portal", 1, CastBarDB.Text.SpellName.MaxCharacters))
+    CastBar.SpellNameText:SetText("Ethereal Portal")
     CastBar.Icon:SetTexture("Interface\\Icons\\ability_mage_netherwindpresence")
     CastBar.Status:SetMinMaxValues(0, 10)
     CastBar.Status:SetValue(5)

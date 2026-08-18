@@ -3,7 +3,7 @@
 Better Cooldown Manager hosts its LibSharedCanvas panels in a draggable, resizable addon-owned window and also registers them with Blizzard's AddOns Settings.
 
 - `Settings.lua` keeps addon-wide controls, including minimap-button visibility, shared visibility, and shared bar appearance on the root page,
-  and owns the individual viewer, power bar, and cast bar pages.
+  and owns the individual viewer, power bar, and cast bar pages; cast spell names remain full and are clipped only at the available space before the duration text.
 - `Profiles.lua` owns profile management, specialization and Edit Mode layout routing, and import/export controls.
 - `Entries.lua` owns named custom-bar management, the drag-to-reorder icon strip, focused entry editor,
   and spell, item, equipment, timer, load-condition, and optional extra aura-ID controls. Spell load-condition menus expose every class/spec so racial and shared bars can be configured across characters; cast timers retain their originating-class scope. New entries start with no selections, which means unrestricted, and become specialization-restricted after the first selection.

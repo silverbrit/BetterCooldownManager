@@ -43,6 +43,9 @@ local function NewRegion(width, height)
     function region:SetShadowColor(...) self.shadowColor = { ... } end
     function region:SetShadowOffset(...) self.shadowOffset = { ... } end
     function region:SetText(text) self.text = text end
+    function region:SetWordWrap(value) self.wordWrap = value end
+    function region:SetNonSpaceWrap(value) self.nonSpaceWrap = value end
+    function region:SetMaxLines(value) self.maxLines = value end
     return region
 end
 
@@ -214,7 +217,7 @@ local BCDM = {
             EmpowerPips = { Colour = { 1, 1, 1, 1 }, Width = 1 },
             Layout = { "TOP", "BCDM_TestAnchor", "BOTTOM", 0, 0 },
             Text = {
-                SpellName = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "LEFT", "LEFT", 0, 0 }, MaxCharacters = 20 },
+                SpellName = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "LEFT", "LEFT", 0, 0 }, MaxCharacters = 1 },
                 CastTime = { FontSize = 12, Colour = { 1, 1, 1 }, Layout = { "RIGHT", "RIGHT", 0, 0 } },
             },
             Icon = { Enabled = true, Layout = "LEFT" },
@@ -249,15 +252,17 @@ Check(displayCastText("L" .. rightSmartQuote .. "été" .. leftSmartQuote .. "ca
     "French smart quotes normalize to ASCII apostrophes")
 Check(displayCastText("l`été", 99) == "l'été", "backticks normalize to ASCII apostrophes")
 local korean = "한국어테스트"
-for length, expected in ipairs({ "한", "한국", "한국어", "한국어테" }) do
-    Check(displayCastText(korean, length) == expected, "Korean text truncates at UTF-8 code point length " .. length)
-end
+Check(displayCastText(korean) == korean, "cast names preserve full UTF-8 text")
 Check(displayCastText(nil, 2) == "" and displayCastText(123, 2) == "", "nil and non-string cast text are empty")
 local returnedSecretText
 local secretTextOK = pcall(function() returnedSecretText = displayCastText(secretText, 1) end)
 Check(secretTextOK and returnedSecretText == secretText, "secret cast text passes through without inspection")
 
 Check(nativeCastBar.shown == false, "enabling BCM hides the native cast bar through Blizzard's API")
+Check(bar.SpellNameText.wordWrap == false and bar.SpellNameText.nonSpaceWrap == false
+    and bar.SpellNameText.maxLines == 1, "cast names are single-line")
+Check(bar.SpellNameText.point[1] == "RIGHT" and bar.SpellNameText.point[2] == bar.CastTimeText
+    and bar.SpellNameText.point[3] == "LEFT", "cast names stop before the duration timer")
 Check(bar.events.PLAYER_ENTERING_WORLD and bar.events.UNIT_SPELLCAST_DELAYED and bar.events.UNIT_SPELLCAST_CHANNEL_UPDATE
     and bar.events.UNIT_SPELLCAST_EMPOWER_UPDATE, "resync and timing update events are registered")
 
@@ -271,6 +276,7 @@ end
 
 local firstDuration = {}
 StartNormal(101, secretDuration)
+Check(bar.SpellNameText.text == "Arcane Cast", "cast names are not character-truncated")
 Check(bar.CastActive and bar.ActiveCastID == 101 and bar.HasDuration, "normal casts bind their duration object")
 Check(bar.Status.timerCalls[#bar.Status.timerCalls].duration == secretDuration
     and bar.Status.timerCalls[#bar.Status.timerCalls].interpolation == Enum.StatusBarInterpolation.Immediate
