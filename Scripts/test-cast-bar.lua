@@ -178,6 +178,7 @@ Enum = {
     SecondsFormatterRounding = { Truncate = 1 },
 }
 RAID_CLASS_COLORS = { MAGE = { r = 0.4, g = 0.6, b = 1 } }
+STANDARD_TEXT_FONT = "standard-font"
 UnitClass = function() return "Mage", "MAGE" end
 UnitCastingInfo = function()
     if not castInfo then return end
@@ -208,7 +209,7 @@ _G.BCDM_ThrowingAnchor = NewFrame("BCDM_ThrowingAnchor", UIParent)
 
 local BCDM = {
     BACKDROP = {},
-    Media = { Font = "font", Foreground = "foreground" },
+    Media = { Font = nil, Foreground = "foreground" },
     db = { profile = {
         General = { Fonts = { FontFlag = "", Shadow = { Enabled = false } } },
         CooldownManager = { General = { BorderSize = 1, IconZoom = 0 } },
@@ -262,6 +263,8 @@ local secretTextOK = pcall(function() returnedSecretText = displayCastText(secre
 Check(secretTextOK and returnedSecretText == secretText, "secret cast text passes through without inspection")
 
 Check(nativeCastBar.shown == false, "enabling BCM hides the native cast bar through Blizzard's API")
+Check(bar.SpellNameText.font[1] == STANDARD_TEXT_FONT and bar.CastTimeText.font[1] == STANDARD_TEXT_FONT,
+    "cast text falls back to the standard font when media font is unavailable")
 Check(bar.SpellNameText.wordWrap == false and bar.SpellNameText.nonSpaceWrap == false
     and bar.SpellNameText.maxLines == 1, "cast names are single-line")
 Check(bar.SpellNameText.point[1] == "RIGHT" and bar.SpellNameText.point[2] == bar.CastTimeText

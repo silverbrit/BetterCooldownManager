@@ -501,7 +501,8 @@ local function SetHooks()
 end
 
 local function SetFontStyle(fontString, settings, generalDB)
-    fontString:SetFont(BCDM.Media.Font, settings.FontSize, generalDB.Fonts.FontFlag)
+    fontString:SetFont((BCDM.Media and BCDM.Media.Font) or STANDARD_TEXT_FONT,
+        settings.FontSize, generalDB.Fonts.FontFlag)
     fontString:SetTextColor(settings.Colour[1], settings.Colour[2], settings.Colour[3], 1)
     fontString:ClearAllPoints()
     fontString:SetPoint(settings.Layout[1], BCDM.CastBar.Status, settings.Layout[2], settings.Layout[3], settings.Layout[4])
