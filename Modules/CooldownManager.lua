@@ -375,7 +375,6 @@ local function StyleIcons(onlyViewerName)
                     childFrame.Cooldown:SetPoint("BOTTOMRIGHT", childFrame, "BOTTOMRIGHT", -borderSize, borderSize)
                     childFrame.Cooldown:SetSwipeColor(0, 0, 0, 0.8)
                     childFrame.Cooldown:SetDrawEdge(false)
-                    childFrame.Cooldown:SetDrawSwipe(true)
                     childFrame.Cooldown:SetSwipeTexture("Interface\\Buttons\\WHITE8X8")
                 end
                 if childFrame.CooldownFlash then childFrame.CooldownFlash:SetAlpha(0) end
@@ -1091,7 +1090,6 @@ function BCDM:UpdateCooldownViewer(viewerType)
                 childFrame.Cooldown:SetPoint("BOTTOMRIGHT", childFrame, "BOTTOMRIGHT", -1, 1)
                 childFrame.Cooldown:SetSwipeColor(0, 0, 0, 0.8)
                 childFrame.Cooldown:SetDrawEdge(false)
-                childFrame.Cooldown:SetDrawSwipe(true)
                 childFrame.Cooldown:SetSwipeTexture("Interface\\Buttons\\WHITE8X8")
             end
             if childFrame.CooldownFlash then childFrame.CooldownFlash:SetAlpha(0) end

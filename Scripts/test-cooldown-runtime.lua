@@ -512,5 +512,7 @@ Check(not cooldownSource:find("UpdateLayoutInfo", 1, true)
     "BCM never refreshes or replaces Edit Mode manager internals")
 Check(cooldownSource:find("UpdateSystemAnchorInfo", 1, true) ~= nil,
     "BCM synchronizes only native Cooldown Viewer anchors")
+Check(not cooldownSource:find("childFrame.Cooldown:SetDrawSwipe(true)", 1, true),
+    "native Cooldown Viewer styling preserves Blizzard's charge-aware swipe state")
 
 return failures == 0
