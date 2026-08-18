@@ -22,6 +22,12 @@ local SWAP_ELIGIBLE = {
     [265] = true, [266] = true, [267] = true,
 }
 
+local UNIT_POWER_SPELL_IDS = Constants and Constants.UnitPowerSpellIDs or {}
+local DEVOURER_VOID_METAMORPHOSIS = UNIT_POWER_SPELL_IDS.VOID_METAMORPHOSIS_SPELL_ID or 1217607
+local DEVOURER_DARK_HEART = UNIT_POWER_SPELL_IDS.DARK_HEART_SPELL_ID or 1225789
+local DEVOURER_SILENCE_THE_WHISPERS = UNIT_POWER_SPELL_IDS.SILENCE_THE_WHISPERS_SPELL_ID or 1227702
+local MAELSTROM_WEAPON = 344179
+
 local RUNE_COLOUR_KEY = {
     [SPECIALIZATION.BLOOD] = "BLOOD",
     [SPECIALIZATION.FROST] = "FROST",
@@ -84,17 +90,19 @@ function BCDM:ResolveSecondaryResource(context)
             })
         elseif specID == SPECIALIZATION.DEVOURER then
             return Descriptor("SOUL", "DEVOURER_SOUL", nil, specID, {
-                sourceSpellID = 1217605,
-                metamorphosisAuraID = 1217607,
+                sourceSpellID = DEVOURER_DARK_HEART,
+                transformedSourceSpellID = DEVOURER_SILENCE_THE_WHISPERS,
+                metamorphosisAuraID = DEVOURER_VOID_METAMORPHOSIS,
+                maximumSpellID = DEVOURER_DARK_HEART,
                 soulGluttonSpellID = 1247534,
             })
         end
     elseif class == "SHAMAN" then
         if specID == SPECIALIZATION.ENHANCEMENT then
             return Descriptor(power.Maelstrom, "AURA_STACKS", power.Maelstrom, specID, {
-                sourceSpellID = 344179,
-                maximum = 10,
-                tickCount = 10,
+                sourceSpellID = MAELSTROM_WEAPON,
+                maximumSpellID = MAELSTROM_WEAPON,
+                maximum = 5,
             })
         elseif specID == SPECIALIZATION.ELEMENTAL and showMana then
             return Descriptor(power.Mana, "STANDARD", power.Mana, specID)
