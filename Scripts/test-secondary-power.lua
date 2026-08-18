@@ -311,7 +311,7 @@ BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_MAXPOWER", "player")
 Check(#createdFrames >= 6, "turning DK HideTicks off recreates rune bars")
 local runeBarsReversed = true
 for _, frame in ipairs(createdFrames) do
-    if frame.reverseFill ~= true then runeBarsReversed = false end
+    if frame.value ~= nil and frame.reverseFill ~= true then runeBarsReversed = false end
 end
 Check(runeBarsReversed, "left fill applies to visible rune StatusBars")
 runeDataAvailable = false

@@ -1,12 +1,17 @@
 local _, BCDM = ...
 
 local runeBars = {}
+local runeDriver
+local runeDriverElapsed = 0
+local runeDriverDescriptor
 local comboPoints = {}
 local essenceTicks = {}
 local widthTimer
 local widthGeneration = 0
 local tickLayoutKey
 local tickLayoutResource
+local runeLayoutKey
+local essenceLayoutKey
 local lastReadableMaximum = {}
 
 local RENDER_UNAVAILABLE = BCDM.RENDER_UNAVAILABLE or 0
@@ -47,6 +52,12 @@ local function ApplyChildBarDirection(bar, direction)
     end
 end
 
+local function StopRuneDriver()
+    runeDriverElapsed = 0
+    runeDriverDescriptor = nil
+    if runeDriver then runeDriver:Hide() end
+end
+
 local function HideBars(bars, getBar)
     for _, value in ipairs(bars) do
         local bar = getBar and getBar(value) or value
@@ -55,6 +66,7 @@ local function HideBars(bars, getBar)
             bar:Hide()
         end
     end
+    if bars == runeBars then StopRuneDriver() end
 end
 
 local function SetBarText(bar, text)
@@ -117,6 +129,7 @@ local function CreateRuneBars()
         end
     end
     wipe(runeBars)
+    runeLayoutKey = nil
 
     for i = 1, 6 do
         local runeBar = CreateFrame("StatusBar", nil, parent)
@@ -160,6 +173,7 @@ local function CreateEssenceTicks(maxEssence)
         essenceTicks[i] = nil
     end
     wipe(essenceTicks)
+    essenceLayoutKey = nil
 
     for i = 1, maxEssence do
         local bar = CreateFrame("StatusBar", nil, parent)
@@ -180,6 +194,10 @@ local function LayoutRuneBars()
 
     local powerBarWidth = secondaryBar:GetWidth() - 2
     local powerBarHeight = secondaryBar:GetHeight() - 2
+    local layoutKey = powerBarWidth .. ":" .. powerBarHeight .. ":"
+        .. tostring(BCDM.db.profile.SecondaryPowerBar.FillDirection)
+    if layoutKey == runeLayoutKey then return end
+    runeLayoutKey = layoutKey
     local runeSpacing = 1
     local runeWidth = (powerBarWidth - (runeSpacing * 5)) / 6
 
@@ -236,6 +254,10 @@ local function LayoutEssenceTicks()
     local powerBarHeight = parent:GetHeight() - 2
     local spacing = 1
     local count = #essenceTicks
+    local layoutKey = powerBarWidth .. ":" .. powerBarHeight .. ":" .. count .. ":"
+        .. tostring(BCDM.db.profile.SecondaryPowerBar.FillDirection)
+    if layoutKey == essenceLayoutKey then return end
+    essenceLayoutKey = layoutKey
     local barWidth = (powerBarWidth - (spacing * (count - 1))) / count
 
     for i = 1, count do
@@ -257,8 +279,44 @@ end
 local function ReadRuneCooldown(runeIndex)
     if type(GetRuneCooldown) ~= "function" then return nil, nil, nil end
     local ok, startTime, duration, runeReady = pcall(GetRuneCooldown, runeIndex)
-    if not ok then return nil, nil, nil end
+    if not ok or BCDM:IsSecretValue(startTime) or BCDM:IsSecretValue(duration)
+        or BCDM:IsSecretValue(runeReady) then
+        return nil, nil, nil
+    end
     return startTime, duration, runeReady
+end
+
+local function UpdateRuneProgress()
+    local descriptor = runeDriverDescriptor
+    if not descriptor then return false end
+    local readyColour = { GetPowerBarColor(descriptor) }
+    local rechargeColour = BCDM.db.profile.General.Colours.SecondaryPower["RUNE_RECHARGE"]
+    local recharge = { GetPowerBarColor(descriptor, rechargeColour) }
+    local hasCooldown = false
+    for i = 1, 6 do
+        local runeStartTime, runeDuration, runeReady = ReadRuneCooldown(i)
+        local bar = runeBars[i]
+        if not bar or runeReady == nil then return false end
+        if runeReady then
+            bar:SetValue(1)
+            bar:SetStatusBarColor(readyColour[1], readyColour[2], readyColour[3], readyColour[4])
+        elseif type(runeStartTime) == "number" and type(runeDuration) == "number"
+            and runeDuration > 0 then
+            local progress = math.min(1, math.max(0, (GetTime() - runeStartTime) / runeDuration))
+            bar:SetValue(progress)
+            bar:SetStatusBarColor(recharge[1], recharge[2], recharge[3], recharge[4])
+            hasCooldown = progress < 1
+        else
+            return false
+        end
+    end
+    return hasCooldown
+end
+
+local function StartRuneDriver(descriptor)
+    runeDriverDescriptor = descriptor
+    runeDriverElapsed = 0
+    if runeDriver then runeDriver:Show() end
 end
 
 local function GetRuneReadyCount()
@@ -274,37 +332,14 @@ local function GetRuneReadyCount()
     return readyCount, RENDER_READABLE
 end
 
-local function StartRuneOnUpdate(runeBar, runeIndex, descriptor)
-    local generalDB = BCDM.db.profile.General
-
-    runeBar:SetScript("OnUpdate", function(self)
-        local runeStartTime, runeDuration, runeReady = ReadRuneCooldown(runeIndex)
-
-        if runeStartTime == nil and runeDuration == nil and runeReady == nil then
-            self:SetScript("OnUpdate", nil)
-            self:Hide()
-            return
-        end
-
-        if runeReady then
-            self:SetScript("OnUpdate", nil)
-            self:SetValue(1)
-            local r, g, b, a = GetPowerBarColor(descriptor)
-            self:SetStatusBarColor(r, g, b, a)
-            return
-        end
-
-        if type(runeDuration) == "number" and runeDuration > 0 then
-            local now = GetTime()
-            local elapsed = now - runeStartTime
-            local progress = math.min(1, elapsed / runeDuration)
-            self:SetValue(progress)
-
-            local rechargeColour = generalDB.Colours.SecondaryPower["RUNE_RECHARGE"]
-            self:SetStatusBarColor(GetPowerBarColor(descriptor, rechargeColour))
-        end
-    end)
-end
+runeDriver = CreateFrame("Frame")
+runeDriver:Hide()
+runeDriver:SetScript("OnUpdate", function(_, elapsed)
+    runeDriverElapsed = runeDriverElapsed + (elapsed or 0.05)
+    if runeDriverElapsed < 0.05 then return end
+    runeDriverElapsed = 0
+    if not UpdateRuneProgress() then StopRuneDriver() end
+end)
 
 local function UpdateRuneDisplay(descriptor)
     local parent = BCDM.SecondaryPowerBar
@@ -352,6 +387,7 @@ local function UpdateRuneDisplay(descriptor)
     for _, v in ipairs(runeReadyList) do table.insert(order, v.index) end
     for _, v in ipairs(runeOnCDList) do table.insert(order, v.index) end
 
+    local hasCooldown = false
     for runePosition = 1, maxPower do
         local i = order[runePosition]
         local runeBar = runeBars[i]
@@ -370,25 +406,36 @@ local function UpdateRuneDisplay(descriptor)
             runeBar:SetValue(1)
             runeBar:SetStatusBarColor(r, g, b, a)
             runeBar:SetScript("OnUpdate", nil)
+        elseif type(runeState.startTime) == "number" and type(runeState.duration) == "number"
+            and runeState.duration > 0 then
+            local progress = math.min(1, math.max(0,
+                (GetTime() - runeState.startTime) / runeState.duration))
+            runeBar:SetValue(progress)
+            local rechargeColour = BCDM.db.profile.General.Colours.SecondaryPower["RUNE_RECHARGE"]
+            runeBar:SetStatusBarColor(GetPowerBarColor(descriptor, rechargeColour))
+            hasCooldown = hasCooldown or progress < 1
         else
-            StartRuneOnUpdate(runeBar, i, descriptor)
+            runeBar:SetValue(0)
         end
     end
+    if hasCooldown then StartRuneDriver(descriptor) else StopRuneDriver() end
     return RENDER_READABLE
 end
 
+local chargedPointLookup = {}
+
 local function GetChargedPowerPointLookup()
-    local chargedLookup = {}
-    if type(GetUnitChargedPowerPoints) ~= "function" then return chargedLookup end
+    wipe(chargedPointLookup)
+    if type(GetUnitChargedPowerPoints) ~= "function" then return chargedPointLookup end
     local ok, charged = pcall(GetUnitChargedPowerPoints, "player")
-    if not ok or BCDM:IsSecretValue(charged) or type(charged) ~= "table" then return chargedLookup end
+    if not ok or BCDM:IsSecretValue(charged) or type(charged) ~= "table" then return chargedPointLookup end
     local iterationOK = pcall(function()
         for _, index in ipairs(charged) do
             local point, state = ReadValue(index)
-            if state == RENDER_READABLE then chargedLookup[point] = true end
+            if state == RENDER_READABLE then chargedPointLookup[point] = true end
         end
     end)
-    return iterationOK and chargedLookup or {}
+    return iterationOK and chargedPointLookup or {}
 end
 
 local function UpdateComboDisplay(descriptor, powerCurrent, currentState, powerMax, maxState)
@@ -847,6 +894,10 @@ local function RefreshSecondaryPowerValues(refreshTicks)
     return state
 end
 
+function BCDM:RefreshSecondaryPowerValues(refreshTicks)
+    return RefreshSecondaryPowerValues(refreshTicks == true)
+end
+
 local function LayoutWidthDependentChildren()
     local descriptor = BCDM:GetCurrentSecondaryResource()
     if descriptor and descriptor.kind == "RUNES" and #runeBars > 0 then
@@ -977,36 +1028,51 @@ local function OnSecondaryPowerBarEvent(self, event, ...)
     if event == "PLAYER_SPECIALIZATION_CHANGED" then
         local unit = ...
         if unit and unit ~= "player" then return end
-        if BCDM.UpdatePowerBars then BCDM:UpdatePowerBars() else BCDM:UpdateSecondaryPowerBar() end
+        if BCDM.QueueRuntimeRefresh then BCDM:QueueRuntimeRefresh("structure")
+        elseif BCDM.UpdatePowerBars then BCDM:UpdatePowerBars()
+        else BCDM:UpdateSecondaryPowerBar() end
         return
     elseif event == "PLAYER_ENTERING_WORLD" or event == "UPDATE_SHAPESHIFT_FORM"
         or event == "PLAYER_TALENT_UPDATE" then
-        if BCDM.UpdatePowerBars then BCDM:UpdatePowerBars() else BCDM:UpdateSecondaryPowerBar() end
+        if BCDM.QueueRuntimeRefresh then BCDM:QueueRuntimeRefresh("structure")
+        elseif BCDM.UpdatePowerBars then BCDM:UpdatePowerBars()
+        else BCDM:UpdateSecondaryPowerBar() end
         return
     end
 
     if event == "RUNE_POWER_UPDATE" or event == "RUNE_TYPE_UPDATE" then
         local descriptor = BCDM:GetCurrentSecondaryResource()
         if not descriptor and self then SetResourceEventRegistration(self, false) end
-        RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
+        if BCDM.QueuePowerBarValueRefresh then
+            BCDM:QueuePowerBarValueRefresh(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
+        else
+            RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
+        end
         return
     end
 
     if IsResourceEvent(event) and not BCDM:GetCurrentSecondaryResource() then
         if self then SetResourceEventRegistration(self, false) end
-        RefreshSecondaryPowerValues(false)
+        if BCDM.QueuePowerBarValueRefresh then BCDM:QueuePowerBarValueRefresh(false)
+        else RefreshSecondaryPowerValues(false) end
         return
     end
 
     if event == "UNIT_AURA" then
-        RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
+        if BCDM.QueuePowerBarValueRefresh then
+            BCDM:QueuePowerBarValueRefresh(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
+        else
+            RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
+        end
         return
     elseif event == "UNIT_MAXPOWER" then
-        RefreshSecondaryPowerValues(true)
+        if BCDM.QueuePowerBarValueRefresh then BCDM:QueuePowerBarValueRefresh(true)
+        else RefreshSecondaryPowerValues(true) end
         return
     end
 
-    RefreshSecondaryPowerValues(false)
+    if BCDM.QueuePowerBarValueRefresh then BCDM:QueuePowerBarValueRefresh(false)
+    else RefreshSecondaryPowerValues(false) end
 end
 
 BCDM._SecondaryPowerBarOnEvent = OnSecondaryPowerBarEvent

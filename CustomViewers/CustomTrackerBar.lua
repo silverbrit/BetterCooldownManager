@@ -15,6 +15,8 @@ local Runtime = {
     Icons = {},
     IconPool = {},
     PendingRefresh = false,
+    PendingStateRefresh = false,
+    RefreshScheduled = false,
     TimerStates = setmetatable({}, { __mode = "k" }),
     RefreshEvents = TRACKER_REFRESH_EVENTS,
 }
@@ -406,6 +408,40 @@ local function GetContainer(barID)
     return container
 end
 
+local function RefreshBarState(barID, bar)
+    local container = Runtime.Containers[barID]
+    if not container then return end
+
+    local visible = {}
+    local layoutNeeded = false
+    local previewing = BCDM.CustomTrackerSettingsPreviewBarID == barID
+    local icons = Runtime.Icons[barID] or {}
+    for _, entryID in ipairs(bar.EntryOrder or {}) do
+        local icon = icons[entryID]
+        local entry = bar.Entries and bar.Entries[entryID]
+        local adapter = entry and entry.Source and SourceAdapters[entry.Source.Type]
+        if icon and entry and adapter then
+            local okState, state = pcall(adapter.GetState, entry.Source, entry)
+            state = okState and state or {}
+            local previousShown = icon:IsShown()
+            local style = icon.EntryStyle or BCDM:GetCustomTrackerEntrySettings(bar, entry)
+            UpdateIconState(icon, state)
+            local shouldDisplay = previewing or BCDM:ShouldDisplayCustomTrackerEntry(style, state)
+            if shouldDisplay then
+                visible[#visible + 1] = icon
+                icon:Show()
+            else
+                icon:Hide()
+            end
+            if previousShown ~= shouldDisplay then layoutNeeded = true end
+        end
+    end
+
+    if layoutNeeded then LayoutIcons(container, bar, visible) end
+    container:SetShown(bar.Enabled ~= false and #visible > 0
+        and BCDM:ShouldShowOwnedFrame(bar))
+end
+
 local function RefreshBar(barID, bar)
     local container = GetContainer(barID)
     container:SetFrameStrata(bar.FrameStrata or "LOW")
@@ -433,19 +469,20 @@ local function RefreshBar(barID, bar)
                     elseif style.Glow == "READY" then state.active, state.ready = false, true end
                 end
                 local shouldDisplay = previewing or BCDM:ShouldDisplayCustomTrackerEntry(style, state)
-                if shouldDisplay or entry.Source.Type == "spell" then
-                    local icon = AcquireIcon(barID, entryID, container)
-                    local width, height = BCDM:GetIconDimensions(bar)
-                    ConfigureIcon(icon, bar, entry, adapter, width, height)
-                    UpdateIconState(icon, state)
-                    if previewing and entry.Enabled == false then
-                        icon:SetAlpha(math.min(icon:GetAlpha(), 0.45))
-                        SetDesaturated(icon.Icon, true)
-                        BCDM:StopCustomGlow(icon)
-                    end
-                    used[entryID] = true
-                    if shouldDisplay then visible[#visible + 1] = icon else icon:Hide() end
+                -- Keep eligible icons alive while hidden. Cooldown events can then
+                -- update Ready/Active visibility without rereading metadata or
+                -- rebuilding the bar.
+                local icon = AcquireIcon(barID, entryID, container)
+                local width, height = BCDM:GetIconDimensions(bar)
+                ConfigureIcon(icon, bar, entry, adapter, width, height)
+                UpdateIconState(icon, state)
+                if previewing and entry.Enabled == false then
+                    icon:SetAlpha(math.min(icon:GetAlpha(), 0.45))
+                    SetDesaturated(icon.Icon, true)
+                    BCDM:StopCustomGlow(icon)
                 end
+                used[entryID] = true
+                if shouldDisplay then visible[#visible + 1] = icon else icon:Hide() end
             end
         end
     end
@@ -456,6 +493,8 @@ local function RefreshBar(barID, bar)
 end
 
 function BCDM:RefreshCustomTrackers()
+    Runtime.PendingRefresh = false
+    Runtime.PendingStateRefresh = false
     local store = self:GetCustomTrackerStore()
     local active = {}
     for _, barID in ipairs(store.BarOrder or {}) do
@@ -477,6 +516,16 @@ function BCDM:RefreshCustomTrackers()
     self:ScheduleCustomTrackerTimerRefresh()
 end
 
+function BCDM:RefreshCustomTrackerStates()
+    Runtime.PendingStateRefresh = false
+    local store = self:GetCustomTrackerStore()
+    for _, barID in ipairs(store.BarOrder or {}) do
+        local bar = store.Bars[barID]
+        if bar then RefreshBarState(barID, bar) end
+    end
+    self:ScheduleCustomTrackerTimerRefresh()
+end
+
 function BCDM:ScheduleCustomTrackerTimerRefresh()
     local nextExpiration
     local now = GetTime()
@@ -488,7 +537,7 @@ function BCDM:ScheduleCustomTrackerTimerRefresh()
     if nextExpiration and C_Timer.NewTimer then
         Runtime.TimerWakeup = C_Timer.NewTimer(math.max(0.01, nextExpiration - now), function()
             Runtime.TimerWakeup = nil
-            BCDM:RefreshCustomTrackers()
+            BCDM:QueueCustomTrackerStateRefresh()
         end)
     end
 end
@@ -504,21 +553,39 @@ function BCDM:TriggerCustomTrackerTimers(spellID)
             local entry = bar.Entries and bar.Entries[entryID]
             local source = entry and entry.Source
             local duration = source and source.Type == "timer" and tonumber(source.Duration)
-            if entry and entry.Enabled ~= false and source.ID == spellID and duration and duration > 0 then
+            if entry and entry.Enabled ~= false and source and source.ID == spellID
+                and duration and duration > 0 then
                 Runtime.TimerStates[entry] = now + duration
             end
         end
     end
-    self:RefreshCustomTrackers()
+    self:QueueCustomTrackerStateRefresh()
+end
+
+local function ScheduleCustomTrackerRefresh()
+    if Runtime.RefreshScheduled then return end
+    Runtime.RefreshScheduled = true
+    C_Timer.After(0, function()
+        Runtime.RefreshScheduled = false
+        if Runtime.PendingRefresh then
+            Runtime.PendingRefresh = false
+            Runtime.PendingStateRefresh = false
+            BCDM:RefreshCustomTrackers()
+        elseif Runtime.PendingStateRefresh then
+            Runtime.PendingStateRefresh = false
+            BCDM:RefreshCustomTrackerStates()
+        end
+    end)
 end
 
 function BCDM:QueueCustomTrackerRefresh()
-    if Runtime.PendingRefresh then return end
     Runtime.PendingRefresh = true
-    C_Timer.After(0, function()
-        Runtime.PendingRefresh = false
-        BCDM:RefreshCustomTrackers()
-    end)
+    ScheduleCustomTrackerRefresh()
+end
+
+function BCDM:QueueCustomTrackerStateRefresh()
+    if not Runtime.PendingRefresh then Runtime.PendingStateRefresh = true end
+    ScheduleCustomTrackerRefresh()
 end
 
 local function UsesCustomTrackerItemData(itemID)
@@ -549,12 +616,20 @@ function BCDM:SetupCustomTrackers()
         end
         frame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
         frame:SetScript("OnEvent", function(_, event, arg1, _, spellID)
-            if event == "UNIT_SPELLCAST_SUCCEEDED" then BCDM:TriggerCustomTrackerTimers(spellID)
+            if event == "UNIT_SPELLCAST_SUCCEEDED" then
+                BCDM:TriggerCustomTrackerTimers(spellID)
             elseif event == "ITEM_DATA_LOAD_RESULT" then
                 if UsesCustomTrackerItemData(arg1) then BCDM:QueueCustomTrackerRefresh() end
-            elseif event == "PLAYER_TARGET_CHANGED" then BCDM:RefreshCustomTrackerAuraUnit("target")
-            elseif event == "PLAYER_REGEN_ENABLED" then BCDM:PreparePendingCustomTrackerAuraDisplays()
-            else BCDM:QueueCustomTrackerRefresh() end
+            elseif event == "PLAYER_TARGET_CHANGED" then
+                BCDM:RefreshCustomTrackerAuraUnit("target")
+            elseif event == "PLAYER_REGEN_ENABLED" then
+                BCDM:PreparePendingCustomTrackerAuraDisplays()
+            elseif event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES"
+                or event == "BAG_UPDATE_COOLDOWN" or event == "ITEM_COUNT_CHANGED" then
+                BCDM:QueueCustomTrackerStateRefresh()
+            else
+                BCDM:QueueCustomTrackerRefresh()
+            end
         end)
         Runtime.EventFrame = frame
     end

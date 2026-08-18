@@ -55,28 +55,48 @@ local function UpdatePowerValues()
     local powerMax = UnitPowerMax("player", powerType)
     if PowerBar and PowerBar.Status and powerType then
         local textMode = BCDM.db.profile.PowerBar.Text.Mode or "AUTO"
-        if BCDM:IsSecretValue(powerCurrent) or BCDM:IsSecretValue(powerMax) then
-            SetSecretPowerText(PowerBar.Text, powerCurrent, powerMax, powerType, textMode)
-        elseif textMode ~= "AUTO" then
-            PowerBar.Text:SetText(BCDM:FormatResourceText(powerCurrent, powerMax, textMode))
-        elseif powerType == 0 then
-            local percent = UnitPowerPercent("player", 0, false, CurveConstants.ScaleTo100)
-            if BCDM:IsSecretValue(percent) then
+        local currentReadable = type(powerCurrent) == "number" and not BCDM:IsSecretValue(powerCurrent)
+        local maxReadable = type(powerMax) == "number" and not BCDM:IsSecretValue(powerMax)
+        local valuesChanged = PowerBar.LastPowerType ~= powerType
+            or not currentReadable or not maxReadable
+            or PowerBar.LastPowerCurrent ~= powerCurrent
+            or PowerBar.LastPowerMaximum ~= powerMax
+        local textChanged = valuesChanged or PowerBar.LastPowerTextMode ~= textMode
+
+        if textChanged then
+            if BCDM:IsSecretValue(powerCurrent) or BCDM:IsSecretValue(powerMax) then
                 SetSecretPowerText(PowerBar.Text, powerCurrent, powerMax, powerType, textMode)
+            elseif textMode ~= "AUTO" then
+                PowerBar.Text:SetText(BCDM:FormatResourceText(powerCurrent, powerMax, textMode))
+            elseif powerType == 0 then
+                local percent = UnitPowerPercent("player", 0, false, CurveConstants.ScaleTo100)
+                if BCDM:IsSecretValue(percent) then
+                    SetSecretPowerText(PowerBar.Text, powerCurrent, powerMax, powerType, textMode)
+                else
+                    PowerBar.Text:SetText(string.format("%.0f%%", percent))
+                end
             else
-                PowerBar.Text:SetText(string.format("%.0f%%", percent))
+                PowerBar.Text:SetText(tostring(powerCurrent))
             end
-        else
-            PowerBar.Text:SetText(tostring(powerCurrent))
+        end
+        if valuesChanged then
+            PowerBar.Status:SetMinMaxValues(0, powerMax)
+            PowerBar.Status:SetValue(powerCurrent)
         end
         PowerBar.Status:SetStatusBarColor(FetchPowerBarColour(powerType))
-        PowerBar.Status:SetMinMaxValues(0, powerMax)
-        PowerBar.Status:SetValue(powerCurrent)
+        PowerBar.LastPowerType = powerType
+        PowerBar.LastPowerTextMode = textMode
+        PowerBar.LastPowerCurrent = currentReadable and powerCurrent or nil
+        PowerBar.LastPowerMaximum = maxReadable and powerMax or nil
     end
     return powerType
 end
 
 local function OnPowerBarEvent(self, event)
+    if BCDM.QueuePowerBarValueRefresh and BCDM.RefreshSecondaryPowerValues then
+        BCDM:QueuePowerBarValueRefresh(false)
+        return
+    end
     UpdatePowerValues()
     if not BCDM._UpdatingPowerBars and BCDM.ApplyPowerBarOwnership then
         BCDM:ApplyPowerBarOwnership(BCDM._SecondaryResourceState)
@@ -84,6 +104,40 @@ local function OnPowerBarEvent(self, event)
 end
 
 BCDM._PowerBarOnEvent = OnPowerBarEvent
+
+local powerRefreshScheduled = false
+local powerRefreshTicks = false
+
+local function ApplyPowerBarValueRefresh(refreshTicks)
+    if BCDM.RefreshSecondaryPowerValues then
+        BCDM:RefreshSecondaryPowerValues(refreshTicks)
+    end
+    UpdatePowerValues()
+    if not BCDM._UpdatingPowerBars and BCDM.ApplyPowerBarOwnership then
+        BCDM:ApplyPowerBarOwnership(BCDM._SecondaryResourceState)
+    end
+end
+
+function BCDM:RefreshPowerBarValues(refreshTicks)
+    ApplyPowerBarValueRefresh(refreshTicks == true)
+end
+
+function BCDM:QueuePowerBarValueRefresh(refreshTicks)
+    powerRefreshTicks = powerRefreshTicks or refreshTicks == true
+    if powerRefreshScheduled then return end
+    if not C_Timer or type(C_Timer.After) ~= "function" then
+        local ticks = powerRefreshTicks
+        powerRefreshTicks, powerRefreshScheduled = false, false
+        ApplyPowerBarValueRefresh(ticks)
+        return
+    end
+    powerRefreshScheduled = true
+    C_Timer.After(0, function()
+        local ticks = powerRefreshTicks
+        powerRefreshTicks, powerRefreshScheduled = false, false
+        ApplyPowerBarValueRefresh(ticks)
+    end)
+end
 
 local function RegisterPowerBarEvents(powerBar)
     powerBar:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
@@ -107,7 +161,9 @@ updatePowerBarHeightEventFrame:SetScript("OnEvent", function(self, event, ...)
         local unit = ...
         if unit and unit ~= "player" then return end
     end
-    if BCDM.UpdatePowerBars then
+    if BCDM.QueueRuntimeRefresh then
+        BCDM:QueueRuntimeRefresh("structure")
+    elseif BCDM.UpdatePowerBars then
         BCDM:UpdatePowerBars()
     end
 end)

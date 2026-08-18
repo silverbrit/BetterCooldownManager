@@ -112,16 +112,38 @@ function BCDM:ResolveSecondaryResource(context)
     end
 end
 
+local currentResourceCacheKey
+local currentResourceCache
+
+function BCDM:InvalidateSecondaryResource()
+    currentResourceCacheKey = nil
+    currentResourceCache = nil
+end
+
 function BCDM:GetCurrentSecondaryResource()
     local specIndex = GetSpecialization()
     local specID = specIndex and GetSpecializationInfo(specIndex)
     local settings = self.db and self.db.profile and self.db.profile.SecondaryPowerBar
-    return self:ResolveSecondaryResource({
-        class = select(2, UnitClass("player")),
+    local class = select(2, UnitClass("player"))
+    local formID = GetShapeshiftFormID and GetShapeshiftFormID() or 0
+    local showMana = settings and (settings.ShowMana or settings.ShowManaBar) == true
+    local cacheable = not self:IsSecretValue(class) and not self:IsSecretValue(specID)
+        and not self:IsSecretValue(formID) and not self:IsSecretValue(showMana)
+    local cacheKey
+    if cacheable then
+        cacheKey = tostring(class) .. ":" .. tostring(specID) .. ":"
+            .. tostring(formID) .. ":" .. tostring(showMana)
+        if cacheKey == currentResourceCacheKey then return currentResourceCache end
+    end
+
+    currentResourceCacheKey = cacheKey
+    currentResourceCache = self:ResolveSecondaryResource({
+        class = class,
         specID = specID,
-        formID = GetShapeshiftFormID and GetShapeshiftFormID() or 0,
-        showMana = settings and (settings.ShowMana or settings.ShowManaBar) == true,
+        formID = formID,
+        showMana = showMana,
     })
+    return currentResourceCache
 end
 
 function BCDM:CanSwapSecondaryResourceToPrimary()

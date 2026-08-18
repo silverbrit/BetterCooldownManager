@@ -225,14 +225,31 @@ function BCDM:ApplyPowerBarOwnership(resourceState)
     local primaryVisible = powerBar ~= nil and powerSettings.Enabled == true
         and not ownsPrimary and primaryPolicyVisible
 
+    local previous = self._PowerBarOwnership
+    local ownershipChanged = not previous
+        or previous.powerBar ~= powerBar or previous.secondaryPowerBar ~= secondaryPowerBar
+        or previous.ownsPrimary ~= ownsPrimary
+        or previous.primaryVisible ~= primaryVisible
+        or previous.secondaryVisible ~= secondaryVisible
+        or previous.primaryPolicyVisible ~= primaryPolicyVisible
+        or previous.secondaryPolicyVisible ~= secondaryPolicyVisible
+    self._PowerBarOwnership = {
+        powerBar = powerBar,
+        secondaryPowerBar = secondaryPowerBar,
+        ownsPrimary = ownsPrimary,
+        primaryVisible = primaryVisible,
+        secondaryVisible = secondaryVisible,
+        primaryPolicyVisible = primaryPolicyVisible,
+        secondaryPolicyVisible = secondaryPolicyVisible,
+    }
     self._SecondaryResourceState = resourceState
     self._SecondaryResourceRenderable = resourceRenderable
     self._SecondaryDisplayVisible = secondaryVisible
     self._SecondaryOwnsPrimaryPosition = ownsPrimary
-    if self.SetOwnedFrameShown then
+    if ownershipChanged and self.SetOwnedFrameShown then
         self:SetOwnedFrameShown(secondaryPowerBar, secondarySettings, secondaryVisible)
         self:SetOwnedFrameShown(powerBar, powerSettings, primaryVisible)
-    else
+    elseif ownershipChanged then
         if secondaryPowerBar then
             if secondaryVisible then secondaryPowerBar:Show() else secondaryPowerBar:Hide() end
         end

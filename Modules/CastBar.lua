@@ -657,13 +657,15 @@ function BCDM:UpdateCastBar()
 
     if CastBarDB.Enabled then
         CastBar.EnabledState = true
-        EnableCastBar(CastBar, not wasEnabled)
+        if not wasEnabled or not CastBar.EventsEnabled then
+            EnableCastBar(CastBar, not wasEnabled)
+        end
         if CastBar.CastActive and CastBar.ActiveKind == "empower" then
             CreatePips(CastBar.EmpoweredStages)
         end
     else
         CastBar.EnabledState = false
-        DisableCastBar(CastBar)
+        if wasEnabled or CastBar.EventsEnabled then DisableCastBar(CastBar) end
     end
     if BCDM.CAST_BAR_TEST_MODE then BCDM:CreateTestCastBar() end
 end
