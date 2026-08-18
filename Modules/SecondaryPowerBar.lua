@@ -253,6 +253,20 @@ local function ReadRuneCooldown(runeIndex)
     return startTime, duration, runeReady
 end
 
+local function ReadRuneStates()
+    local states, readyCount = {}, 0
+    for i = 1, 6 do
+        local startTime, duration, runeReady = ReadRuneCooldown(i)
+        if BCDM:IsSecretValue(startTime) or BCDM:IsSecretValue(duration) or BCDM:IsSecretValue(runeReady)
+            or (runeReady ~= true and runeReady ~= false) then
+            return nil, nil, RENDER_UNAVAILABLE
+        end
+        states[i] = { startTime = startTime, duration = duration, ready = runeReady }
+        if runeReady then readyCount = readyCount + 1 end
+    end
+    return states, readyCount, RENDER_READABLE
+end
+
 local function StartRuneOnUpdate(runeBar, runeIndex, descriptor)
     local generalDB = BCDM.db.profile.General
 
@@ -291,38 +305,28 @@ local function UpdateRuneDisplay(descriptor)
 
     local maxPower = 6
     local r, g, b, a = GetPowerBarColor(descriptor)
-
-    local runeReadyList = {}
-    local runeOnCDList = {}
-    local runeStates = {}
-    local hasUsableData = false
-
-    for i = 1, maxPower do
-        local runeStartTime, runeDuration, runeReady = ReadRuneCooldown(i)
-        runeStates[i] = { startTime = runeStartTime, duration = runeDuration, ready = runeReady }
-        if runeReady ~= nil or (type(runeStartTime) == "number" and type(runeDuration) == "number") then
-            hasUsableData = true
-        end
-
-        if runeReady then
-            table.insert(runeReadyList, { index = i })
-        else
-            if type(runeStartTime) == "number" and type(runeDuration) == "number" and runeDuration > 0 then
-                local elapsed = GetTime() - runeStartTime
-                local remain = math.max(0, runeDuration - elapsed)
-                table.insert(runeOnCDList, { index = i, remaining = remain })
-            else
-                table.insert(runeOnCDList, { index = i, remaining = 999 })
-            end
-        end
-    end
-
-    if not hasUsableData then
+    local runeStates, _, state = ReadRuneStates()
+    if state == RENDER_UNAVAILABLE then
         HideBars(runeBars)
         if BCDM.ClearTicks then BCDM:ClearTicks() end
         tickLayoutKey = false
         tickLayoutResource = nil
-        return RENDER_UNAVAILABLE
+        return state
+    end
+
+    local runeReadyList = {}
+    local runeOnCDList = {}
+    for i = 1, maxPower do
+        local runeState = runeStates[i]
+        if runeState.ready then
+            table.insert(runeReadyList, { index = i })
+        elseif type(runeState.startTime) == "number" and type(runeState.duration) == "number"
+            and runeState.duration > 0 then
+            local remain = math.max(0, runeState.duration - (GetTime() - runeState.startTime))
+            table.insert(runeOnCDList, { index = i, remaining = remain })
+        else
+            table.insert(runeOnCDList, { index = i, remaining = 999 })
+        end
     end
 
     table.sort(runeOnCDList, function(a, b) return a.remaining < b.remaining end)
@@ -639,10 +643,10 @@ end
 RESOURCE_HANDLERS.RUNES = function(descriptor, bar, settings)
     if settings.HideTicks then
         HideBars(runeBars)
-        local current, state = GetPowerValue(descriptor.powerType)
+        local _, current, state = ReadRuneStates()
         if state == RENDER_UNAVAILABLE then return nil, nil, state end
         SetResourceStatus(bar, current, 6)
-        return current, 6, state, state == RENDER_READABLE and ReadableText(current, 6) or nil
+        return current, 6, state, ReadableText(current, 6)
     end
     bar.Status:Hide()
     local state = UpdateRuneDisplay(descriptor)

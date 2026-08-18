@@ -27,6 +27,7 @@ local partialPower = 0
 local partialCalls = 0
 local chargedPowerPoints
 local runeDataAvailable = true
+local runeReadyStates = { true, true, true, true, true, true }
 local currentDescriptor
 local collapsingStarCost = 40
 
@@ -66,9 +67,9 @@ UnitStagger = function()
     return powerValues.stagger or 0
 end
 GetUnitChargedPowerPoints = function() return chargedPowerPoints end
-GetRuneCooldown = function()
+GetRuneCooldown = function(runeIndex)
     if not runeDataAvailable then return end
-    return 0, 0, true
+    return 0, 0, runeReadyStates[runeIndex]
 end
 GetTime = function() return 0 end
 AbbreviateLargeNumbers = function(value) return tostring(value) end
@@ -292,12 +293,19 @@ Check(comboBarsReversed, "left fill applies to visible combo-point StatusBars")
 chargedPowerPoints = nil
 
 currentDescriptor = { kind = "RUNES", powerType = Enum.PowerType.Runes, tickCount = 6 }
-powerValues[Enum.PowerType.Runes] = 4
+powerValues[Enum.PowerType.Runes] = 6
+runeReadyStates = { true, true, true, false, false, false }
 runeDataAvailable = true
 BCDM.db.profile.SecondaryPowerBar.HideTicks = true
 BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_UPDATE", "player")
-Check(statusValue == 4 and statusMin == 0 and statusMax == 6 and statusShown,
-    "DK HideTicks keeps a meaningful aggregate rune display")
+Check(statusValue == 3 and textValue == "3" and statusMin == 0 and statusMax == 6 and statusShown,
+    "DK HideTicks counts ready runes instead of using UnitPower")
+runeReadyStates[2] = nil
+barHidden, barShown, statusShown = false, false, true
+BCDM._SecondaryPowerBarOnEvent(nil, "RUNE_POWER_UPDATE")
+Check(barHidden and not barShown and not statusShown,
+    "an unavailable rune ready state hides the aggregate display")
+runeReadyStates[2] = true
 BCDM.db.profile.SecondaryPowerBar.HideTicks = false
 BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_MAXPOWER", "player")
 Check(#createdFrames >= 6, "turning DK HideTicks off recreates rune bars")
