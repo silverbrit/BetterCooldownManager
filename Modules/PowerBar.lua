@@ -26,6 +26,26 @@ local function NudgePowerBar(powerBar, xOffset, yOffset)
         xOfs + xOffset, yOfs + yOffset)
 end
 
+local function SetSecretPowerText(fontString, powerCurrent, powerMax, powerType, textMode)
+    if not fontString then return false end
+    local format
+    local value1, value2
+    if textMode == "CURRENT_MAX" then
+        format, value1, value2 = "%d / %d", powerCurrent, powerMax
+    elseif textMode == "PERCENT" or (textMode == "AUTO" and powerType == 0) then
+        format, value1 = "%.0f%%", UnitPowerPercent("player", 0, false, CurveConstants.ScaleTo100)
+    else
+        value1 = powerCurrent
+    end
+
+    local okMethod, setFormattedText = pcall(function() return fontString.SetFormattedText end)
+    if okMethod and type(setFormattedText) == "function" then
+        local ok = pcall(setFormattedText, fontString, format or "%d", value1, value2)
+        if ok then return true end
+    end
+    return pcall(fontString.SetText, fontString, value1)
+end
+
 local function UpdatePowerValues()
     local PowerBar = BCDM.PowerBar
     local _, class = UnitClass("player")
@@ -36,13 +56,13 @@ local function UpdatePowerValues()
     if PowerBar and PowerBar.Status and powerType then
         local textMode = BCDM.db.profile.PowerBar.Text.Mode or "AUTO"
         if BCDM:IsSecretValue(powerCurrent) or BCDM:IsSecretValue(powerMax) then
-            PowerBar.Text:SetText("")
+            SetSecretPowerText(PowerBar.Text, powerCurrent, powerMax, powerType, textMode)
         elseif textMode ~= "AUTO" then
             PowerBar.Text:SetText(BCDM:FormatResourceText(powerCurrent, powerMax, textMode))
         elseif powerType == 0 then
             local percent = UnitPowerPercent("player", 0, false, CurveConstants.ScaleTo100)
             if BCDM:IsSecretValue(percent) then
-                PowerBar.Text:SetText("")
+                SetSecretPowerText(PowerBar.Text, powerCurrent, powerMax, powerType, textMode)
             else
                 PowerBar.Text:SetText(string.format("%.0f%%", percent))
             end

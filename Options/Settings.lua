@@ -636,7 +636,8 @@ local function CreateTrackedBarsPanel()
         controls.scrollFrame:Show()
     end
 
-    function panel:OnStandaloneSettingsActivated()
+    local baseRefresh = panel.Refresh
+    local function AttachEmbeddedPanel(self)
         local embedded = GetBetterTrackedBarsSettingsPanel()
         if not embedded or embedded == self then
             DetachEmbeddedPanel()
@@ -653,6 +654,12 @@ local function CreateTrackedBarsPanel()
         elseif type(embedded.Refresh) == "function" then embedded:Refresh() end
     end
 
+    panel.OnRefresh = function(self)
+        baseRefresh(self)
+        AttachEmbeddedPanel(self)
+    end
+    panel.OnStandaloneSettingsActivated = AttachEmbeddedPanel
+    panel:HookScript("OnHide", DetachEmbeddedPanel)
     panel.OnSettingsDeactivated = DetachEmbeddedPanel
     return panel
 end
@@ -865,7 +872,8 @@ local function CreateBarPanel(barType)
     local layout = U.Section(controls, "Layout & Positioning", true)
     PathDropdown(controls, layout, "Anchor From", ProfileRoot,
         { barType, "Layout", 1 }, update, function() return ANCHOR_POINTS end, { disabled = EnabledDisabled })
-    local anchorType = barType == "SecondaryPowerBar" and "SecondaryPower" or barType
+    local anchorType = barType == "PowerBar" and "Power"
+        or barType == "SecondaryPowerBar" and "SecondaryPower" or barType
     PathDropdown(controls, layout, "Anchor Parent", ProfileRoot,
         { barType, "Layout", 2 }, update, AnchorValues(anchorType), { disabled = EnabledDisabled, maxHeight = 420 })
     PathDropdown(controls, layout, "Anchor To", ProfileRoot,

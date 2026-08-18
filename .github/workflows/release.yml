@@ -6,7 +6,11 @@ on:
       - "*"
 
 jobs:
+  quality:
+    uses: ./.github/workflows/test.yml
+
   release:
+    needs: quality
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

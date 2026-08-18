@@ -34,16 +34,26 @@ for _, event in ipairs({
 }) do
     Check(refreshEvents[event], "custom trackers refresh on " .. event)
 end
+local changelogFile = assert(io.open(root .. "/Options/Changelog.lua", "r"))
+local changelogSource = changelogFile:read("*a")
+changelogFile:close()
+local releaseCount = 0
+for _ in changelogSource:gmatch("\n## %d+ %([^%)]+%)") do releaseCount = releaseCount + 1 end
+Check(releaseCount == 1 and changelogSource:find("## 33 (August 18 2026)", 1, true)
+    and changelogSource:find("- Thanks to Unhalted", 1, true)
+    and not changelogSource:find("### Development", 1, true),
+    "runtime changelog contains only the current dated release and note")
 
 local defaults = BCDM:GetDefaultDB()
-Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,
-    "selected element highlights default to enabled")
+Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true
+    and defaults.global.SettingsWindow.Opacity == 0.72,
+    "settings window highlights and opacity default to enabled values")
 Check(defaults.global.MinimapButton.hide == false and defaults.global.MinimapButton.minimapPos == 225,
     "the minimap launcher uses LibDBIcon's default storage")
 Check(assert(loadfile(root .. "/Scripts/test-minimap-button.lua"))(BCDM, Check),
     "minimap button runtime tests pass")
-Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == true,
-    "trinket viewer shows on-use equipment by default")
+Check(defaults.profile.CooldownManager.Trinket.DisplayOnUseOnly == false,
+    "trinket viewer shows all equipped equipment by default")
 Check(defaults.profile.CooldownManager.Trinket.Text.FontSize == 15,
     "trinket aura stacks have configurable text defaults")
 Check(defaults.profile.CooldownManager.General.CooldownText.Layout[4] == 0
@@ -91,10 +101,27 @@ Check(not BCDM:NormalizeEssentialAnchorProfile(legacyEssentialProfile),
 Check(defaults.profile.CooldownManager.Trinket.IconSize == 32
     and defaults.profile.CooldownManager.Trinket.IconWidth == 32
     and defaults.profile.CooldownManager.Trinket.IconHeight == 32
-    and defaults.profile.CooldownManager.Trinket.Layout[1] == "TOPRIGHT"
-    and defaults.profile.CooldownManager.Trinket.Layout[2] == "ElvUF_Player"
-    and defaults.profile.CooldownManager.Trinket.Layout[3] == "BOTTOMRIGHT",
-    "trinkets default to 32px icons anchored to the ElvUI player frame")
+    and defaults.profile.CooldownManager.Trinket.Layout[1] == "CENTER"
+    and defaults.profile.CooldownManager.Trinket.Layout[2] == "NONE"
+    and defaults.profile.CooldownManager.Trinket.Layout[3] == "CENTER",
+    "trinkets default to 32px icons centered on Blizzard UIParent")
+local savedIsElvUIActive = BCDM.IsElvUIActive
+BCDM.IsElvUIActive = function() return true end
+local elvTrinketLayout = BCDM:GetDefaultTrinketLayout()
+BCDM.IsElvUIActive = savedIsElvUIActive
+Check(elvTrinketLayout[1] == "TOPRIGHT" and elvTrinketLayout[2] == "ElvUF_Player"
+    and elvTrinketLayout[3] == "BOTTOMRIGHT",
+    "ElvUI trinkets keep the player-frame bottom-right default")
+local legacyTrinketProfile = {
+    CooldownManager = { Trinket = { Layout = { "TOPRIGHT", "ElvUF_Player", "BOTTOMRIGHT", 0, 0 } } },
+}
+Check(BCDM:NormalizeTrinketAnchorProfile(legacyTrinketProfile)
+    and legacyTrinketProfile.CooldownManager.Trinket.Layout[1] == "CENTER"
+    and legacyTrinketProfile.CooldownManager.Trinket.Layout[2] == "NONE"
+    and legacyTrinketProfile.CooldownManager.Trinket.Layout[3] == "CENTER",
+    "legacy trinket defaults migrate to centered UIParent without custom UI")
+Check(not BCDM:NormalizeTrinketAnchorProfile(legacyTrinketProfile),
+    "trinket anchor migration is idempotent")
 Check(defaults.profile.CastBar.Layout[2] == "BCDM_PowerBar",
     "cast bar defaults to the BCM power bar anchor")
 Check(defaults.profile.PowerBar.BackgroundColour[1] == 62 / 255
@@ -130,6 +157,20 @@ local auraCandidates = BCDM:BuildCustomTrackerAuraCandidateIDs(
 Check(table.concat(auraCandidates, ",") == "100,200,300,400", "aura candidates combine source, override, and explicit IDs")
 Check(#BCDM:BuildCustomTrackerAuraCandidateIDs({ Type = "item", ID = 100 }, 200) == 0,
     "non-spell entries do not receive aura candidates")
+local savedSpellAPI, savedSpellBookAPI = C_Spell, C_SpellBook
+C_Spell = { GetSpellInfo = function(spellID)
+    return spellID == 900 and { name = "Bone Shield", iconID = 123 } or nil
+end }
+C_SpellBook = { IsSpellInSpellBook = function() return false end }
+local auraEligible, cooldownAvailable, auraAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "spell", ID = 900 } }, BCDM.CustomTrackerSourceAdapters.spell)
+Check(auraEligible and not cooldownAvailable and auraAvailable,
+    "valid aura spell IDs remain eligible without spellbook cooldown state")
+local unavailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "spell", ID = 901 } },
+    { IsAvailable = function() return false end })
+Check(not unavailable, "unavailable non-aura sources remain filtered")
+C_Spell, C_SpellBook = savedSpellAPI, savedSpellBook
 Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
 Check(BCDM:FormatResourceText(25, 100, "PERCENT") == "25%", "resource text supports percentages")
 local secretValue = {}

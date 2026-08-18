@@ -108,6 +108,7 @@ CreateFrame = function() return eventFrame end
 
 local currentPower, currentType, currentMax = 10, 0, 100
 local updatedColour
+local formattedPowerText
 local powerModule = {
     db = { profile = {
         General = {
@@ -123,7 +124,12 @@ local powerModule = {
             SetMinMaxValues = function(_, minimum, maximum) currentMax = maximum end,
             SetValue = function(_, value) currentPower = value end,
         },
-        Text = { SetText = function() end },
+        Text = {
+            SetText = function() end,
+            SetFormattedText = function(_, format, value)
+                formattedPowerText = { format, value }
+            end,
+        },
     },
 }
 function powerModule:ResolveBarFillColour(_, _, context)
@@ -151,6 +157,14 @@ currentType, currentPower, currentMax = 3, 25, 120
 powerModule._PowerBarOnEvent(nil, "UNIT_DISPLAYPOWER")
 Check(currentPower == 25 and currentMax == 120 and table.concat(updatedColour, ",") ~= firstColour,
     "UNIT_DISPLAYPOWER refreshes power values and colour")
+local secretPower = {}
+local plainSecretCheck = powerModule.IsSecretValue
+powerModule.IsSecretValue = function(_, value) return value == secretPower end
+currentPower, currentMax, currentType = secretPower, 120, 3
+powerModule._PowerBarOnEvent(nil, "UNIT_POWER_UPDATE")
+Check(formattedPowerText and formattedPowerText[1] == "%d" and formattedPowerText[2] == secretPower,
+    "restricted power values use the FontString widget formatter instead of clearing text")
+powerModule.IsSecretValue = plainSecretCheck
 
 CreateFrame = savedCreateFrame
 for name, value in pairs(savedPowerGlobals) do _G[name] = value end
@@ -160,12 +174,14 @@ local savedAnchor = _G.OwnedBarsTestAnchor
 local savedNonFrame = _G.OwnedBarsNonFrame
 local savedForbiddenAnchor = _G.OwnedBarsForbiddenAnchor
 local savedUnreadableAnchor = _G.OwnedBarsUnreadableAnchor
+local savedInaccessibleAnchor = _G.OwnedBarsInaccessibleAnchor
 local savedThrowingWidthAnchor = _G.OwnedBarsThrowingWidthAnchor
 UIParent = {}
 local function importedFrame(width)
     return {
         IsObjectType = function(_, objectType) return objectType == "Frame" end,
         IsForbidden = function() return false end,
+        CanBeAccessedInContext = function() return true end,
         SetPoint = function() end,
         GetWidth = function() return width or 111 end,
     }
@@ -176,6 +192,8 @@ _G.OwnedBarsForbiddenAnchor = importedFrame()
 _G.OwnedBarsForbiddenAnchor.IsForbidden = function() return true end
 _G.OwnedBarsUnreadableAnchor = importedFrame()
 _G.OwnedBarsUnreadableAnchor.IsObjectType = function() error("unreadable frame type") end
+_G.OwnedBarsInaccessibleAnchor = importedFrame()
+_G.OwnedBarsInaccessibleAnchor.CanBeAccessedInContext = function() return false end
 local cycleProfile = {
     PowerBar = { Layout = { "BOTTOM", "BCDM_SecondaryPowerBar", "TOP", 0, 0 }, Width = 123 },
     SecondaryPowerBar = { Layout = { "BOTTOM", "BCDM_PowerBar", "TOP", 0, 0 }, Width = 234 },
@@ -188,6 +206,8 @@ Check(BCDM:ResolveAnchorParent("OwnedBarsForbiddenAnchor") == UIParent,
     "forbidden imported anchors fall back to UIParent")
 Check(BCDM:ResolveAnchorParent("OwnedBarsUnreadableAnchor") == UIParent,
     "unreadable imported anchors fall back to UIParent")
+Check(BCDM:ResolveAnchorParent("OwnedBarsInaccessibleAnchor") == UIParent,
+    "inaccessible imported anchors fall back to UIParent")
 local throwingSetPointAnchor = importedFrame()
 local throwingSetPointFrame = {}
 function throwingSetPointFrame:SetPoint(_, relativeTo)
@@ -254,6 +274,7 @@ _G.OwnedBarsTestAnchor = savedAnchor
 _G.OwnedBarsNonFrame = savedNonFrame
 _G.OwnedBarsForbiddenAnchor = savedForbiddenAnchor
 _G.OwnedBarsUnreadableAnchor = savedUnreadableAnchor
+_G.OwnedBarsInaccessibleAnchor = savedInaccessibleAnchor
 _G.OwnedBarsThrowingWidthAnchor = savedThrowingWidthAnchor
 BCDM.db = oldDB
 BCDM._SecondaryResourceState = oldState

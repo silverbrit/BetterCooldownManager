@@ -4,6 +4,7 @@ local BetterCooldownManager = LibStub("AceAddon-3.0"):NewAddon("BetterCooldownMa
 function BetterCooldownManager:OnInitialize()
     BCDM.db = LibStub("AceDB-3.0"):New("BCDMDB", BCDM:GetDefaultDB(), true)
     BCDM:NormalizeEssentialAnchorProfiles(BCDM.db)
+    BCDM:NormalizeTrinketAnchorProfiles(BCDM.db)
     BCDM:NormalizeBarColourProfiles(BCDM.db)
     BCDM:NormalizeRemovedSettingsProfiles(BCDM.db)
     BCDM:MigrateCustomTrackerProfiles(BCDM.db)
@@ -20,9 +21,19 @@ function BetterCooldownManager:OnInitialize()
         BCDM:QueueCooldownViewerLayoutApply()
         if BCDM.RefreshSettings then BCDM:RefreshSettings() end
     end
+    local function HandleProfileReset()
+        local defaults = BCDM:GetDefaultDB()
+        local profile = BCDM.db.profile
+        local trinket = profile and profile.CooldownManager and profile.CooldownManager.Trinket
+        local defaultTrinket = defaults.profile.CooldownManager.Trinket
+        if type(trinket) == "table" and type(defaultTrinket) == "table" then
+            trinket.Layout = BCDM:CopyTable(defaultTrinket.Layout)
+        end
+        HandleProfileLayoutChanged()
+    end
     BCDM.db.RegisterCallback(BCDM, "OnProfileChanged", HandleProfileLayoutChanged)
     BCDM.db.RegisterCallback(BCDM, "OnProfileCopied", HandleProfileLayoutChanged)
-    BCDM.db.RegisterCallback(BCDM, "OnProfileReset", HandleProfileLayoutChanged)
+    BCDM.db.RegisterCallback(BCDM, "OnProfileReset", HandleProfileReset)
     BCDM:RegisterSettings()
 end
 

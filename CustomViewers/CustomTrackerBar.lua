@@ -76,14 +76,25 @@ end
 local SourceAdapters = {}
 BCDM.CustomTrackerSourceAdapters = SourceAdapters
 
+local function GetSpellInfo(source)
+    if not (C_Spell and C_Spell.GetSpellInfo) then return end
+    local ok, info = pcall(C_Spell.GetSpellInfo, source.ID)
+    return ok and info or nil
+end
+
 SourceAdapters.spell = {
     GetMetadata = function(source)
-        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(source.ID)
+        local info = GetSpellInfo(source)
         if not info then return end
         return info.name, info.iconID
     end,
     IsAvailable = function(source)
-        return C_SpellBook and C_SpellBook.IsSpellInSpellBook and C_SpellBook.IsSpellInSpellBook(source.ID) == true
+        if not (C_SpellBook and C_SpellBook.IsSpellInSpellBook) then return false end
+        local ok, available = pcall(C_SpellBook.IsSpellInSpellBook, source.ID)
+        return ok and available == true
+    end,
+    IsAuraAvailable = function(source)
+        return GetSpellInfo(source) ~= nil
     end,
     GetState = function(source)
         local charges = C_Spell.GetSpellCharges(source.ID)
@@ -201,6 +212,25 @@ function BCDM:RegisterCustomTrackerSourceAdapter(sourceType, adapter)
     SourceAdapters[sourceType] = adapter
     return true
 end
+
+local function GetSourceAvailability(entry, adapter)
+    if not (type(entry) == "table" and type(adapter) == "table" and type(entry.Source) == "table") then
+        return false, false, false
+    end
+    local available = not adapter.IsAvailable
+    if adapter.IsAvailable then
+        local ok, result = pcall(adapter.IsAvailable, entry.Source)
+        available = ok and result == true
+    end
+    local auraAvailable = false
+    if type(adapter.IsAuraAvailable) == "function" then
+        local ok, result = pcall(adapter.IsAuraAvailable, entry.Source)
+        auraAvailable = ok and result == true
+    end
+    return available or auraAvailable, available, auraAvailable
+end
+
+BCDM._GetCustomTrackerSourceAvailability = GetSourceAvailability
 
 local function PlayerMatchesFilters(entry)
     local classToken = select(2, UnitClass("player"))
@@ -385,7 +415,7 @@ local function RefreshBar(barID, bar)
     for _, entryID in ipairs(bar.EntryOrder or {}) do
         local entry = bar.Entries and bar.Entries[entryID]
         local adapter = entry and entry.Source and SourceAdapters[entry.Source.Type]
-        local available = entry and adapter and (not adapter.IsAvailable or adapter.IsAvailable(entry.Source))
+        local available, cooldownAvailable = GetSourceAvailability(entry, adapter)
         local settings = entry and BCDM:GetCustomTrackerEntrySettings(bar, entry)
         local eligible = previewing or (entry and entry.Enabled ~= false and PlayerMatchesFilters(settings) and available)
         if entry and adapter and eligible then
@@ -393,7 +423,7 @@ local function RefreshBar(barID, bar)
             if name or previewing then
                 local style = settings
                 local existing = Runtime.Icons[barID] and Runtime.Icons[barID][entryID]
-                local state = available and (adapter.GetState(entry.Source, entry) or {}) or {}
+                local state = cooldownAvailable and (adapter.GetState(entry.Source, entry) or {}) or {}
                 if existing and existing.LastState then
                     if state.active == nil then state.active = existing.LastState.active end
                     if state.ready == nil then state.ready = existing.LastState.ready end

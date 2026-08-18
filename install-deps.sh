@@ -21,11 +21,6 @@ if [[ ! -f "${script_dir}/BetterCooldownManager.toc" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${libraries_dir}/Init.xml" ]]; then
-  echo "Error: Libraries/Init.xml not found in ${script_dir}." >&2
-  exit 1
-fi
-
 for command in git svn; do
   if ! command -v "${command}" >/dev/null 2>&1; then
     echo "Error: ${command} is required but was not found in PATH." >&2
@@ -39,7 +34,6 @@ done
 staging_dir="$(mktemp -d "${script_dir}/.install-deps.XXXXXX")"
 staged_libraries="${staging_dir}/Libraries"
 mkdir -p "${staged_libraries}/Ace3"
-cp "${libraries_dir}/Init.xml" "${staged_libraries}/Init.xml"
 git clone --depth 1 --branch main https://github.com/Silverbrit/LibSharedCanvas.git "${staged_libraries}/LibSharedCanvas-1.0"
 
 svn export https://repos.curseforge.com/wow/ace3/trunk/AceAddon-3.0 "${staged_libraries}/Ace3/AceAddon-3.0"

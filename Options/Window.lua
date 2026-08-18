@@ -1,5 +1,7 @@
 local _, BCDM = ...
 
+local U = BCDM.SettingsUtils
+
 local WINDOW_NAME = "BetterCooldownManagerSettingsWindow"
 local DEFAULT_WIDTH = 1180
 local DEFAULT_HEIGHT = 760
@@ -7,6 +9,11 @@ local MIN_WIDTH = 900
 local MIN_HEIGHT = 600
 local NAV_WIDTH = 230
 local FOOTER_HEIGHT = 34
+local NAV_FOOTER_HEIGHT = 42
+local DEFAULT_WINDOW_OPACITY = 0.72
+local OPACITY_SETTINGS_VERSION = 2
+local MIN_WINDOW_OPACITY = 0.5
+local MAX_WINDOW_OPACITY = 1
 
 local settingsWindow
 local selectedPanelName
@@ -20,7 +27,24 @@ end
 
 local function WindowSettings()
     BCDM.db.global.SettingsWindow = BCDM.db.global.SettingsWindow or {}
-    return BCDM.db.global.SettingsWindow
+    local settings = BCDM.db.global.SettingsWindow
+    if settings.OpacityVersion ~= OPACITY_SETTINGS_VERSION then
+        settings.Opacity = DEFAULT_WINDOW_OPACITY
+        settings.OpacityVersion = OPACITY_SETTINGS_VERSION
+    end
+    return settings
+end
+
+-- Changelog.lua provides the generated runtime copy because WoW cannot read Markdown files.
+local CHANGELOG_TEXT = BCDM.ChangelogText or "# Changelog\n\n## 33 (August 18 2026)"
+
+local function ClampWindowOpacity(value)
+    value = tonumber(value) or DEFAULT_WINDOW_OPACITY
+    return math.max(MIN_WINDOW_OPACITY, math.min(MAX_WINDOW_OPACITY, value))
+end
+
+local function GetWindowOpacity()
+    return ClampWindowOpacity(WindowSettings().Opacity)
 end
 
 local function SaveWindowGeometry(frame)
@@ -120,6 +144,138 @@ local function CreateNavigationButton(parent, entry, previousButton)
     return button
 end
 
+local function AddChangelogLine(controls, section, text)
+    local row = U.Text(controls, section, "• " .. text)
+    row.Text:ClearAllPoints()
+    row.Text:SetPoint("TOPLEFT")
+    row.Text:SetJustifyV("TOP")
+    row.Text:SetWordWrap(true)
+    local baseRefresh = row.Refresh
+    function row:Refresh()
+        baseRefresh(self)
+        local width = controls.scrollFrame:GetWidth()
+        if type(width) == "number" and width > 0 then
+            self.Text:SetWidth(math.max(1, width - 48))
+        end
+        self:SetHeight(math.max(24, (self.Text:GetStringHeight() or 14) + 4))
+    end
+    return row
+end
+
+local function CreateChangelogPanel()
+    local panel, controls = U.NewPanel()
+    local section
+    for line in CHANGELOG_TEXT:gmatch("[^\r\n]+") do
+        local hashes, heading = line:match("^(#+)%s+(.+)$")
+        if hashes and #hashes == 2 then
+            section = U.Section(controls, heading, true)
+        elseif hashes and #hashes == 3 and section then
+            U.Subsection(controls, section, heading)
+        elseif section and line:match("^%- ") then
+            AddChangelogLine(controls, section, line:sub(3))
+        end
+    end
+    panel:Hide()
+    return panel
+end
+
+local function CreateOpacitySlider(parent, frame)
+    local slider = CreateFrame("Frame", nil, parent)
+    slider:SetSize(96, 16)
+    slider:SetPoint("RIGHT", frame.CloseButton, "LEFT", -8, 0)
+
+    local track = slider:CreateTexture(nil, "BACKGROUND")
+    track:SetHeight(2)
+    track:SetPoint("LEFT", 6, 0)
+    track:SetPoint("RIGHT", -6, 0)
+    track:SetColorTexture(1, 1, 1, 0.1)
+
+    local thumb = CreateFrame("Button", nil, slider)
+    thumb:SetSize(12, 10)
+    local thumbTexture = thumb:CreateTexture(nil, "ARTWORK")
+    thumbTexture:SetAllPoints()
+    thumbTexture:SetColorTexture(1, 0.82, 0, 0.8)
+
+    local function SetOpacity(alpha)
+        alpha = ClampWindowOpacity(alpha)
+        WindowSettings().Opacity = alpha
+        frame:SetAlpha(1)
+
+        local scale
+        if alpha < DEFAULT_WINDOW_OPACITY then
+            scale = alpha / DEFAULT_WINDOW_OPACITY
+        else
+            scale = 1 + (alpha - DEFAULT_WINDOW_OPACITY) / (MAX_WINDOW_OPACITY - DEFAULT_WINDOW_OPACITY)
+        end
+        local function BackdropAlpha(base)
+            if alpha < DEFAULT_WINDOW_OPACITY then return base * scale end
+            return base + (1 - base) * (scale - 1)
+        end
+        frame:SetBackdropColor(0.035, 0.035, 0.035, BackdropAlpha(0.72))
+        frame.TitleBar:SetBackdropColor(0.015, 0.015, 0.015, BackdropAlpha(0.82))
+        frame.Navigation:SetBackdropColor(0.02, 0.02, 0.02, BackdropAlpha(0.5))
+        frame.Footer:SetBackdropColor(0.015, 0.015, 0.015, BackdropAlpha(0.82))
+
+        local fraction = (alpha - MIN_WINDOW_OPACITY) / (MAX_WINDOW_OPACITY - MIN_WINDOW_OPACITY)
+        thumb:ClearAllPoints()
+        thumb:SetPoint("CENTER", track, "LEFT", fraction * track:GetWidth(), 0)
+    end
+
+    local function ReadCursorOpacity()
+        local cursorX = GetCursorPosition()
+        local scale = slider:GetEffectiveScale()
+        local left = track:GetLeft()
+        local width = track:GetWidth()
+        if not scale or not left or not width or width <= 0 then return end
+        local fraction = (cursorX / scale - left) / width
+        return MIN_WINDOW_OPACITY + math.max(0, math.min(1, fraction))
+            * (MAX_WINDOW_OPACITY - MIN_WINDOW_OPACITY)
+    end
+
+    local dragging
+    local function StopDragging()
+        dragging = false
+        thumb:SetScript("OnUpdate", nil)
+    end
+    local function StartDragging()
+        dragging = true
+        thumb:SetScript("OnUpdate", function()
+            if dragging then
+                local alpha = ReadCursorOpacity()
+                if alpha then SetOpacity(alpha) end
+            end
+        end)
+        local alpha = ReadCursorOpacity()
+        if alpha then SetOpacity(alpha) end
+    end
+
+    thumb:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" then StartDragging() end
+    end)
+    thumb:SetScript("OnMouseUp", function(_, button)
+        if button == "LeftButton" then StopDragging() end
+    end)
+
+    local trackButton = CreateFrame("Button", nil, slider)
+    trackButton:SetAllPoints()
+    trackButton:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" then StartDragging() end
+    end)
+    trackButton:SetScript("OnMouseUp", function(_, button)
+        if button == "LeftButton" then StopDragging() end
+    end)
+
+    slider:EnableMouseWheel(true)
+    slider:SetScript("OnMouseWheel", function(_, delta)
+        SetOpacity(GetWindowOpacity() + delta * 0.05)
+    end)
+    slider:SetScript("OnShow", function()
+        SetOpacity(GetWindowOpacity())
+    end)
+    SetOpacity(GetWindowOpacity())
+    return slider
+end
+
 local function CreateSupportButton(parent, previousButton, text, icon, popupTitle, url, width)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width or 120, 26)
@@ -157,16 +313,17 @@ local function CreateSettingsWindow()
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    frame:SetBackdropColor(0.035, 0.035, 0.035, 0.72)
+    frame:SetBackdropColor(0.035, 0.035, 0.035, 1)
     frame:SetBackdropBorderColor(0.2, 0.2, 0.2, 0.9)
     RestoreWindowGeometry(frame)
+    frame:SetAlpha(1)
 
     frame.TitleBar = CreateFrame("Frame", nil, frame, "BackdropTemplate")
     frame.TitleBar:SetPoint("TOPLEFT", 1, -1)
     frame.TitleBar:SetPoint("TOPRIGHT", -1, -1)
     frame.TitleBar:SetHeight(48)
     frame.TitleBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    frame.TitleBar:SetBackdropColor(0.015, 0.015, 0.015, 0.82)
+    frame.TitleBar:SetBackdropColor(0.015, 0.015, 0.015, 1)
     frame.TitleBar:EnableMouse(true)
     frame.TitleBar:RegisterForDrag("LeftButton")
     frame.TitleBar:SetScript("OnDragStart", function() frame:StartMoving() end)
@@ -203,12 +360,22 @@ local function CreateSettingsWindow()
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    frame.Navigation:SetBackdropColor(0.02, 0.02, 0.02, 0.5)
+    frame.Navigation:SetBackdropColor(0.02, 0.02, 0.02, 1)
     frame.Navigation:SetBackdropBorderColor(0.18, 0.18, 0.18, 0.8)
 
     frame.NavigationContent = CreateFrame("Frame", nil, frame.Navigation)
     frame.NavigationContent:SetPoint("TOPLEFT", 8, -8)
-    frame.NavigationContent:SetPoint("BOTTOMRIGHT", -8, 8)
+    frame.NavigationContent:SetPoint("BOTTOMRIGHT", -8, NAV_FOOTER_HEIGHT + 8)
+
+    frame.NavigationFooter = CreateFrame("Frame", nil, frame.Navigation)
+    frame.NavigationFooter:SetPoint("BOTTOMLEFT", 8, 8)
+    frame.NavigationFooter:SetPoint("BOTTOMRIGHT", -8, 8)
+    frame.NavigationFooter:SetHeight(NAV_FOOTER_HEIGHT - 8)
+    local navigationDivider = frame.NavigationFooter:CreateTexture(nil, "ARTWORK")
+    navigationDivider:SetPoint("TOPLEFT")
+    navigationDivider:SetPoint("TOPRIGHT")
+    navigationDivider:SetHeight(1)
+    navigationDivider:SetColorTexture(0.2, 0.2, 0.2, 0.8)
 
     frame.Content = CreateFrame("Frame", nil, frame)
     frame.Content:SetPoint("TOPLEFT", frame.Navigation, "TOPRIGHT", 14, 0)
@@ -219,7 +386,7 @@ local function CreateSettingsWindow()
     frame.Footer:SetPoint("BOTTOMRIGHT", -1, 1)
     frame.Footer:SetHeight(FOOTER_HEIGHT)
     frame.Footer:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    frame.Footer:SetBackdropColor(0.015, 0.015, 0.015, 0.82)
+    frame.Footer:SetBackdropColor(0.015, 0.015, 0.015, 1)
 
     frame.Footer.Label = frame.Footer:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     frame.Footer.Label:SetPoint("LEFT", 14, 0)
@@ -238,6 +405,7 @@ local function CreateSettingsWindow()
     CreateSupportButton(frame.Footer, twitch, "Support",
         "Interface\\AddOns\\BetterCooldownManager\\Media\\Support\\Ko-Fi.png",
         "Support Better Cooldown Manager", "https://ko-fi.com/unhalted", 130)
+    CreateOpacitySlider(frame.TitleBar, frame)
 
     frame.ResizeButton = CreateFrame("Button", nil, frame)
     frame.ResizeButton:SetSize(20, 20)
@@ -262,14 +430,25 @@ local function CreateSettingsWindow()
         previousButton = entry.button
     end
 
+    frame.ChangelogEntry = { name = "Changelog", panel = CreateChangelogPanel() }
+    frame.ChangelogEntry.button = CreateNavigationButton(frame.NavigationFooter, frame.ChangelogEntry)
+    frame.ChangelogEntry.button:SetHeight(28)
+    frame.ChangelogEntry.button:SetScript("OnClick", function()
+        SelectPanel(frame, frame.ChangelogEntry)
+    end)
     frame:SetScript("OnShow", function()
+        frame:SetAlpha(1)
         if SettingsPanel and SettingsPanel:IsShown() then
             if type(HideUIPanel) == "function" then HideUIPanel(SettingsPanel)
             else SettingsPanel:Hide() end
         end
         local selectedEntry = frame.Entries[1]
-        for _, entry in ipairs(frame.Entries) do
-            if entry.name == selectedPanelName then selectedEntry = entry break end
+        if selectedPanelName == frame.ChangelogEntry.name then
+            selectedEntry = frame.ChangelogEntry
+        else
+            for _, entry in ipairs(frame.Entries) do
+                if entry.name == selectedPanelName then selectedEntry = entry break end
+            end
         end
         SelectPanel(frame, selectedEntry)
     end)

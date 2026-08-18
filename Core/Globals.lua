@@ -491,16 +491,18 @@ BCDM.AnchorParents = {
             ["EssentialCooldownViewer"] = "|cFF00AEF7Blizzard|r: Essential Cooldown Viewer",
             ["UtilityCooldownViewer"] = "|cFF00AEF7Blizzard|r: Utility Cooldown Viewer",
             ["BCDM_SecondaryPowerBar"] = "|cFF8080FFBCDM|r: Secondary Power Bar",
+            ["NONE"] = "|cFF00AEF7Blizzard|r: UIParent",
         },
-        { "EssentialCooldownViewer", "UtilityCooldownViewer", "BCDM_SecondaryPowerBar" },
+        { "NONE", "EssentialCooldownViewer", "UtilityCooldownViewer", "BCDM_SecondaryPowerBar" },
     },
     ["SecondaryPower"] = {
         {
             ["EssentialCooldownViewer"] = "|cFF00AEF7Blizzard|r: Essential Cooldown Viewer",
             ["UtilityCooldownViewer"] = "|cFF00AEF7Blizzard|r: Utility Cooldown Viewer",
             ["BCDM_PowerBar"] = "|cFF8080FFBCDM|r: Power Bar",
+            ["NONE"] = "|cFF00AEF7Blizzard|r: UIParent",
         },
-        { "EssentialCooldownViewer", "UtilityCooldownViewer", "BCDM_PowerBar"},
+        { "NONE", "EssentialCooldownViewer", "UtilityCooldownViewer", "BCDM_PowerBar" },
     },
     ["CastBar"] = {
         {

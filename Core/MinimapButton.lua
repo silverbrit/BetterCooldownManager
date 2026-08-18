@@ -1,6 +1,6 @@
 local _, BCDM = ...
 
-local DATA_OBJECT_NAME = "BetterCooldownManager"
+local DATA_OBJECT_NAME = "Better Cooldown Manager"
 local ICON_TEXTURE = "Interface\\AddOns\\BetterCooldownManager\\Media\\Logo.png"
 
 local function GetSettings()
@@ -33,8 +33,8 @@ local function CreateDataObject(dataBroker)
             if button == "LeftButton" and BCDM.ToggleSettings then BCDM:ToggleSettings() end
         end,
         OnTooltipShow = function(tooltip)
-            tooltip:AddLine(BCDM.ADDON_NAME or "Better Cooldown Manager")
-            tooltip:AddLine("Left-click to toggle settings.", 1, 1, 1)
+            tooltip:AddLine(BCDM.ADDON_NAME or DATA_OBJECT_NAME)
+            tooltip:AddLine("Left-click to |cff00ff00open settings|r", 1, 1, 1)
         end,
     })
     return BCDM.MinimapDataObject

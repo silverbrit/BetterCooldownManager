@@ -1,6 +1,6 @@
 # Custom Viewers
 
-`CustomTrackerBar.lua` owns reusable named tracker bars and the shared source-adapter contract for spells, items, equipment slots, and fixed-duration cast timers. Bar and entry IDs are stable profile data; display order lives in explicit arrays. Non-aura runtime icons are pooled and all sources refresh through one coalesced event frame, including pet, spellbook, mount/action-bar override, and Cooldown Viewer spell-override lifecycle changes.
+`CustomTrackerBar.lua` owns reusable named tracker bars and the shared source-adapter contract for spells, items, equipment slots, and fixed-duration cast timers. Bar and entry IDs are stable profile data; display order lives in explicit arrays. Non-aura runtime icons are pooled and all sources refresh through one coalesced event frame, including pet, spellbook, mount/action-bar override, and Cooldown Viewer spell-override lifecycle changes. Spell cooldown availability is separate from valid spell metadata, so AuraContainer-only spell IDs can render without pretending they are learned cooldowns.
 
 `AuraSourceDisplay.lua` gives spell entries a Retail 12.1-only AuraContainer layer. Player helpful and player-cast target helpful/harmful auras bind directly to Blizzard-managed icon, cooldown, stack, and tooltip widgets. Containers are prepared outside combat and stable spell frames are not returned to the generic pool. The ordinary spell cooldown remains underneath when no candidate aura is active.
 
