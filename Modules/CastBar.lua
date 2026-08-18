@@ -643,7 +643,7 @@ function BCDM:CreateCastBar()
     else
         DisableCastBar(CastBar)
     end
-    ScheduleCastBarWidth(0.1)
+    ScheduleCastBarWidth(0.5)
 end
 
 function BCDM:UpdateCastBar()
@@ -653,7 +653,7 @@ function BCDM:UpdateCastBar()
     local wasEnabled = CastBar.EnabledState == true
 
     ApplyCastBarAppearance()
-    ScheduleCastBarWidth(0.1)
+    ScheduleCastBarWidth(0.5)
 
     if CastBarDB.Enabled then
         CastBar.EnabledState = true
