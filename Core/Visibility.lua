@@ -59,6 +59,16 @@ function BCDM:ShouldShowOwnedFrame(config)
     return self:EvaluateVisibilityState(self:GetOwnedFrameVisibilityPolicy(config), CurrentState())
 end
 
+function BCDM:SetOwnedFrameShown(frame, config, shown)
+    if not frame then return false end
+    local policyVisible = self:ShouldShowOwnedFrame(config)
+    local registration = registrations[frame]
+    if registration then registration.PolicyVisible = policyVisible end
+    local visible = shown == true and policyVisible
+    if visible then frame:Show() else frame:Hide() end
+    return visible
+end
+
 function BCDM:RegisterOwnedFrameVisibility(frame, configProvider, refresh)
     if not frame or registrations[frame] then return end
     registrations[frame] = {
@@ -80,11 +90,8 @@ function BCDM:RefreshOwnedFrameVisibility()
         local policyVisible = self:ShouldShowOwnedFrame(config)
         if policyVisible ~= registration.PolicyVisible then
             registration.PolicyVisible = policyVisible
-            if not policyVisible then
-                frame:Hide()
-            elseif registration.Refresh then
-                registration.Refresh(frame)
-            end
+            if not policyVisible then frame:Hide() end
+            if registration.Refresh then registration.Refresh(frame) end
         elseif frame:IsShown() and not policyVisible then
             frame:Hide()
         end
@@ -99,8 +106,11 @@ function BCDM:SetupVisibilityEvents()
         "PLAYER_MOUNT_DISPLAY_CHANGED", "PLAYER_IS_GLIDING_CHANGED", "PLAYER_ALIVE", "PLAYER_DEAD", "PLAYER_UNGHOST",
         "UNIT_ENTERED_VEHICLE", "UNIT_EXITED_VEHICLE", "PLAYER_UPDATE_RESTING",
     }) do frame:RegisterEvent(event) end
-    frame:SetScript("OnEvent", function(_, _, unit)
-        if unit and unit ~= "player" then return end
+    frame:SetScript("OnEvent", function(_, event, unit)
+        if (event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITED_VEHICLE")
+            and unit ~= "player" then
+            return
+        end
         BCDM:RefreshOwnedFrameVisibility()
     end)
     self.VisibilityEventFrame = frame
