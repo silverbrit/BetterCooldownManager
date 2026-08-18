@@ -131,6 +131,20 @@ local auraCandidates = BCDM:BuildCustomTrackerAuraCandidateIDs(
 Check(table.concat(auraCandidates, ",") == "100,200,300,400", "aura candidates combine source, override, and explicit IDs")
 Check(#BCDM:BuildCustomTrackerAuraCandidateIDs({ Type = "item", ID = 100 }, 200) == 0,
     "non-spell entries do not receive aura candidates")
+local savedSpellAPI, savedSpellBookAPI = C_Spell, C_SpellBook
+C_Spell = { GetSpellInfo = function(spellID)
+    return spellID == 900 and { name = "Bone Shield", iconID = 123 } or nil
+end }
+C_SpellBook = { IsSpellInSpellBook = function() return false end }
+local auraEligible, cooldownAvailable, auraAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "spell", ID = 900 } }, BCDM.CustomTrackerSourceAdapters.spell)
+Check(auraEligible and not cooldownAvailable and auraAvailable,
+    "valid aura spell IDs remain eligible without spellbook cooldown state")
+local unavailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "spell", ID = 901 } },
+    { IsAvailable = function() return false end })
+Check(not unavailable, "unavailable non-aura sources remain filtered")
+C_Spell, C_SpellBook = savedSpellAPI, savedSpellBook
 Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
 Check(BCDM:FormatResourceText(25, 100, "PERCENT") == "25%", "resource text supports percentages")
 local secretValue = {}

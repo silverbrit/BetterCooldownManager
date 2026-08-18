@@ -1,0 +1,28 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Lua 5.1
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Check Lua version
+        run: lua -e 'assert(_VERSION == "Lua 5.1")'
+
+      - name: Check Lua syntax
+        run: find Core CustomViewers Locales Modules Options Scripts -name '*.lua' -print0 | xargs -0 -n1 luac -p
+
+      - name: Run tests
+        run: lua Scripts/test.lua .

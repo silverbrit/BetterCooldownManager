@@ -66,6 +66,11 @@ function BCDM:IsSafeAnchorParent(frame)
     local okForbidden, forbidden = pcall(isForbidden, frame)
     if not okForbidden or IsSecret(self, forbidden) or forbidden ~= false then return false end
 
+    local canBeAccessed = ReadMethod(self, frame, "CanBeAccessedInContext")
+    if not canBeAccessed then return false end
+    local okAccessible, accessible = pcall(canBeAccessed, frame)
+    if not okAccessible or IsSecret(self, accessible) or accessible ~= true then return false end
+
     return ReadMethod(self, frame, "SetPoint") ~= nil
 end
 

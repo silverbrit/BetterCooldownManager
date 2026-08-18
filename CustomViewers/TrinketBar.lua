@@ -388,7 +388,8 @@ local function LayoutTrinketBar()
     BCDM.TrinketBarContainer:ClearAllPoints()
     BCDM.TrinketBarContainer:SetFrameStrata(CustomDB.FrameStrata or "LOW")
     local anchorParent = BCDM:ResolveAnchorParent(CustomDB.Layout[2])
-    BCDM.TrinketBarContainer:SetPoint(containerAnchorFrom, anchorParent, CustomDB.Layout[3], CustomDB.Layout[4], CustomDB.Layout[5])
+    BCDM:SetSafeAnchorPoint(BCDM.TrinketBarContainer, containerAnchorFrom, anchorParent,
+        CustomDB.Layout[3], CustomDB.Layout[4], CustomDB.Layout[5])
 
     for _, icon in pairs(slotIcons) do
         BCDM:StopCustomGlow(icon)

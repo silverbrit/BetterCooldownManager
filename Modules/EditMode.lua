@@ -13,12 +13,21 @@ function BCDM:GetLayouts()
     return BCDM.EditModeLayoutsLayouts
 end
 
+local function GetPresetLayoutCount()
+    local manager = EditModePresetLayoutManager
+    local getPresets = manager and manager.GetCopyOfPresetLayouts
+    if type(getPresets) == "function" then
+        local ok, layouts = pcall(getPresets, manager)
+        if ok and type(layouts) == "table" then return #layouts end
+    end
+    return 2
+end
+
 local function GetIndexForName(name)
     local layoutInfo = C_EditMode.GetLayouts()
     for i, info in pairs(layoutInfo.layouts) do
         if info.layoutName == name then
-            local offset = 2
-            local index = i + offset
+            local index = i + GetPresetLayoutCount()
             if index == layoutInfo.activeLayout then return end
             return index
         end
