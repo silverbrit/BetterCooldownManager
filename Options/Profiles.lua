@@ -141,7 +141,12 @@ local function CreateProfilesPanel()
         end })
     end
 
-    local sharing, sharingControls = Canvas.CreateProfileSharingSection(controls.scrollChild, L("Profile Sharing"))
+    local sharing, sharingControls = Canvas.CreateProfileSharingSection(controls.scrollChild, L("Profile Sharing"), {
+        exportLabel = L("Export Profile"),
+        exportButtonText = L("Export"),
+        importLabel = L("Import String"),
+        importButtonText = L("Import"),
+    })
     controls:RegisterSection(sharing)
 
     local function Refresh()

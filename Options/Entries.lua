@@ -90,7 +90,7 @@ local function BarValues()
     local values = {}
     for _, barID in ipairs(Store().BarOrder) do
         local bar = Store().Bars[barID]
-        if bar then values[#values + 1] = { text = bar.Name or ("Tracker Bar " .. barID), value = barID } end
+        if bar then values[#values + 1] = { text = bar.Name or (L("Tracker Bar") .. " " .. barID), value = barID } end
     end
     return values
 end
@@ -207,7 +207,7 @@ local function CreateManagement(panel, controls)
             if not bar then return end
             StaticPopupDialogs.BCDM_RENAME_TRACKER_BAR = {
                 text = L("Rename Tracker Bar"),
-                button1 = "Rename",
+                button1 = L("Rename"),
                 button2 = CANCEL,
                 hasEditBox = true,
                 editBoxWidth = 300,
@@ -355,12 +355,19 @@ local function ResolveSpellID(value)
     return info and info.spellID
 end
 
+local SOURCE_LABELS = {
+    spell = L("Spell"),
+    item = L("Item"),
+    equipment = L("Equipment Slot"),
+    timer = L("Cast Timer"),
+}
+
 local function EntryName(entry)
     local source = entry.Source or {}
     local adapter = BCDM.CustomTrackerSourceAdapters and BCDM.CustomTrackerSourceAdapters[source.Type]
     local name, icon
     if adapter and adapter.GetMetadata then name, icon = adapter.GetMetadata(source) end
-    return name or (source.Type .. " " .. tostring(source.ID)), icon
+    return name or ((SOURCE_LABELS[source.Type] or L("Source")) .. " " .. tostring(source.ID)), icon
 end
 
 local function EntryItemCount(entry)
@@ -403,13 +410,6 @@ local function SetupFilterMenu(button, entry, panel)
         end
     end)
 end
-
-local SOURCE_LABELS = {
-    spell = "Spell",
-    item = "Item",
-    equipment = "Equipment Slot",
-    timer = "Cast Timer",
-}
 
 local UNKNOWN_ICON = 134400
 
@@ -471,11 +471,11 @@ local function CreateEntryDialog()
     dialog.Error:SetPoint("RIGHT", dialog, "RIGHT", -190, 0)
     dialog.Error:SetTextColor(1, 0.25, 0.2)
 
-    dialog.Cancel = Canvas.CreateActionButton(dialog, "Cancel")
+    dialog.Cancel = Canvas.CreateActionButton(dialog, L("Cancel"))
     dialog.Cancel:SetSize(86, 26)
     dialog.Cancel:SetPoint("BOTTOMRIGHT", -18, 14)
     dialog.Cancel:SetScript("OnClick", function() dialog:Hide() end)
-    dialog.Add = Canvas.CreateActionButton(dialog, "Add")
+    dialog.Add = Canvas.CreateActionButton(dialog, L("Add"))
     dialog.Add:SetSize(86, 26)
     dialog.Add:SetPoint("RIGHT", dialog.Cancel, "LEFT", -8, 0)
 
@@ -498,9 +498,9 @@ local function CreateEntryDialog()
             name, icon = adapter.GetMetadata({ Type = sourceType, ID = sourceID })
         end
         self.Icon:SetTexture(icon or UNKNOWN_ICON)
-        self.PreviewName:SetText(name or (sourceID and ((SOURCE_LABELS[sourceType] or "Source") .. " " .. sourceID)
-            or "Enter a source below"))
-        self.PreviewSource:SetText(sourceID and ((SOURCE_LABELS[sourceType] or sourceType) .. " ID: " .. sourceID) or "")
+        self.PreviewName:SetText(name or (sourceID and ((SOURCE_LABELS[sourceType] or L("Source")) .. " " .. sourceID)
+            or L("Enter a source below")))
+        self.PreviewSource:SetText(sourceID and ((SOURCE_LABELS[sourceType] or L("Source")) .. " " .. L("ID:") .. " " .. sourceID) or "")
     end
 
     function dialog:SchedulePreview()
@@ -514,20 +514,20 @@ local function CreateEntryDialog()
     function dialog:Submit()
         local sourceID = self:ResolveSource()
         if not sourceID then
-            self.Error:SetText(self.Mode == "item" and "Enter a valid positive item ID."
-                or "Enter a valid spell ID or name.")
+            self.Error:SetText(self.Mode == "item" and L("Enter a valid positive item ID.")
+                or L("Enter a valid spell ID or name."))
             return
         end
         local duration
         if self.Mode == "timer" then
             duration = tonumber(self.Duration:GetText())
             if not duration or duration <= 0 or duration >= math.huge then
-                self.Error:SetText("Enter a duration greater than zero.")
+                self.Error:SetText(L("Enter a duration greater than zero."))
                 return
             end
         end
         if not selectedBarID or not Store().Bars[selectedBarID] then
-            self.Error:SetText("Select a tracker bar first.")
+            self.Error:SetText(L("Select a tracker bar first."))
             return
         end
 
@@ -544,8 +544,8 @@ local function CreateEntryDialog()
 
     function dialog:ShowFor(mode, panel)
         self.Mode, self.Panel = mode, panel
-        self.Title:SetText(mode == "spell" and "Add Spell" or mode == "item" and "Add Item" or "Add Cast Timer")
-        self.PrimaryLabel:SetText(mode == "item" and "Item ID" or "Spell ID or Name")
+        self.Title:SetText(mode == "spell" and L("Add Spell") or mode == "item" and L("Add Item") or L("Add Cast Timer"))
+        self.PrimaryLabel:SetText(mode == "item" and L("Item ID") or L("Spell ID or Name"))
         self.Primary:SetText("")
         self.Duration:SetText("")
         self.Error:SetText("")
@@ -751,8 +751,8 @@ local function CreateEntries(panel, controls)
             if not self.Entry then return end
             local source = self.Entry.Source or {}
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(self.EntryName or "Tracker Entry", 1, 0.82, 0)
-            GameTooltip:AddLine((SOURCE_LABELS[source.Type] or source.Type or "Source") .. " ID: " .. tostring(source.ID), 1, 1, 1)
+            GameTooltip:SetText(self.EntryName or L("Tracker Entry"), 1, 0.82, 0)
+            GameTooltip:AddLine((SOURCE_LABELS[source.Type] or L("Source")) .. " " .. L("ID:") .. " " .. tostring(source.ID), 1, 1, 1)
             GameTooltip:AddLine(L("Click to edit. Drag to reorder."), 0.7, 0.7, 0.7)
             GameTooltip:Show()
         end)
@@ -781,8 +781,8 @@ local function CreateEntries(panel, controls)
     end)
     strip.Add:RegisterForDrag("LeftButton")
     strip.Add:SetScript("OnReceiveDrag", function() AddCursorEntry(panel) end)
-    Canvas.AttachTooltip(strip.Add, "Add Entry",
-        "Click to add an entry, or drag an item from your bags or a spell from your spellbook here.")
+    Canvas.AttachTooltip(strip.Add, L("Add Entry"),
+        L("Click to add an entry, or drag an item from your bags or a spell from your spellbook here."))
 
     function strip:Refresh()
         local bar = SelectedBar()
@@ -859,7 +859,7 @@ local function CreateEntries(panel, controls)
     header.Enabled:SetPoint("RIGHT", header, "RIGHT", -120, 0)
     header.EnabledLabel = Canvas.CreateLabel(header, L("Enabled"), "GameFontHighlight")
     header.EnabledLabel:SetPoint("RIGHT", header.Enabled, "LEFT", -2, 0)
-    header.Delete = Canvas.CreateActionButton(header, "Delete")
+    header.Delete = Canvas.CreateActionButton(header, L("Delete"))
     header.Delete:SetSize(92, 26)
     header.Delete:SetPoint("RIGHT", 0, 0)
     header.Enabled:SetScript("OnClick", function(self)
@@ -876,8 +876,8 @@ local function CreateEntries(panel, controls)
     end)
     function header:Refresh()
         local entry = SelectedEntry()
-        self.Empty:SetText(SelectedBar() and "This bar has no entries yet. Use + above to add one."
-            or "Create or select a tracker bar to add entries.")
+        self.Empty:SetText(SelectedBar() and L("This bar has no entries yet. Use + above to add one.")
+            or L("Create or select a tracker bar to add entries."))
         self.Empty:SetShown(entry == nil)
         for _, region in ipairs({ self.Icon, self.Name, self.Source, self.Enabled, self.EnabledLabel, self.Delete }) do
             region:SetShown(entry ~= nil)
@@ -887,8 +887,8 @@ local function CreateEntries(panel, controls)
         local source = entry.Source or {}
         U.SetSettingsIcon(self.Icon, icon or UNKNOWN_ICON)
         self.Name:SetText(name)
-        local sourceText = (SOURCE_LABELS[source.Type] or source.Type or "Source") .. " ID: " .. tostring(source.ID)
-        if source.Type == "timer" then sourceText = sourceText .. "  •  " .. tostring(source.Duration or 0) .. " seconds" end
+        local sourceText = (SOURCE_LABELS[source.Type] or L("Source")) .. " " .. L("ID:") .. " " .. tostring(source.ID)
+        if source.Type == "timer" then sourceText = sourceText .. "  •  " .. tostring(source.Duration or 0) .. " " .. L("seconds") end
         self.Source:SetText(sourceText)
         self.Enabled:SetChecked(entry.Enabled ~= false)
     end

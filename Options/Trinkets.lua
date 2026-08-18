@@ -66,10 +66,10 @@ end
 
 local function ItemMetadata(slotID)
     local itemID = GetInventoryItemID("player", slotID)
-    if not itemID or BCDM:IsSecretValue(itemID) then return "Empty Trinket Slot", UNKNOWN_ICON end
+    if not itemID or BCDM:IsSecretValue(itemID) then return L("Empty Trinket Slot"), UNKNOWN_ICON end
     local name, _, _, _, _, _, _, _, _, icon = C_Item.GetItemInfo(itemID)
     if not name and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(itemID) end
-    return name or ("Item " .. tostring(itemID)), icon or GetInventoryItemTexture("player", slotID) or UNKNOWN_ICON, itemID
+    return name or (L("Item") .. " " .. tostring(itemID)), icon or GetInventoryItemTexture("player", slotID) or UNKNOWN_ICON, itemID
 end
 
 function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
