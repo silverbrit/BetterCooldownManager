@@ -4,5 +4,6 @@
     <Script file="Trinkets.lua"/>
     <Script file="Profiles.lua"/>
     <Script file="Settings.lua"/>
+    <Script file="Changelog.lua"/>
     <Script file="Window.lua"/>
 </Ui>

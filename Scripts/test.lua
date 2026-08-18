@@ -34,6 +34,15 @@ for _, event in ipairs({
 }) do
     Check(refreshEvents[event], "custom trackers refresh on " .. event)
 end
+local changelogFile = assert(io.open(root .. "/Options/Changelog.lua", "r"))
+local changelogSource = changelogFile:read("*a")
+changelogFile:close()
+local releaseCount = 0
+for _ in changelogSource:gmatch("\n## %d+ %([^%)]+%)") do releaseCount = releaseCount + 1 end
+Check(releaseCount == 1 and changelogSource:find("## 33 (August 18 2026)", 1, true)
+    and changelogSource:find("- Thanks to Unhalted", 1, true)
+    and not changelogSource:find("### Development", 1, true),
+    "runtime changelog contains only the current dated release and note")
 
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true

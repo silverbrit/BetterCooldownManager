@@ -1,3 +1,7 @@
+local _, BCDM = ...
+
+-- Generated runtime copy of CHANGELOG.md; WoW cannot read Markdown files.
+BCDM.ChangelogText = [=[
 # Changelog
 
 ## 33 (August 18 2026)
@@ -27,3 +31,4 @@
 
 - Kept Blizzard Cooldown Viewer and native bar frames Blizzard-owned; BCM only styles and positions them through guarded addon-owned metadata.
 - Added protected/inaccessible anchor fallbacks, combat-safe refreshes, dynamic Edit Mode preset handling, and safer Tracked Buff centering/restoration to reduce taint and layout races.
+]=]
