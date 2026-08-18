@@ -42,7 +42,10 @@ local function NewRegion(width, height)
     function region:SetTextColor(...) self.textColor = { ... } end
     function region:SetShadowColor(...) self.shadowColor = { ... } end
     function region:SetShadowOffset(...) self.shadowOffset = { ... } end
-    function region:SetText(text) self.text = text end
+    function region:SetText(text)
+        if not self.font then error("Font not set") end
+        self.text = text
+    end
     function region:SetWordWrap(value) self.wordWrap = value end
     function region:SetNonSpaceWrap(value) self.nonSpaceWrap = value end
     function region:SetMaxLines(value) self.maxLines = value end

@@ -626,11 +626,11 @@ function BCDM:CreateCastBar()
     CastBar.SpellNameText = CastBar.SpellNameText or CastBar.Status:CreateFontString(nil, "OVERLAY")
     CastBar.CastTimeText = CastBar.CastTimeText or CastBar.Status:CreateFontString(nil, "OVERLAY")
     CastBar.CastTimeBinding = CastBar.CastTimeBinding or CreateCastTimeBinding(CastBar.CastTimeText)
-    CastBar.SpellNameText:SetText("")
-    CastBar.CastTimeText:SetText("")
 
     BCDM.CastBar = CastBar
     ApplyCastBarAppearance()
+    CastBar.SpellNameText:SetText("")
+    CastBar.CastTimeText:SetText("")
     BCDM:RegisterOwnedFrameVisibility(CastBar, function() return BCDM.db.profile.CastBar end, function(frame)
         if frame.CastActive and frame.HasDuration then frame:Show() end
     end)
