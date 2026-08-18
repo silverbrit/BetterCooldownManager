@@ -2,28 +2,29 @@ local _, BCDM = ...
 
 local U = BCDM.SettingsUtils
 local Canvas = U.Canvas
+local L = U.L
 local selectedBarID
 local selectedEntryID
 local customTrackerPanel
 local entryDialog
 
 local ANCHOR_POINTS = {
-    { text = "Top Left", value = "TOPLEFT" }, { text = "Top", value = "TOP" },
-    { text = "Top Right", value = "TOPRIGHT" }, { text = "Left", value = "LEFT" },
-    { text = "Center", value = "CENTER" }, { text = "Right", value = "RIGHT" },
-    { text = "Bottom Left", value = "BOTTOMLEFT" }, { text = "Bottom", value = "BOTTOM" },
-    { text = "Bottom Right", value = "BOTTOMRIGHT" },
+    { text = L("Top Left"), value = "TOPLEFT" }, { text = L("Top"), value = "TOP" },
+    { text = L("Top Right"), value = "TOPRIGHT" }, { text = L("Left"), value = "LEFT" },
+    { text = L("Center"), value = "CENTER" }, { text = L("Right"), value = "RIGHT" },
+    { text = L("Bottom Left"), value = "BOTTOMLEFT" }, { text = L("Bottom"), value = "BOTTOM" },
+    { text = L("Bottom Right"), value = "BOTTOMRIGHT" },
 }
 
 local GROWTH = {
-    { text = "Right", value = "RIGHT" }, { text = "Left", value = "LEFT" },
-    { text = "Up", value = "UP" }, { text = "Down", value = "DOWN" },
+    { text = L("Right"), value = "RIGHT" }, { text = L("Left"), value = "LEFT" },
+    { text = L("Up"), value = "UP" }, { text = L("Down"), value = "DOWN" },
 }
 
 local STRATA = {
-    { text = "Background", value = "BACKGROUND" }, { text = "Low", value = "LOW" },
-    { text = "Medium", value = "MEDIUM" }, { text = "High", value = "HIGH" },
-    { text = "Dialog", value = "DIALOG" }, { text = "Tooltip", value = "TOOLTIP" },
+    { text = L("Background"), value = "BACKGROUND" }, { text = L("Low"), value = "LOW" },
+    { text = L("Medium"), value = "MEDIUM" }, { text = L("High"), value = "HIGH" },
+    { text = L("Dialog"), value = "DIALOG" }, { text = L("Tooltip"), value = "TOOLTIP" },
 }
 
 local function Store()
@@ -89,7 +90,7 @@ local function BarValues()
     local values = {}
     for _, barID in ipairs(Store().BarOrder) do
         local bar = Store().Bars[barID]
-        if bar then values[#values + 1] = { text = bar.Name or ("Tracker Bar " .. barID), value = barID } end
+        if bar then values[#values + 1] = { text = bar.Name or (L("Tracker Bar") .. " " .. barID), value = barID } end
     end
     return values
 end
@@ -105,7 +106,7 @@ local function AnchorValues()
     for _, barID in ipairs(Store().BarOrder) do
         if barID ~= selectedBarID then
             local bar = Store().Bars[barID]
-            values[#values + 1] = { text = "BCDM: " .. (bar.Name or ("Tracker Bar " .. barID)), value = "BCDM_CustomTrackerBar_" .. barID }
+            values[#values + 1] = { text = "BCDM: " .. (bar.Name or (L("Tracker Bar") .. " " .. barID)), value = "BCDM_CustomTrackerBar_" .. barID }
         end
     end
     return values
@@ -160,7 +161,7 @@ local function AccessLayout(index, panel, fallback)
         if index == 2 then
             local targetID = type(value) == "string" and tonumber(value:match("^BCDM_CustomTrackerBar_(%d+)$"))
             if targetID and BCDM:WouldCustomTrackerAnchorCycle(selectedBarID, targetID) then
-                BCDM:PrettyPrint("That anchor would create a tracker-bar cycle.")
+                BCDM:PrettyPrint(L("That anchor would create a tracker-bar cycle."))
                 return
             end
         end
@@ -205,8 +206,8 @@ local function CreateManagement(panel, controls)
             local bar = SelectedBar()
             if not bar then return end
             StaticPopupDialogs.BCDM_RENAME_TRACKER_BAR = {
-                text = "Rename Tracker Bar",
-                button1 = "Rename",
+                text = L("Rename Tracker Bar"),
+                button1 = L("Rename"),
                 button2 = CANCEL,
                 hasEditBox = true,
                 editBoxWidth = 300,
@@ -245,7 +246,7 @@ local function CreateManagement(panel, controls)
         { text = "Delete", width = 120, disabled = function() return SelectedBar() == nil end, click = function()
             if not selectedBarID then return end
             local deleting = selectedBarID
-            BCDM:CreatePrompt("Delete Tracker Bar", "Delete this tracker bar and all of its entries?", function()
+            BCDM:CreatePrompt(L("Delete Tracker Bar"), L("Delete this tracker bar and all of its entries?"), function()
                 BCDM:DeleteCustomTrackerBar(deleting)
                 selectedBarID = nil
                 selectedEntryID = nil
@@ -354,12 +355,19 @@ local function ResolveSpellID(value)
     return info and info.spellID
 end
 
+local SOURCE_LABELS = {
+    spell = L("Spell"),
+    item = L("Item"),
+    equipment = L("Equipment Slot"),
+    timer = L("Cast Timer"),
+}
+
 local function EntryName(entry)
     local source = entry.Source or {}
     local adapter = BCDM.CustomTrackerSourceAdapters and BCDM.CustomTrackerSourceAdapters[source.Type]
     local name, icon
     if adapter and adapter.GetMetadata then name, icon = adapter.GetMetadata(source) end
-    return name or (source.Type .. " " .. tostring(source.ID)), icon
+    return name or ((SOURCE_LABELS[source.Type] or L("Source")) .. " " .. tostring(source.ID)), icon
 end
 
 local function EntryItemCount(entry)
@@ -375,12 +383,12 @@ local VISUAL_MODES = U.VISUAL_MODES
 local GLOW_MODES = U.GLOW_MODES
 
 local EQUIPMENT_SLOTS = {
-    { text = "Head", value = 1 }, { text = "Neck", value = 2 }, { text = "Shoulder", value = 3 },
-    { text = "Shirt", value = 4 }, { text = "Chest", value = 5 }, { text = "Waist", value = 6 },
-    { text = "Legs", value = 7 }, { text = "Feet", value = 8 }, { text = "Wrist", value = 9 },
-    { text = "Hands", value = 10 }, { text = "Finger 1", value = 11 }, { text = "Finger 2", value = 12 },
-    { text = "Trinket 1", value = 13 }, { text = "Trinket 2", value = 14 }, { text = "Back", value = 15 },
-    { text = "Main Hand", value = 16 }, { text = "Off Hand", value = 17 }, { text = "Tabard", value = 19 },
+    { text = L("Head"), value = 1 }, { text = L("Neck"), value = 2 }, { text = L("Shoulder"), value = 3 },
+    { text = L("Shirt"), value = 4 }, { text = L("Chest"), value = 5 }, { text = L("Waist"), value = 6 },
+    { text = L("Legs"), value = 7 }, { text = L("Feet"), value = 8 }, { text = L("Wrist"), value = 9 },
+    { text = L("Hands"), value = 10 }, { text = L("Finger 1"), value = 11 }, { text = L("Finger 2"), value = 12 },
+    { text = L("Trinket 1"), value = 13 }, { text = L("Trinket 2"), value = 14 }, { text = L("Back"), value = 15 },
+    { text = L("Main Hand"), value = 16 }, { text = L("Off Hand"), value = 17 }, { text = L("Tabard"), value = 19 },
 }
 
 local function SetupFilterMenu(button, entry, panel)
@@ -402,13 +410,6 @@ local function SetupFilterMenu(button, entry, panel)
         end
     end)
 end
-
-local SOURCE_LABELS = {
-    spell = "Spell",
-    item = "Item",
-    equipment = "Equipment Slot",
-    timer = "Cast Timer",
-}
 
 local UNKNOWN_ICON = 134400
 
@@ -434,7 +435,7 @@ local function CreateEntryDialog()
     dialog:SetBackdropBorderColor(1, 0.82, 0, 0.8)
     dialog:Hide()
 
-    dialog.Title = Canvas.CreateLabel(dialog, "Add Tracker Entry", "GameFontNormalLarge")
+    dialog.Title = Canvas.CreateLabel(dialog, L("Add Tracker Entry"), "GameFontNormalLarge")
     dialog.Title:SetPoint("TOPLEFT", 18, -16)
     dialog.Title:SetTextColor(1, 0.82, 0)
     dialog.Close = CreateFrame("Button", nil, dialog, "UIPanelCloseButton")
@@ -445,7 +446,7 @@ local function CreateEntryDialog()
     dialog.Icon:SetSize(44, 44)
     dialog.Icon:SetPoint("TOPLEFT", 18, -50)
     dialog.Icon:SetTexture(UNKNOWN_ICON)
-    dialog.PreviewName = Canvas.CreateLabel(dialog, "Enter a source below", "GameFontHighlight")
+    dialog.PreviewName = Canvas.CreateLabel(dialog, L("Enter a source below"), "GameFontHighlight")
     dialog.PreviewName:SetPoint("TOPLEFT", dialog.Icon, "TOPRIGHT", 12, -2)
     dialog.PreviewName:SetPoint("RIGHT", dialog, "RIGHT", -18, 0)
     dialog.PreviewName:SetWordWrap(false)
@@ -453,13 +454,13 @@ local function CreateEntryDialog()
     dialog.PreviewSource:SetPoint("TOPLEFT", dialog.PreviewName, "BOTTOMLEFT", 0, -6)
     dialog.PreviewSource:SetTextColor(0.65, 0.65, 0.65)
 
-    dialog.PrimaryLabel = Canvas.CreateLabel(dialog, "Spell ID or Name", "GameFontHighlightSmall")
+    dialog.PrimaryLabel = Canvas.CreateLabel(dialog, L("Spell ID or Name"), "GameFontHighlightSmall")
     dialog.PrimaryLabel:SetPoint("TOPLEFT", 18, -106)
     dialog.Primary = Canvas.CreateInput(dialog)
     dialog.Primary:SetPoint("TOPLEFT", dialog.PrimaryLabel, "BOTTOMLEFT", 0, -4)
     dialog.Primary:SetPoint("RIGHT", dialog, "RIGHT", -18, 0)
 
-    dialog.DurationLabel = Canvas.CreateLabel(dialog, "Duration (seconds)", "GameFontHighlightSmall")
+    dialog.DurationLabel = Canvas.CreateLabel(dialog, L("Duration (seconds)"), "GameFontHighlightSmall")
     dialog.DurationLabel:SetPoint("TOPLEFT", dialog.Primary, "BOTTOMLEFT", 0, -10)
     dialog.Duration = Canvas.CreateInput(dialog)
     dialog.Duration:SetPoint("TOPLEFT", dialog.DurationLabel, "BOTTOMLEFT", 0, -4)
@@ -470,11 +471,11 @@ local function CreateEntryDialog()
     dialog.Error:SetPoint("RIGHT", dialog, "RIGHT", -190, 0)
     dialog.Error:SetTextColor(1, 0.25, 0.2)
 
-    dialog.Cancel = Canvas.CreateActionButton(dialog, "Cancel")
+    dialog.Cancel = Canvas.CreateActionButton(dialog, L("Cancel"))
     dialog.Cancel:SetSize(86, 26)
     dialog.Cancel:SetPoint("BOTTOMRIGHT", -18, 14)
     dialog.Cancel:SetScript("OnClick", function() dialog:Hide() end)
-    dialog.Add = Canvas.CreateActionButton(dialog, "Add")
+    dialog.Add = Canvas.CreateActionButton(dialog, L("Add"))
     dialog.Add:SetSize(86, 26)
     dialog.Add:SetPoint("RIGHT", dialog.Cancel, "LEFT", -8, 0)
 
@@ -497,9 +498,9 @@ local function CreateEntryDialog()
             name, icon = adapter.GetMetadata({ Type = sourceType, ID = sourceID })
         end
         self.Icon:SetTexture(icon or UNKNOWN_ICON)
-        self.PreviewName:SetText(name or (sourceID and ((SOURCE_LABELS[sourceType] or "Source") .. " " .. sourceID)
-            or "Enter a source below"))
-        self.PreviewSource:SetText(sourceID and ((SOURCE_LABELS[sourceType] or sourceType) .. " ID: " .. sourceID) or "")
+        self.PreviewName:SetText(name or (sourceID and ((SOURCE_LABELS[sourceType] or L("Source")) .. " " .. sourceID)
+            or L("Enter a source below")))
+        self.PreviewSource:SetText(sourceID and ((SOURCE_LABELS[sourceType] or L("Source")) .. " " .. L("ID:") .. " " .. sourceID) or "")
     end
 
     function dialog:SchedulePreview()
@@ -513,20 +514,20 @@ local function CreateEntryDialog()
     function dialog:Submit()
         local sourceID = self:ResolveSource()
         if not sourceID then
-            self.Error:SetText(self.Mode == "item" and "Enter a valid positive item ID."
-                or "Enter a valid spell ID or name.")
+            self.Error:SetText(self.Mode == "item" and L("Enter a valid positive item ID.")
+                or L("Enter a valid spell ID or name."))
             return
         end
         local duration
         if self.Mode == "timer" then
             duration = tonumber(self.Duration:GetText())
             if not duration or duration <= 0 or duration >= math.huge then
-                self.Error:SetText("Enter a duration greater than zero.")
+                self.Error:SetText(L("Enter a duration greater than zero."))
                 return
             end
         end
         if not selectedBarID or not Store().Bars[selectedBarID] then
-            self.Error:SetText("Select a tracker bar first.")
+            self.Error:SetText(L("Select a tracker bar first."))
             return
         end
 
@@ -543,8 +544,8 @@ local function CreateEntryDialog()
 
     function dialog:ShowFor(mode, panel)
         self.Mode, self.Panel = mode, panel
-        self.Title:SetText(mode == "spell" and "Add Spell" or mode == "item" and "Add Item" or "Add Cast Timer")
-        self.PrimaryLabel:SetText(mode == "item" and "Item ID" or "Spell ID or Name")
+        self.Title:SetText(mode == "spell" and L("Add Spell") or mode == "item" and L("Add Item") or L("Add Cast Timer"))
+        self.PrimaryLabel:SetText(mode == "item" and L("Item ID") or L("Spell ID or Name"))
         self.Primary:SetText("")
         self.Duration:SetText("")
         self.Error:SetText("")
@@ -585,13 +586,13 @@ local function OpenAddEntryMenu(owner, panel)
     if not selectedBarID or not MenuUtil or type(MenuUtil.CreateContextMenu) ~= "function" then return end
     MenuUtil.CreateContextMenu(owner, function(_, root)
         if type(root.SetMinimumWidth) == "function" then root:SetMinimumWidth(190) end
-        root:CreateButton("Spell", function() CreateEntryDialog():ShowFor("spell", panel) end)
-        root:CreateButton("Item", function() CreateEntryDialog():ShowFor("item", panel) end)
-        local equipment = root:CreateButton("Equipment Slot")
+        root:CreateButton(L("Spell"), function() CreateEntryDialog():ShowFor("spell", panel) end)
+        root:CreateButton(L("Item"), function() CreateEntryDialog():ShowFor("item", panel) end)
+        local equipment = root:CreateButton(L("Equipment Slot"))
         for _, slot in ipairs(EQUIPMENT_SLOTS) do
             equipment:CreateButton(slot.text, function() AddEquipmentEntry(slot.value, panel) end)
         end
-        root:CreateButton("Cast Timer", function() CreateEntryDialog():ShowFor("timer", panel) end)
+        root:CreateButton(L("Cast Timer"), function() CreateEntryDialog():ShowFor("timer", panel) end)
     end)
 end
 
@@ -750,9 +751,9 @@ local function CreateEntries(panel, controls)
             if not self.Entry then return end
             local source = self.Entry.Source or {}
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(self.EntryName or "Tracker Entry", 1, 0.82, 0)
-            GameTooltip:AddLine((SOURCE_LABELS[source.Type] or source.Type or "Source") .. " ID: " .. tostring(source.ID), 1, 1, 1)
-            GameTooltip:AddLine("Click to edit. Drag to reorder.", 0.7, 0.7, 0.7)
+            GameTooltip:SetText(self.EntryName or L("Tracker Entry"), 1, 0.82, 0)
+            GameTooltip:AddLine((SOURCE_LABELS[source.Type] or L("Source")) .. " " .. L("ID:") .. " " .. tostring(source.ID), 1, 1, 1)
+            GameTooltip:AddLine(L("Click to edit. Drag to reorder."), 0.7, 0.7, 0.7)
             GameTooltip:Show()
         end)
         button:SetScript("OnLeave", function(self)
@@ -780,8 +781,8 @@ local function CreateEntries(panel, controls)
     end)
     strip.Add:RegisterForDrag("LeftButton")
     strip.Add:SetScript("OnReceiveDrag", function() AddCursorEntry(panel) end)
-    Canvas.AttachTooltip(strip.Add, "Add Entry",
-        "Click to add an entry, or drag an item from your bags or a spell from your spellbook here.")
+    Canvas.AttachTooltip(strip.Add, L("Add Entry"),
+        L("Click to add an entry, or drag an item from your bags or a spell from your spellbook here."))
 
     function strip:Refresh()
         local bar = SelectedBar()
@@ -841,7 +842,7 @@ local function CreateEntries(panel, controls)
 
     local header = Canvas.CreateBaseRow(section.Content, 58)
     U.Add(controls, section, header)
-    header.Empty = Canvas.CreateLabel(header, "This bar has no entries yet. Use + above to add one.", "GameFontHighlight")
+    header.Empty = Canvas.CreateLabel(header, L("This bar has no entries yet. Use + above to add one."), "GameFontHighlight")
     header.Empty:SetPoint("LEFT", 0, 0)
     header.Icon = header:CreateTexture(nil, "ARTWORK")
     header.Icon:SetSize(U.SELECTED_ICON_SIZE, U.SELECTED_ICON_SIZE)
@@ -856,9 +857,9 @@ local function CreateEntries(panel, controls)
     header.Enabled = CreateFrame("CheckButton", nil, header, "UICheckButtonTemplate")
     header.Enabled:SetSize(24, 24)
     header.Enabled:SetPoint("RIGHT", header, "RIGHT", -120, 0)
-    header.EnabledLabel = Canvas.CreateLabel(header, "Enabled", "GameFontHighlight")
+    header.EnabledLabel = Canvas.CreateLabel(header, L("Enabled"), "GameFontHighlight")
     header.EnabledLabel:SetPoint("RIGHT", header.Enabled, "LEFT", -2, 0)
-    header.Delete = Canvas.CreateActionButton(header, "Delete")
+    header.Delete = Canvas.CreateActionButton(header, L("Delete"))
     header.Delete:SetSize(92, 26)
     header.Delete:SetPoint("RIGHT", 0, 0)
     header.Enabled:SetScript("OnClick", function(self)
@@ -875,8 +876,8 @@ local function CreateEntries(panel, controls)
     end)
     function header:Refresh()
         local entry = SelectedEntry()
-        self.Empty:SetText(SelectedBar() and "This bar has no entries yet. Use + above to add one."
-            or "Create or select a tracker bar to add entries.")
+        self.Empty:SetText(SelectedBar() and L("This bar has no entries yet. Use + above to add one.")
+            or L("Create or select a tracker bar to add entries."))
         self.Empty:SetShown(entry == nil)
         for _, region in ipairs({ self.Icon, self.Name, self.Source, self.Enabled, self.EnabledLabel, self.Delete }) do
             region:SetShown(entry ~= nil)
@@ -886,8 +887,8 @@ local function CreateEntries(panel, controls)
         local source = entry.Source or {}
         U.SetSettingsIcon(self.Icon, icon or UNKNOWN_ICON)
         self.Name:SetText(name)
-        local sourceText = (SOURCE_LABELS[source.Type] or source.Type or "Source") .. " ID: " .. tostring(source.ID)
-        if source.Type == "timer" then sourceText = sourceText .. "  •  " .. tostring(source.Duration or 0) .. " seconds" end
+        local sourceText = (SOURCE_LABELS[source.Type] or L("Source")) .. " " .. L("ID:") .. " " .. tostring(source.ID)
+        if source.Type == "timer" then sourceText = sourceText .. "  •  " .. tostring(source.Duration or 0) .. " " .. L("seconds") end
         self.Source:SetText(sourceText)
         self.Enabled:SetChecked(entry.Enabled ~= false)
     end
@@ -978,25 +979,25 @@ local function CreateEntries(panel, controls)
 
     local filters = Canvas.CreateBaseRow(section.Content, 28)
     U.Add(controls, section, filters)
-    filters.Label = Canvas.CreateLabel(filters, "Class / Specialization", "GameFontHighlight")
+    filters.Label = Canvas.CreateLabel(filters, L("Class / Specialization"), "GameFontHighlight")
     filters.Label:SetPoint("LEFT", 0, 0)
     filters.Dropdown = Canvas.CreateDropdown(filters)
     filters.Dropdown:SetPoint("RIGHT", 0, 0)
     filters.Dropdown:SetWidth(320)
-    filters.Dropdown:OverrideText("Choose Class / Specialization")
+    filters.Dropdown:OverrideText(L("Choose Class / Specialization"))
     function filters:Refresh()
         local entry = SelectedEntry()
         self:SetShown(entry ~= nil and entry.OverrideBarSettings == true)
         if not entry or entry.OverrideBarSettings ~= true then return end
         SetupFilterMenu(self.Dropdown, entry, panel)
-        self.Dropdown:OverrideText("Choose Class / Specialization")
+        self.Dropdown:OverrideText(L("Choose Class / Specialization"))
     end
 
     local aura = Canvas.CreateBaseRow(section.Content, 52)
     U.Add(controls, section, aura)
-    aura.Label = Canvas.CreateLabel(aura, "Extra Aura IDs", "GameFontHighlight")
+    aura.Label = Canvas.CreateLabel(aura, L("Extra Aura IDs"), "GameFontHighlight")
     aura.Label:SetPoint("TOPLEFT", 0, -2)
-    aura.Help = Canvas.CreateLabel(aura, "Optional comma-separated overrides; source spell matching remains automatic.", "GameFontHighlightSmall")
+    aura.Help = Canvas.CreateLabel(aura, L("Optional comma-separated overrides; source spell matching remains automatic."), "GameFontHighlightSmall")
     aura.Help:SetPoint("TOPLEFT", aura.Label, "BOTTOMLEFT", 0, -4)
     aura.Help:SetTextColor(0.65, 0.65, 0.65)
     aura.Input = Canvas.CreateInput(aura)
@@ -1054,19 +1055,19 @@ local function CreateEntries(panel, controls)
 
     local sharedFilters = Canvas.CreateBaseRow(sharedSection.Content, 28)
     U.Add(controls, sharedSection, sharedFilters)
-    sharedFilters.Label = Canvas.CreateLabel(sharedFilters, "Class / Specialization", "GameFontHighlight")
+    sharedFilters.Label = Canvas.CreateLabel(sharedFilters, L("Class / Specialization"), "GameFontHighlight")
     sharedFilters.Label:SetPoint("LEFT", 0, 0)
     sharedFilters.Dropdown = Canvas.CreateDropdown(sharedFilters)
     sharedFilters.Dropdown:SetPoint("RIGHT", 0, 0)
     sharedFilters.Dropdown:SetWidth(320)
-    sharedFilters.Dropdown:OverrideText("Choose Class / Specialization")
+    sharedFilters.Dropdown:OverrideText(L("Choose Class / Specialization"))
     function sharedFilters:Refresh()
         local bar = SelectedBar()
         self:SetShown(bar ~= nil)
         if not bar then return end
         bar.EntrySettings = bar.EntrySettings or {}
         SetupFilterMenu(self.Dropdown, bar.EntrySettings, panel)
-        self.Dropdown:OverrideText("Choose Class / Specialization")
+        self.Dropdown:OverrideText(L("Choose Class / Specialization"))
     end
 
     local itemData = CreateFrame("Frame", nil, panel)

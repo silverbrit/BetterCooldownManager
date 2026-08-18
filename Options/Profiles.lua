@@ -2,6 +2,7 @@ local _, BCDM = ...
 
 local Canvas = LibStub("LibSharedCanvas-1.0")
 local U = BCDM.SettingsUtils
+local L = U.L
 local profilesPanel
 
 local function ProfileNames(exclude)
@@ -25,7 +26,7 @@ end
 
 local function ShowExport(text)
     StaticPopupDialogs.BCDM_EXPORT_PROFILE = {
-        text = "Export Profile",
+        text = L("Export Profile"),
         button1 = CLOSE or "Close",
         hasEditBox = true,
         editBoxWidth = 420,
@@ -48,21 +49,21 @@ local function CreateProfilesPanel()
     local panel, controls = U.NewPanel()
     controls.state = { copy = nil, delete = nil, export = nil }
 
-    local management, managementControls = Canvas.CreateProfileManagementSection(controls.scrollChild, "Profiles", {
-        introText = "Switch the active profile, create new ones, copy settings between profiles, and remove unused profiles.",
-        resetDescription = "Reset the current profile back to its default values, in case your configuration is broken, or you simply want to start over.",
-        currentProfileText = "Current Profile: |cffffd100Default|r",
-        chooseDescription = "Create a new profile by entering a name in the edit box, or switch to one of the existing profiles.",
-        copyDescription = "Copy the settings from one existing profile into the currently active profile.",
-        deleteDescription = "Delete existing and unused profiles from the database to save space, and cleanup the SavedVariables file.",
-        resetButtonText = "Reset Profile",
-        newLabel = "New",
-        existingLabel = "Existing Profiles",
-        createButtonText = "Create",
-        copyLabel = "Copy From",
-        copyButtonText = "Copy",
-        deleteLabel = "Delete a Profile",
-        deleteButtonText = "Delete",
+    local management, managementControls = Canvas.CreateProfileManagementSection(controls.scrollChild, L("Profiles"), {
+        introText = L("Switch the active profile, create new ones, copy settings between profiles, and remove unused profiles."),
+        resetDescription = L("Reset the current profile back to its default values, in case your configuration is broken, or you simply want to start over."),
+        currentProfileText = L("Current Profile: |cffffd100Default|r"),
+        chooseDescription = L("Create a new profile by entering a name in the edit box, or switch to one of the existing profiles."),
+        copyDescription = L("Copy the settings from one existing profile into the currently active profile."),
+        deleteDescription = L("Delete existing and unused profiles from the database to save space, and cleanup the SavedVariables file."),
+        resetButtonText = L("Reset Profile"),
+        newLabel = L("New"),
+        existingLabel = L("Existing Profiles"),
+        createButtonText = L("Create"),
+        copyLabel = L("Copy From"),
+        copyButtonText = L("Copy"),
+        deleteLabel = L("Delete a Profile"),
+        deleteButtonText = L("Delete"),
     }, { compactLayout = true })
     controls:RegisterSection(management)
 
@@ -140,7 +141,12 @@ local function CreateProfilesPanel()
         end })
     end
 
-    local sharing, sharingControls = Canvas.CreateProfileSharingSection(controls.scrollChild, "Profile Sharing")
+    local sharing, sharingControls = Canvas.CreateProfileSharingSection(controls.scrollChild, L("Profile Sharing"), {
+        exportLabel = L("Export Profile"),
+        exportButtonText = L("Export"),
+        importLabel = L("Import String"),
+        importButtonText = L("Import"),
+    })
     controls:RegisterSection(sharing)
 
     local function Refresh()
@@ -150,7 +156,7 @@ local function CreateProfilesPanel()
         if not HasProfile(controls.state.delete) or controls.state.delete == current then controls.state.delete = nil end
         if not HasProfile(controls.state.export) then controls.state.export = current end
 
-        managementControls.currentProfileLabel:SetText("Current Profile: |cffffd100" .. current .. "|r")
+        managementControls.currentProfileLabel:SetText(L("Current Profile:") .. " |cffffd100" .. current .. "|r")
         local routedProfile = BCDM.db.global.UseGlobalProfile == true or BCDM.db:IsDualSpecEnabled()
         Canvas.RefreshDropdownState(managementControls.activeDropdown, routedProfile)
         Canvas.RefreshDropdownState(managementControls.copyDropdown,
@@ -172,23 +178,23 @@ local function CreateProfilesPanel()
             BCDM.db:SetProfile(name)
             BCDM:UpdateBCDM()
             Refresh()
-        end, "Select profile...")
+        end, L("Select profile..."))
     Canvas.AttachDropdownMenu(managementControls.copyDropdown,
         function() return ProfileNames(BCDM.db:GetCurrentProfile()) end,
         function() return controls.state.copy end, function(name) controls.state.copy = name Refresh() end,
-        "Select profile...")
+        L("Select profile..."))
     Canvas.AttachDropdownMenu(managementControls.deleteDropdown,
         function() return ProfileNames(BCDM.db:GetCurrentProfile()) end,
         function() return controls.state.delete end, function(name) controls.state.delete = name Refresh() end,
-        "Select profile...")
+        L("Select profile..."))
     Canvas.AttachDropdownMenu(sharingControls.exportDropdown, function() return ProfileNames() end,
         function() return controls.state.export end, function(name) controls.state.export = name Refresh() end,
-        "Select profile...")
+        L("Select profile..."))
 
     managementControls.createButton:SetScript("OnClick", function()
         local name = strtrim(managementControls.createNameEdit:GetText() or "")
         if name == "" or name:find("[%c|]") then
-            BCDM:PrettyPrint("Enter a valid profile name.")
+            BCDM:PrettyPrint(L("Enter a valid profile name."))
             return
         end
         BCDM.db:SetProfile(name)
@@ -198,7 +204,7 @@ local function CreateProfilesPanel()
     end)
     managementControls.resetButton:SetScript("OnClick", function()
         local name = BCDM.db:GetCurrentProfile()
-        BCDM:CreatePrompt("Reset Profile", "Reset '" .. name .. "' to defaults?", function()
+        BCDM:CreatePrompt(L("Reset Profile"), L("Reset") .. " '" .. name .. "' " .. L("to defaults?"), function()
             BCDM.db:ResetProfile()
             BCDM:UpdateBCDM()
             Refresh()
@@ -207,7 +213,7 @@ local function CreateProfilesPanel()
     managementControls.copyButton:SetScript("OnClick", function()
         local source = controls.state.copy
         if not source then return end
-        BCDM:CreatePrompt("Copy Profile", "Copy '" .. source .. "' into the current profile?", function()
+        BCDM:CreatePrompt(L("Copy Profile"), L("Copy") .. " '" .. source .. "' " .. L("into the current profile?"), function()
             BCDM.db:CopyProfile(source)
             controls.state.copy = nil
             BCDM:UpdateBCDM()
@@ -217,7 +223,7 @@ local function CreateProfilesPanel()
     managementControls.deleteButton:SetScript("OnClick", function()
         local name = controls.state.delete
         if not name then return end
-        BCDM:CreatePrompt("Delete Profile", "Delete profile '" .. name .. "'?", function()
+        BCDM:CreatePrompt(L("Delete Profile"), L("Delete profile") .. " '" .. name .. "' ?", function()
             BCDM.db:DeleteProfile(name)
             controls.state.delete = nil
             Refresh()
