@@ -193,7 +193,7 @@ local Defaults = {
             },
             Trinket = {
                 Enabled = true,
-                DisplayOnUseOnly = true,
+                DisplayOnUseOnly = false,
                 UseSharedVisibility = true,
                 Visibility = VisibilityDefaults(),
                 IconSize = 32,
@@ -201,7 +201,7 @@ local Defaults = {
                 IconHeight = 32,
                 KeepAspectRatio = true,
                 FrameStrata = "LOW",
-                Layout = {"TOPRIGHT", "ElvUF_Player", "BOTTOMRIGHT", 0, 0},
+                Layout = {"CENTER", "NONE", "CENTER", 0, 0},
                 Spacing = 1,
                 GrowthDirection = "LEFT",
                 OffsetByParentHeight = true,
@@ -331,5 +331,6 @@ function BCDM:CopyTable(value, seen)
 end
 
 function BCDM:GetDefaultDB()
+    Defaults.profile.CooldownManager.Trinket.Layout = self:GetDefaultTrinketLayout()
     return Defaults
 end

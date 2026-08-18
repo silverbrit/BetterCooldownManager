@@ -38,6 +38,13 @@ function BCDM:IsElvUIActive()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI") == true
 end
 
+function BCDM:GetDefaultTrinketLayout()
+    if self:IsElvUIActive() then
+        return { "TOPRIGHT", "ElvUF_Player", "BOTTOMRIGHT", 0, 0 }
+    end
+    return { "CENTER", "NONE", "CENTER", 0, 0 }
+end
+
 function BCDM:GetAnchorParents(anchorType)
     return self:BuildAnchorParents(self.AnchorParents[anchorType], self:IsElvUIActive(), ELVUI_ANCHORS)
 end
@@ -152,6 +159,44 @@ function BCDM:NormalizeEssentialAnchorProfile(profile)
     if type(layout) ~= "table" or layout[5] ~= nil or not ANCHOR_POINTS[layout[2]] then return false end
     essential.Layout = { layout[1], "NONE", layout[2], layout[3] or 0, layout[4] or 0 }
     return true
+end
+
+local LEGACY_TRINKET_LAYOUTS = {
+    { "TOPRIGHT", "ElvUF_Player", "BOTTOMRIGHT", 0, 0 },
+}
+
+local function SameLayout(left, right)
+    if type(left) ~= "table" then return false end
+    for index = 1, 5 do
+        if left[index] ~= right[index] then return false end
+    end
+    return true
+end
+
+function BCDM:NormalizeTrinketAnchorProfile(profile)
+    local cooldownManager = type(profile) == "table" and profile.CooldownManager
+    local trinket = type(cooldownManager) == "table" and cooldownManager.Trinket
+    local layout = type(trinket) == "table" and trinket.Layout
+    if type(layout) ~= "table" then return false end
+    local legacy = false
+    for _, legacyLayout in ipairs(LEGACY_TRINKET_LAYOUTS) do
+        if SameLayout(layout, legacyLayout) then legacy = true break end
+    end
+    if not legacy then return false end
+    local defaultLayout = self:GetDefaultTrinketLayout()
+    if SameLayout(layout, defaultLayout) then return false end
+    trinket.Layout = defaultLayout
+    return true
+end
+
+function BCDM:NormalizeTrinketAnchorProfiles(db)
+    local profiles = db and db.sv and db.sv.profiles
+    if type(profiles) ~= "table" then return false end
+    local changed = false
+    for _, profile in pairs(profiles) do
+        if self:NormalizeTrinketAnchorProfile(profile) then changed = true end
+    end
+    return changed
 end
 
 function BCDM:NormalizeEssentialAnchorProfiles(db)
