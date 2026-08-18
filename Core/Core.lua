@@ -14,6 +14,7 @@ function BetterCooldownManager:OnInitialize()
         end
     end
     if BCDM.db.global.UseGlobalProfile then BCDM.db:SetProfile(BCDM.db.global.GlobalProfile or "Default") end
+    BCDM:ResolveLSM()
     local function HandleProfileLayoutChanged()
         BCDM:UpdateBCDM()
         BCDM:QueueCooldownViewerLayoutApply()
