@@ -319,7 +319,8 @@ Check(store.Bars[newBar].Text.Layout[4] == 0, "new tracker text defaults to zero
 Check(store.Bars[newBar].EntrySettings.TextEnabled == true, "new bars enable shared entry text by default")
 Check(store.Bars[newBar].EntrySettings.Tooltip == true, "new bars enable shared entry tooltips by default")
 Check(store.Bars[newBar].EntrySettings.DisplayMode == "ALWAYS", "new bars share display mode by default")
-Check(type(store.Bars[newBar].EntrySettings.SpecFilters) == "table", "new bars share specialization filters")
+Check(store.Bars[newBar].EntrySettings.SpecFilters == nil,
+    "new bars start unrestricted without preselecting specializations")
 Check(BCDM:RenameCustomTrackerBar(newBar, "Utility"), "bar can be renamed")
 local duplicate = BCDM:DuplicateCustomTrackerBar(store.BarOrder[1])
 Check(duplicate and #store.Bars[duplicate].EntryOrder == #custom.EntryOrder, "duplicate receives copied entries")
@@ -342,6 +343,13 @@ local equipmentEntry = BCDM:AddCustomTrackerEntry(newBar, "equipment", 13)
 Check(store.Bars[newBar].Entries[equipmentEntry].Source.ID == 13, "typed entry stores equipment slot")
 Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[equipmentEntry], 62, "MAGE", "Arcane"),
     "entries without specialization filters remain unrestricted")
+Check(BCDM:ToggleSpecializationFilter(store.Bars[newBar].EntrySettings, 62)
+    and not BCDM:EntryMatchesSpecialization(store.Bars[newBar].EntrySettings, 63, "MAGE", "Fire"),
+    "the first specialization selection changes an unrestricted target into a filter")
+Check(not BCDM:ToggleSpecializationFilter(store.Bars[newBar].EntrySettings, 62)
+    and store.Bars[newBar].EntrySettings.SpecFilters == nil
+    and BCDM:EntryMatchesSpecialization(store.Bars[newBar].EntrySettings, 63, "MAGE", "Fire"),
+    "clearing the final specialization restores unrestricted matching")
 local auraEntry = BCDM:AddCustomTrackerEntry(newBar, "spell", 456, { AuraIDs = "789, 789, 987" })
 Check(table.concat(store.Bars[newBar].Entries[auraEntry].Source.AuraIDs, ",") == "789,987",
     "new spell entries normalize optional aura IDs")

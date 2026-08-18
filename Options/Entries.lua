@@ -395,8 +395,7 @@ local function SetupFilterMenu(button, entry, panel)
                 submenu:CreateCheckbox(specEntry.specName or tostring(specEntry.specID), function()
                     return entry.SpecFilters and entry.SpecFilters[value] == true
                 end, function()
-                    entry.SpecFilters = entry.SpecFilters or {}
-                    entry.SpecFilters[value] = not entry.SpecFilters[value] or nil
+                    BCDM:ToggleSpecializationFilter(entry, value)
                     Changed(panel)
                 end)
             end
@@ -533,10 +532,8 @@ local function CreateEntryDialog()
 
         local extra
         if self.Mode == "spell" or self.Mode == "timer" then
-            local class = select(2, UnitClass("player"))
-            extra = { SpecFilters = BCDM:BuildSpecFilters(class), FilterClass = class, Duration = duration }
+            extra = { FilterClass = select(2, UnitClass("player")), Duration = duration }
         else
-            extra = { SpecFilters = BCDM:BuildSpecFilters() }
             RequestItemData(sourceID)
         end
         selectedEntryID = BCDM:AddCustomTrackerEntry(selectedBarID, self.Mode, sourceID, extra)
@@ -580,9 +577,7 @@ end
 
 local function AddEquipmentEntry(slotID, panel)
     if not selectedBarID or not Store().Bars[selectedBarID] then return end
-    selectedEntryID = BCDM:AddCustomTrackerEntry(selectedBarID, "equipment", slotID, {
-        SpecFilters = BCDM:BuildSpecFilters(),
-    })
+    selectedEntryID = BCDM:AddCustomTrackerEntry(selectedBarID, "equipment", slotID)
     Changed(panel)
 end
 
@@ -608,15 +603,13 @@ local function AddCursorEntry(panel)
         if BCDM:IsSecretValue(cursorInfo1) then return false end
         sourceType, sourceID = "item", tonumber(cursorInfo1)
         if not sourceID or sourceID <= 0 then return false end
-        extra = { SpecFilters = BCDM:BuildSpecFilters() }
         RequestItemData(sourceID)
     elseif cursorType == "spell" then
         local cursorSpell = cursorInfo3 or cursorInfo1
         if BCDM:IsSecretValue(cursorSpell) then return false end
         sourceType, sourceID = "spell", ResolveSpellID(cursorSpell)
         if not sourceID then return false end
-        local class = select(2, UnitClass("player"))
-        extra = { SpecFilters = BCDM:BuildSpecFilters(class), FilterClass = class }
+        extra = { FilterClass = select(2, UnitClass("player")) }
     else
         return false
     end
@@ -1070,10 +1063,6 @@ local function CreateEntries(panel, controls)
         self:SetShown(bar ~= nil)
         if not bar then return end
         bar.EntrySettings = bar.EntrySettings or {}
-        if type(bar.EntrySettings.SpecFilters) ~= "table"
-            and type(bar.EntrySettings.ClassSpecFilters) ~= "table" then
-            bar.EntrySettings.SpecFilters = BCDM:BuildSpecFilters(bar.EntrySettings.FilterClass)
-        end
         SetupFilterMenu(self.Dropdown, bar.EntrySettings, panel)
         self.Dropdown:OverrideText("Choose Class / Specialization")
     end
