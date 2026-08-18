@@ -34,7 +34,17 @@ for _, event in ipairs({
 }) do
     Check(refreshEvents[event], "custom trackers refresh on " .. event)
 end
-local changelogFile = assert(io.open(root .. "/Options/Changelog.lua", "r"))
+local tocFile = assert(io.open(root .. "/BetterCooldownManager.toc", "r"))
+local tocSource = tocFile:read("*a")
+tocFile:close()
+local optionsTocFile = assert(io.open(root .. "/BetterCooldownManager_Options/BetterCooldownManager_Options.toc", "r"))
+local optionsTocSource = optionsTocFile:read("*a")
+optionsTocFile:close()
+Check(not tocSource:find("Options/Init.xml", 1, true)
+    and optionsTocSource:find("## LoadOnDemand: 1", 1, true)
+    and optionsTocSource:find("Options/Init.xml", 1, true),
+    "settings code is deferred to the load-on-demand options addon")
+local changelogFile = assert(io.open(root .. "/BetterCooldownManager_Options/Options/Changelog.lua", "r"))
 local changelogSource = changelogFile:read("*a")
 changelogFile:close()
 local releaseCount = 0
@@ -439,6 +449,8 @@ Check(store.BarOrder[#store.BarOrder] == recycledID, "new bars append without re
 Check(assert(loadfile(root .. "/Scripts/test-glows.lua"))(root), "custom glow lifecycle tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-cooldown-runtime.lua"))(root),
     "Cooldown Manager runtime safety tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-refresh-scheduler.lua"))(root, BCDM, Check),
+    "runtime refresh scheduler tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-owned-bars.lua"))(root, BCDM, Check),
     "owned bar visibility, anchoring, and width tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-secondary-power.lua"))(root),

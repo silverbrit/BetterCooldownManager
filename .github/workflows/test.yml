@@ -22,7 +22,7 @@ jobs:
         run: lua -e 'assert(_VERSION == "Lua 5.1")'
 
       - name: Check Lua syntax
-        run: find Core CustomViewers Locales Modules Options Scripts -name '*.lua' -print0 | xargs -0 -n1 luac -p
+        run: find Core CustomViewers Modules Scripts BetterCooldownManager_Options -name '*.lua' -print0 | xargs -0 -n1 luac -p
 
       - name: Run tests
         run: lua Scripts/test.lua .

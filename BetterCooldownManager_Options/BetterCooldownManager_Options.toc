@@ -1,0 +1,22 @@
+## Title: |cFF8080FFBetter|r Cooldown Manager Options
+## Interface: 120100
+## Version: @project-version@
+## Notes: Settings for Better Cooldown Manager
+## LoadOnDemand: 1
+## Dependencies: BetterCooldownManager
+
+# Load Locales
+Locales/enUS.lua
+Locales/deDE.lua
+Locales/esES.lua
+Locales/esMX.lua
+Locales/frFR.lua
+Locales/itIT.lua
+Locales/koKR.lua
+Locales/ptBR.lua
+Locales/ruRU.lua
+Locales/zhCN.lua
+Locales/zhTW.lua
+
+# Load Options
+Options/Init.xml

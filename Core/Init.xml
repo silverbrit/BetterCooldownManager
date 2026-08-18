@@ -7,6 +7,7 @@
     <Script file="BarBehavior.lua"/>
     <Script file="ResourceCatalog.lua"/>
     <Script file="CustomTrackers.lua"/>
+    <Script file="RefreshScheduler.lua"/>
     <Script file="EventManager.lua"/>
     <Script file="API.lua"/>
     <Script file="Core.lua"/>

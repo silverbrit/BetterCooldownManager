@@ -1010,7 +1010,7 @@ function unreadable:IsItem() error("secret item state") end
 Check(not BCDM:IsCustomizableCooldownViewerItem(unreadable),
     "unreadable Cooldown Viewer rows are not customizable")
 
-local optionsFile = assert(io.open(root .. "/Options/Settings.lua", "r"))
+local optionsFile = assert(io.open(root .. "/BetterCooldownManager_Options/Options/Settings.lua", "r"))
 local optionsSource = optionsFile:read("*a")
 optionsFile:close()
 Check(optionsSource:find("SetDisplayMode", 1, true) ~= nil
