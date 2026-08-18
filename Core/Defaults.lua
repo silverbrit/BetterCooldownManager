@@ -31,6 +31,7 @@ local Defaults = {
             Y = 0,
             Width = 1180,
             Height = 760,
+            Opacity = 0.72,
             ShowSelectedElementHighlight = true,
         },
         MinimapButton = {

@@ -4,6 +4,7 @@
 
 ### Settings
 
+- Added a bottom-left Changelog page sourced from this file and a title-bar opacity slider that preserves the original default transparency while making 100% fully opaque.
 - Replaced the AceGUI configuration window with a draggable, resizable Better Cooldown Manager window powered by LibSharedCanvas-1.0, while retaining access through Blizzard's AddOns Settings.
 - Added dedicated categories for individual cooldown viewers, power bars, the cast bar, and profiles, with all sections expanded by default.
 - Reorganized settings by scope: shared appearance options remain on the main page, viewer-specific options live with their viewer, resource colours live with their respective power bars, and Edit Mode layout routing now lives under Profiles.
@@ -50,12 +51,14 @@
 
 ### Cast and Resource Bars
 
+- Fixed Power Bar anchor-parent selection and secret-safe resource text rendering.
 - Added fill direction, optional sparks, and current/maximum/percent text modes.
 - Reworked the trinket viewer around persistent equipment-slot icons, asynchronous item loading, and slot cooldown events.
 - Added interruptible and non-interruptible cast colours, configurable empowered-stage pips, fill direction, and richer Settings previews.
 
 ### Development
 
+- Removed unused media assets and moved direct library loading from `Libraries/Init.xml` into the addon TOC.
 - Added a modular Options implementation built around the externally maintained LibSharedCanvas-1.0.
 - Removed the AceGUI, AceDBOptions, and unused SharedMedia widget dependencies.
 - Added `install-deps.sh` for refreshing vendored libraries.

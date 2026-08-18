@@ -865,7 +865,8 @@ local function CreateBarPanel(barType)
     local layout = U.Section(controls, "Layout & Positioning", true)
     PathDropdown(controls, layout, "Anchor From", ProfileRoot,
         { barType, "Layout", 1 }, update, function() return ANCHOR_POINTS end, { disabled = EnabledDisabled })
-    local anchorType = barType == "SecondaryPowerBar" and "SecondaryPower" or barType
+    local anchorType = barType == "PowerBar" and "Power"
+        or barType == "SecondaryPowerBar" and "SecondaryPower" or barType
     PathDropdown(controls, layout, "Anchor Parent", ProfileRoot,
         { barType, "Layout", 2 }, update, AnchorValues(anchorType), { disabled = EnabledDisabled, maxHeight = 420 })
     PathDropdown(controls, layout, "Anchor To", ProfileRoot,

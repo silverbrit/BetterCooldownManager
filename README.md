@@ -6,25 +6,15 @@
 [![Donate](https://img.shields.io/badge/Donate-1E88E5?style=for-the-badge&logo=streamlabs&logoColor=white)](https://streamelements.com/unhaltedgb/tip)
 [![KoFi](https://img.shields.io/badge/KoFi-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://ko-fi.com/unhalted)
 
-## Announcement
-- **Issues** are closed for now as I focus on real-life and other ventures. I am happy with the position of BetterCooldownManager. Development will continue but at a slower rate.
-- **Pull Requests** can be made but will likely be ignored / looked at less frequently. Please check all closed **Pull Requests** to ensure you are not creating something already denied.
-
 ## Features
 - Clean, Pixel Border Skinning. Borders can be adjusted.
-- Standard LibDataBroker/LibDBIcon minimap launcher for opening the Better Cooldown Manager settings window.
-- Custom Cooldown Text & Tweaks.
-- Clickable custom, power-type, class, specialization, and cast-state fill-colour swatches without conflicting toggles.
-- Power Bar, Secondary Power Bar & Cast Bar with anchoring, automatic width matching, fill direction, and display controls.
-- Named Custom Tracker Bars: create, rename, duplicate, and anchor reusable mixed-source bars.
-- Track spells, items, equipment slots, and fixed-duration cast timers together.
-- Custom spells use Retail 12.1 AuraContainers for active player and target auras, with normal cooldowns underneath as the automatic fallback.
-- Drag-to-reorder Custom Tracker entries with shared display, appearance, glow, text, tooltip, class, and specialization defaults plus optional per-entry overrides.
-- Shared visibility rules for combat, instance type, mounted/skyriding, dead, vehicle, and resting states, with per-bar overrides.
-- Resource text modes, responsive power updates, and optional power-bar sparks.
-- Class, interruptibility, or custom cast-colour modes plus configurable empowered-stage pips and Settings previews.
-- Trinket Viewer: automatically tracks equipped trinkets with shared or per-slot display, appearance, glow, text, tooltip, and specialization behavior.
-- API for AddOns to add anchors to Utility, Tracked Buffs, Custom Trackers, and Trinket Bars.
+- Minimap button for opening the Better Cooldown Manager settings.
+- Custom Cooldown Text, Tweaks & Glows.
+- Custom Power & Secondary Power Colours.
+- Power Bar, Secondary Power Bar & Cast Bar with Anchoring & Auto Adjustment for Width.
+- Custom Tracker Bars: Add any known spell, item, equipment slot, or cast timer.
+- Custom Trinket Bar: Automatically creates trackers for equipped trinkets.
+- API for AddOns to add their own anchors to Utility, Tracked Buffs, Custom Trackers, and Trinket Bars.
 
 ## Libraries
 - [Ace3](https://www.curseforge.com/wow/addons/ace3): Provides the addon lifecycle, profiles, localization, and serialization.
@@ -37,14 +27,3 @@
 - [LibDBIcon-1.0](https://www.curseforge.com/wow/addons/libdbicon-1-0): Registers the standard minimap button.
 
 All of these libraries contribute to the success of BetterCooldownManager & are highly appreciated by myself.
-
-## About the Project
-This is a passion project & this has to be maintained as much as possible in order for the longevity of the AddOn. It is solo-developed, but some very kind people from the community have already started contributing.
-
-## Development
-
-The repository targets Retail 12.1 and includes local Codex architecture guidance in `AGENTS.md`, `.context/`, and `.codex/skills/wow-addon-architect/`. Generated dependencies under `Libraries/` are not committed except for `Init.xml`; run `install-deps.sh` after cloning to install LibSharedCanvas and the remaining libraries and refresh the development-only Blizzard UI sources, then use `lua Scripts/test.lua .` for the pure-Lua model tests.
-
-Secondary-resource rules are centralized in `Core/ResourceCatalog.lua`; bar modules consume its descriptors instead of maintaining their own class/spec lookup chains. Cast bars bind Retail duration objects directly to native StatusBar and duration-text widgets, with no Lua countdown loop, and restore Blizzard's `PlayerCastingBarFrame` through `SetAndUpdateShowCastbar` when disabled. Custom tracker specialization filters are stored by numeric specialization ID, with legacy token filters retained only when they cannot be converted safely.
-
-Tracked Buff centering keeps Blizzard's native pooled `BuffIconCooldownViewer` frames and follows their `layoutIndex` order. BCM enumerates active pool frames, positions the visible set against an addon-owned anchor, and reapplies those anchors after Blizzard active-state and layout changes without reading aura state or calling Blizzard refresh methods. Viewer layout changes save through LibEditModeOverride and securely update only the native Cooldown Viewer systems; BCM never opens Edit Mode, replaces Edit Mode manager state, or refreshes CompactUnitFrames.

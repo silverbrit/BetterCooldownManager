@@ -108,6 +108,7 @@ CreateFrame = function() return eventFrame end
 
 local currentPower, currentType, currentMax = 10, 0, 100
 local updatedColour
+local formattedPowerText
 local powerModule = {
     db = { profile = {
         General = {
@@ -123,7 +124,12 @@ local powerModule = {
             SetMinMaxValues = function(_, minimum, maximum) currentMax = maximum end,
             SetValue = function(_, value) currentPower = value end,
         },
-        Text = { SetText = function() end },
+        Text = {
+            SetText = function() end,
+            SetFormattedText = function(_, format, value)
+                formattedPowerText = { format, value }
+            end,
+        },
     },
 }
 function powerModule:ResolveBarFillColour(_, _, context)
@@ -151,6 +157,14 @@ currentType, currentPower, currentMax = 3, 25, 120
 powerModule._PowerBarOnEvent(nil, "UNIT_DISPLAYPOWER")
 Check(currentPower == 25 and currentMax == 120 and table.concat(updatedColour, ",") ~= firstColour,
     "UNIT_DISPLAYPOWER refreshes power values and colour")
+local secretPower = {}
+local plainSecretCheck = powerModule.IsSecretValue
+powerModule.IsSecretValue = function(_, value) return value == secretPower end
+currentPower, currentMax, currentType = secretPower, 120, 3
+powerModule._PowerBarOnEvent(nil, "UNIT_POWER_UPDATE")
+Check(formattedPowerText and formattedPowerText[1] == "%d" and formattedPowerText[2] == secretPower,
+    "restricted power values use the FontString widget formatter instead of clearing text")
+powerModule.IsSecretValue = plainSecretCheck
 
 CreateFrame = savedCreateFrame
 for name, value in pairs(savedPowerGlobals) do _G[name] = value end
