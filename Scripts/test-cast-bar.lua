@@ -420,6 +420,15 @@ Check(not bar.CastActive and bar.ActiveCastID == nil and bar.scripts.OnEvent == 
 channelInfo = nil
 BCDM.db.profile.CastBar.Enabled = true
 BCDM:UpdateCastBar()
+BCDM.CAST_BAR_TEST_MODE = true
+BCDM.db.profile.CastBar.Layout[2] = "BCDM_PowerBar"
+_G.BCDM_PowerBar.width = 333
+bar.width = 200
+BCDM:CreateTestCastBar()
+RunTimers()
+Check(bar.width == 333, "settings preview reschedules cast-bar width matching")
+BCDM.CAST_BAR_TEST_MODE = false
+BCDM.db.profile.CastBar.Layout[2] = "BCDM_TestAnchor"
 bar.widthWrites = 0
 anchor.width = 120
 BCDM:UpdateCastBarWidth()

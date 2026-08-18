@@ -678,6 +678,7 @@ function BCDM:CreateTestCastBar()
 
     DisableCastTimeText()
     ApplyCastBarAppearance()
+    ScheduleCastBarWidth(0.5)
     local CastBarDB = BCDM.db.profile.CastBar
     local testState = BCDM.CAST_BAR_TEST_STATE or "NORMAL"
     CastBar.SpellNameText:SetText("Ethereal Portal")
