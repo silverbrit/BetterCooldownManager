@@ -217,12 +217,15 @@ function BCDM:GetClassSpecCatalog(targetClassToken)
     return catalog
 end
 
-function BCDM:BuildSpecFilters(targetClassToken)
-    local filters = {}
-    for _, classEntry in ipairs(self:GetClassSpecCatalog(targetClassToken)) do
-        for _, specEntry in ipairs(classEntry.specs) do filters[specEntry.specID] = true end
+function BCDM:ToggleSpecializationFilter(target, specID)
+    specID = tonumber(specID)
+    if type(target) ~= "table" or not specID or specID <= 0 or specID ~= math.floor(specID) then
+        return false
     end
-    return filters
+    local filters = type(target.SpecFilters) == "table" and target.SpecFilters or {}
+    filters[specID] = filters[specID] ~= true and true or nil
+    target.SpecFilters = next(filters) and filters or nil
+    return filters[specID] == true
 end
 
 function BCDM:EntryMatchesSpecialization(entry, specID, classToken, specName)
@@ -477,7 +480,6 @@ function BCDM:AddCustomTrackerBar(name)
         name = "Tracker Bar " .. displayIndex
     end
     local entrySettings = BCDM:CopyTable(DEFAULT_ENTRY_SETTINGS)
-    entrySettings.SpecFilters = self:BuildSpecFilters()
     store.Bars[id] = {
         ID = id,
         Name = name,

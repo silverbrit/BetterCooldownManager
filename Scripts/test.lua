@@ -25,6 +25,15 @@ assert(loadfile(root .. "/Core/Defaults.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Core/CustomTrackers.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Modules/CooldownManager.lua"))("BetterCooldownManager", BCDM)
 assert(loadfile(root .. "/Scripts/test-cooldown-manager.lua"))(BCDM, Check)
+assert(loadfile(root .. "/CustomViewers/CustomTrackerBar.lua"))("BetterCooldownManager", BCDM)
+local refreshEvents = {}
+for _, event in ipairs(BCDM.CustomTrackerRuntime.RefreshEvents) do refreshEvents[event] = true end
+for _, event in ipairs({
+    "UNIT_PET", "SPELLS_CHANGED", "PLAYER_MOUNT_DISPLAY_CHANGED",
+    "UPDATE_OVERRIDE_ACTIONBAR", "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED",
+}) do
+    Check(refreshEvents[event], "custom trackers refresh on " .. event)
+end
 
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true,
@@ -310,7 +319,8 @@ Check(store.Bars[newBar].Text.Layout[4] == 0, "new tracker text defaults to zero
 Check(store.Bars[newBar].EntrySettings.TextEnabled == true, "new bars enable shared entry text by default")
 Check(store.Bars[newBar].EntrySettings.Tooltip == true, "new bars enable shared entry tooltips by default")
 Check(store.Bars[newBar].EntrySettings.DisplayMode == "ALWAYS", "new bars share display mode by default")
-Check(type(store.Bars[newBar].EntrySettings.SpecFilters) == "table", "new bars share specialization filters")
+Check(store.Bars[newBar].EntrySettings.SpecFilters == nil,
+    "new bars start unrestricted without preselecting specializations")
 Check(BCDM:RenameCustomTrackerBar(newBar, "Utility"), "bar can be renamed")
 local duplicate = BCDM:DuplicateCustomTrackerBar(store.BarOrder[1])
 Check(duplicate and #store.Bars[duplicate].EntryOrder == #custom.EntryOrder, "duplicate receives copied entries")
@@ -333,6 +343,13 @@ local equipmentEntry = BCDM:AddCustomTrackerEntry(newBar, "equipment", 13)
 Check(store.Bars[newBar].Entries[equipmentEntry].Source.ID == 13, "typed entry stores equipment slot")
 Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[equipmentEntry], 62, "MAGE", "Arcane"),
     "entries without specialization filters remain unrestricted")
+Check(BCDM:ToggleSpecializationFilter(store.Bars[newBar].EntrySettings, 62)
+    and not BCDM:EntryMatchesSpecialization(store.Bars[newBar].EntrySettings, 63, "MAGE", "Fire"),
+    "the first specialization selection changes an unrestricted target into a filter")
+Check(not BCDM:ToggleSpecializationFilter(store.Bars[newBar].EntrySettings, 62)
+    and store.Bars[newBar].EntrySettings.SpecFilters == nil
+    and BCDM:EntryMatchesSpecialization(store.Bars[newBar].EntrySettings, 63, "MAGE", "Fire"),
+    "clearing the final specialization restores unrestricted matching")
 local auraEntry = BCDM:AddCustomTrackerEntry(newBar, "spell", 456, { AuraIDs = "789, 789, 987" })
 Check(table.concat(store.Bars[newBar].Entries[auraEntry].Source.AuraIDs, ",") == "789,987",
     "new spell entries normalize optional aura IDs")
@@ -341,6 +358,10 @@ Check(BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry],
     "numeric specialization filters match directly")
 Check(not BCDM:EntryMatchesSpecialization(store.Bars[newBar].Entries[filteredEntry], 63, "MAGE", "Fire"),
     "numeric specialization filters reject other specs")
+local sharedRacial = { Source = { Type = "spell", ID = 20594 }, FilterClass = "MAGE",
+    SpecFilters = { [62] = true, [267] = true } }
+Check(BCDM:EntryMatchesSpecialization(sharedRacial, 267, "WARLOCK", "Destruction"),
+    "spell filters can target a specialization outside the source character class")
 local order = store.Bars[newBar].EntryOrder
 Check(BCDM:ReorderCustomTrackerEntry(newBar, filteredEntry, 1) and order[1] == filteredEntry,
     "entry can be dragged to the first position")

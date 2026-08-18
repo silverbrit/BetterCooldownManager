@@ -6,7 +6,7 @@ Better Cooldown Manager hosts its LibSharedCanvas panels in a draggable, resizab
   and owns the individual viewer, power bar, and cast bar pages.
 - `Profiles.lua` owns profile management, specialization and Edit Mode layout routing, and import/export controls.
 - `Entries.lua` owns named custom-bar management, the drag-to-reorder icon strip, focused entry editor,
-  and spell, item, equipment, timer, load-condition, and optional extra aura-ID controls.
+  and spell, item, equipment, timer, load-condition, and optional extra aura-ID controls. Spell load-condition menus expose every class/spec so racial and shared bars can be configured across characters; cast timers retain their originating-class scope. New entries start with no selections, which means unrestricted, and become specialization-restricted after the first selection.
 - `Trinkets.lua` owns equipped-slot selection, shared trinket behavior, and focused per-slot overrides.
 - The Tracked Bars page embeds Better Tracked Bars' registered settings canvas in the standalone window when that optional addon is loaded, with the recommendation page as a fallback.
 - `Utils.lua` adapts BCDM state and callbacks to `LibSharedCanvas-1.0` rows.

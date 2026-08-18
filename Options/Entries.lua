@@ -387,15 +387,15 @@ local function SetupFilterMenu(button, entry, panel)
     if type(button.SetupMenu) ~= "function" then return end
     button:SetupMenu(function(_, root)
         root:SetScrollMode(420)
-        for _, classEntry in ipairs(BCDM:GetClassSpecCatalog(entry.FilterClass)) do
+        local targetClass = entry.Source and entry.Source.Type == "timer" and entry.FilterClass
+        for _, classEntry in ipairs(BCDM:GetClassSpecCatalog(targetClass)) do
             local submenu = root:CreateButton(classEntry.className or classEntry.classToken)
             for _, specEntry in ipairs(classEntry.specs or {}) do
                 local value = specEntry.specID
                 submenu:CreateCheckbox(specEntry.specName or tostring(specEntry.specID), function()
                     return entry.SpecFilters and entry.SpecFilters[value] == true
                 end, function()
-                    entry.SpecFilters = entry.SpecFilters or {}
-                    entry.SpecFilters[value] = not entry.SpecFilters[value] or nil
+                    BCDM:ToggleSpecializationFilter(entry, value)
                     Changed(panel)
                 end)
             end
@@ -532,10 +532,8 @@ local function CreateEntryDialog()
 
         local extra
         if self.Mode == "spell" or self.Mode == "timer" then
-            local class = select(2, UnitClass("player"))
-            extra = { SpecFilters = BCDM:BuildSpecFilters(class), FilterClass = class, Duration = duration }
+            extra = { FilterClass = select(2, UnitClass("player")), Duration = duration }
         else
-            extra = { SpecFilters = BCDM:BuildSpecFilters() }
             RequestItemData(sourceID)
         end
         selectedEntryID = BCDM:AddCustomTrackerEntry(selectedBarID, self.Mode, sourceID, extra)
@@ -579,9 +577,7 @@ end
 
 local function AddEquipmentEntry(slotID, panel)
     if not selectedBarID or not Store().Bars[selectedBarID] then return end
-    selectedEntryID = BCDM:AddCustomTrackerEntry(selectedBarID, "equipment", slotID, {
-        SpecFilters = BCDM:BuildSpecFilters(),
-    })
+    selectedEntryID = BCDM:AddCustomTrackerEntry(selectedBarID, "equipment", slotID)
     Changed(panel)
 end
 
@@ -601,21 +597,18 @@ end
 
 local function AddCursorEntry(panel)
     if not selectedBarID or not Store().Bars[selectedBarID] or type(GetCursorInfo) ~= "function" then return false end
-    local cursorType, cursorInfo1, _, cursorInfo3 = GetCursorInfo()
+    local cursorType, cursorID, _, cursorSpellID = GetCursorInfo()
     local sourceType, sourceID, extra
     if cursorType == "item" then
-        if BCDM:IsSecretValue(cursorInfo1) then return false end
-        sourceType, sourceID = "item", tonumber(cursorInfo1)
+        if BCDM:IsSecretValue(cursorID) then return false end
+        sourceType, sourceID = "item", tonumber(cursorID)
         if not sourceID or sourceID <= 0 then return false end
-        extra = { SpecFilters = BCDM:BuildSpecFilters() }
         RequestItemData(sourceID)
     elseif cursorType == "spell" then
-        local cursorSpell = cursorInfo3 or cursorInfo1
-        if BCDM:IsSecretValue(cursorSpell) then return false end
-        sourceType, sourceID = "spell", ResolveSpellID(cursorSpell)
-        if not sourceID then return false end
-        local class = select(2, UnitClass("player"))
-        extra = { SpecFilters = BCDM:BuildSpecFilters(class), FilterClass = class }
+        if BCDM:IsSecretValue(cursorSpellID) then return false end
+        sourceType, sourceID = "spell", tonumber(cursorSpellID)
+        if not sourceID or sourceID <= 0 then return false end
+        extra = { FilterClass = select(2, UnitClass("player")) }
     else
         return false
     end
@@ -781,7 +774,10 @@ local function CreateEntries(panel, controls)
     strip.Add.Text:SetPoint("CENTER", 0, 1)
     strip.Add.Text:SetText("+")
     strip.Add.Text:SetTextColor(1, 0.82, 0)
-    strip.Add:SetScript("OnClick", function(self) OpenAddEntryMenu(self, panel) end)
+    strip.Add:RegisterForClicks("LeftButtonUp")
+    strip.Add:SetScript("OnClick", function(self)
+        if not AddCursorEntry(panel) then OpenAddEntryMenu(self, panel) end
+    end)
     strip.Add:RegisterForDrag("LeftButton")
     strip.Add:SetScript("OnReceiveDrag", function() AddCursorEntry(panel) end)
     Canvas.AttachTooltip(strip.Add, "Add Entry",
@@ -1069,10 +1065,6 @@ local function CreateEntries(panel, controls)
         self:SetShown(bar ~= nil)
         if not bar then return end
         bar.EntrySettings = bar.EntrySettings or {}
-        if type(bar.EntrySettings.SpecFilters) ~= "table"
-            and type(bar.EntrySettings.ClassSpecFilters) ~= "table" then
-            bar.EntrySettings.SpecFilters = BCDM:BuildSpecFilters(bar.EntrySettings.FilterClass)
-        end
         SetupFilterMenu(self.Dropdown, bar.EntrySettings, panel)
         self.Dropdown:OverrideText("Choose Class / Specialization")
     end

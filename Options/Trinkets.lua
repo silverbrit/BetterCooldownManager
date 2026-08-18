@@ -37,8 +37,7 @@ local function SetupFilterMenu(button, target, panel, callback)
                 submenu:CreateCheckbox(specEntry.specName or tostring(value), function()
                     return target.SpecFilters and target.SpecFilters[value] == true
                 end, function()
-                    target.SpecFilters = target.SpecFilters or {}
-                    target.SpecFilters[value] = not target.SpecFilters[value] or nil
+                    BCDM:ToggleSpecializationFilter(target, value)
                     Changed(panel, callback)
                 end)
             end
@@ -268,10 +267,6 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
     local function SharedTarget()
         local settings = Settings()
         settings.EntrySettings = type(settings.EntrySettings) == "table" and settings.EntrySettings or {}
-        if type(settings.EntrySettings.SpecFilters) ~= "table"
-            and type(settings.EntrySettings.ClassSpecFilters) ~= "table" then
-            settings.EntrySettings.SpecFilters = BCDM:BuildSpecFilters(settings.EntrySettings.FilterClass)
-        end
         return settings.EntrySettings
     end
     local function SharedField(field, fallback)
