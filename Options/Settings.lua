@@ -636,7 +636,8 @@ local function CreateTrackedBarsPanel()
         controls.scrollFrame:Show()
     end
 
-    function panel:OnStandaloneSettingsActivated()
+    local baseRefresh = panel.Refresh
+    local function AttachEmbeddedPanel(self)
         local embedded = GetBetterTrackedBarsSettingsPanel()
         if not embedded or embedded == self then
             DetachEmbeddedPanel()
@@ -653,6 +654,12 @@ local function CreateTrackedBarsPanel()
         elseif type(embedded.Refresh) == "function" then embedded:Refresh() end
     end
 
+    panel.OnRefresh = function(self)
+        baseRefresh(self)
+        AttachEmbeddedPanel(self)
+    end
+    panel.OnStandaloneSettingsActivated = AttachEmbeddedPanel
+    panel:HookScript("OnHide", DetachEmbeddedPanel)
     panel.OnSettingsDeactivated = DetachEmbeddedPanel
     return panel
 end
