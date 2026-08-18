@@ -393,6 +393,8 @@ Check(assert(loadfile(root .. "/Scripts/test-secondary-power.lua"))(root),
     "secondary-resource secret-value tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-trinket-candidates.lua"))(root),
     "trinket candidate tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-cast-bar.lua"))(root),
+    "cast bar lifecycle and secret-safety tests pass")
 
 if failures > 0 then os.exit(1) end
 print("Custom tracker model tests passed")

@@ -302,7 +302,6 @@ local Defaults = {
                     FontSize = 12,
                     Colour = {1, 1, 1},
                     Layout = {"LEFT", "LEFT", 3, 0},
-                    MaxCharacters = 12,
                 },
                 CastTime = {
                     FontSize = 12,
