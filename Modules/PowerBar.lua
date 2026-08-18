@@ -190,7 +190,9 @@ function BCDM:UpdatePowerBarAppearance()
     local powerLayout, powerAnchor = BCDM:GetPowerBarLayout("PowerBar", false)
     BCDM:SetSafeAnchorPoint(powerBar, powerLayout[1], powerAnchor,
         powerLayout[3], powerLayout[4], powerLayout[5])
-    powerBar:SetWidth(powerBarDB.Width)
+    if powerBarDB.MatchWidthOfAnchor ~= true then
+        powerBar:SetWidth(powerBarDB.Width)
+    end
     powerBar:SetHeight(BCDM._SecondaryDisplayVisible == true
         and powerBarDB.Height or powerBarDB.HeightWithoutSecondary)
     powerBar:SetFrameStrata(powerBarDB.FrameStrata or "LOW")

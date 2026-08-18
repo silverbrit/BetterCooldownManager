@@ -885,7 +885,6 @@ local function ApplyPowerBarWidth(barType, secondaryOwnsPrimary)
         else
             width = ReadAnchorWidth(anchor)
         end
-        width = width or settings.Width
     else
         width = settings.Width
     end

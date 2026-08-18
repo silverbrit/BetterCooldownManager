@@ -245,8 +245,8 @@ cycleProfile.PowerBar.Layout = { "BOTTOM", "OwnedBarsThrowingWidthAnchor", "TOP"
 cycleProfile.SecondaryPowerBar.Layout = { "BOTTOM", "OwnedBarsThrowingWidthAnchor", "TOP", 0, 0 }
 BCDM:QueuePowerBarWidthUpdates()
 callbacks[3]()
-Check(widthPower.width == 123 and widthSecondary.width == 234,
-    "throwing imported anchor widths fall back to each bar's configured width")
+Check(widthPower.width == 222 and widthSecondary.width == 222,
+    "unreadable anchor widths preserve each bar's current width")
 
 C_Timer = savedTimer
 UIParent = savedUIParent
