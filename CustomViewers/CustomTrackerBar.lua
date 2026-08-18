@@ -439,7 +439,7 @@ local function RefreshBarState(barID, bar)
 
     if layoutNeeded then LayoutIcons(container, bar, visible) end
     container:SetShown(bar.Enabled ~= false and #visible > 0
-        and BCDM:ShouldShowOwnedFrame(bar))
+        and (previewing or BCDM:ShouldShowOwnedFrame(bar)))
 end
 
 local function RefreshBar(barID, bar)
