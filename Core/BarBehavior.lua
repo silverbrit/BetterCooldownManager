@@ -165,6 +165,83 @@ function BCDM:FormatResourceText(current, maximum, mode)
     return tostring(current)
 end
 
+BCDM.RENDER_UNAVAILABLE = BCDM.RENDER_UNAVAILABLE or 0
+BCDM.RENDER_READABLE = BCDM.RENDER_READABLE or 1
+BCDM.RENDER_WIDGET = BCDM.RENDER_WIDGET or 2
+
+function BCDM:IsResourceRenderable(state)
+    return state == self.RENDER_READABLE or state == self.RENDER_WIDGET
+end
+
+function BCDM:ResolvePrimaryDisplayPowerType(powerType, class, specialization, formID)
+    if class ~= "DRUID" then return powerType end
+    formID = formID or 0
+    local nonBalanceMoonkin = (specialization == 2 or specialization == 3 or specialization == 4)
+        and formID >= 31 and formID <= 35
+    if (specialization == 1 and formID == 0) or nonBalanceMoonkin then
+        return Enum and Enum.PowerType and Enum.PowerType.Mana or 0
+    end
+    return powerType
+end
+
+function BCDM:ShouldSecondaryOwnPrimaryPosition(descriptor, settings, resourceState, policyVisible)
+    if type(settings) ~= "table" or descriptor == nil or not self:IsResourceRenderable(resourceState) then return false end
+    if settings.Enabled ~= true or descriptor.swapToPrimaryEligible ~= true
+        or settings.SwapToPowerBarPosition ~= true then
+        return false
+    end
+    if policyVisible == nil then
+        if self.ShouldShowOwnedFrame then
+            policyVisible = self:ShouldShowOwnedFrame(settings)
+        else
+            policyVisible = true
+        end
+    end
+    return policyVisible == true
+end
+
+function BCDM:ApplyPowerBarOwnership(resourceState)
+    local profile = self.db and self.db.profile or {}
+    local powerSettings = profile.PowerBar or {}
+    local secondarySettings = profile.SecondaryPowerBar or {}
+    local powerBar = self.PowerBar
+    local secondaryPowerBar = self.SecondaryPowerBar
+    local descriptor = self.GetCurrentSecondaryResource and self:GetCurrentSecondaryResource()
+    local secondaryPolicyVisible = true
+    if self.ShouldShowOwnedFrame then
+        secondaryPolicyVisible = self:ShouldShowOwnedFrame(secondarySettings)
+    end
+    local resourceRenderable = self:IsResourceRenderable(resourceState)
+    local ownsPrimary = secondaryPowerBar ~= nil
+        and self:ShouldSecondaryOwnPrimaryPosition(
+            descriptor, secondarySettings, resourceState, secondaryPolicyVisible)
+    local secondaryVisible = secondaryPowerBar ~= nil and secondarySettings.Enabled == true
+        and resourceRenderable and secondaryPolicyVisible
+    local primaryPolicyVisible = true
+    if self.ShouldShowOwnedFrame then
+        primaryPolicyVisible = self:ShouldShowOwnedFrame(powerSettings)
+    end
+    local primaryVisible = powerBar ~= nil and powerSettings.Enabled == true
+        and not ownsPrimary and primaryPolicyVisible
+
+    self._SecondaryResourceState = resourceState
+    self._SecondaryResourceRenderable = resourceRenderable
+    self._SecondaryDisplayVisible = secondaryVisible
+    self._SecondaryOwnsPrimaryPosition = ownsPrimary
+    if self.SetOwnedFrameShown then
+        self:SetOwnedFrameShown(secondaryPowerBar, secondarySettings, secondaryVisible)
+        self:SetOwnedFrameShown(powerBar, powerSettings, primaryVisible)
+    else
+        if secondaryPowerBar then
+            if secondaryVisible then secondaryPowerBar:Show() else secondaryPowerBar:Hide() end
+        end
+        if powerBar then
+            if primaryVisible then powerBar:Show() else powerBar:Hide() end
+        end
+    end
+    return ownsPrimary, primaryVisible, secondaryVisible
+end
+
 function BCDM:ApplyStatusBarDirection(statusBar, direction)
     if statusBar and statusBar.SetReverseFill then statusBar:SetReverseFill(direction == "LEFT") end
 end

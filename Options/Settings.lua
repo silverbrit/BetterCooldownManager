@@ -724,9 +724,11 @@ local function CreateBarPanel(barType)
     local panel, controls = U.NewPanel()
     local RefreshBarHighlight
     local function update()
-        if barType == "PowerBar" then BCDM:UpdatePowerBar()
-        elseif barType == "SecondaryPowerBar" then BCDM:UpdateSecondaryPowerBar()
-        else BCDM:UpdateCastBar() end
+        if barType == "PowerBar" or barType == "SecondaryPowerBar" then
+            BCDM:UpdatePowerBars()
+        else
+            BCDM:UpdateCastBar()
+        end
         if BCDM.QueueCooldownViewerLayoutApply then BCDM:QueueCooldownViewerLayoutApply() end
         if RefreshBarHighlight then RefreshBarHighlight() end
     end
