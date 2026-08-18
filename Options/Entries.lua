@@ -597,18 +597,17 @@ end
 
 local function AddCursorEntry(panel)
     if not selectedBarID or not Store().Bars[selectedBarID] or type(GetCursorInfo) ~= "function" then return false end
-    local cursorType, cursorInfo1, _, cursorInfo3 = GetCursorInfo()
+    local cursorType, cursorID, _, cursorSpellID = GetCursorInfo()
     local sourceType, sourceID, extra
     if cursorType == "item" then
-        if BCDM:IsSecretValue(cursorInfo1) then return false end
-        sourceType, sourceID = "item", tonumber(cursorInfo1)
+        if BCDM:IsSecretValue(cursorID) then return false end
+        sourceType, sourceID = "item", tonumber(cursorID)
         if not sourceID or sourceID <= 0 then return false end
         RequestItemData(sourceID)
     elseif cursorType == "spell" then
-        local cursorSpell = cursorInfo3 or cursorInfo1
-        if BCDM:IsSecretValue(cursorSpell) then return false end
-        sourceType, sourceID = "spell", ResolveSpellID(cursorSpell)
-        if not sourceID then return false end
+        if BCDM:IsSecretValue(cursorSpellID) then return false end
+        sourceType, sourceID = "spell", tonumber(cursorSpellID)
+        if not sourceID or sourceID <= 0 then return false end
         extra = { FilterClass = select(2, UnitClass("player")) }
     else
         return false
@@ -775,7 +774,10 @@ local function CreateEntries(panel, controls)
     strip.Add.Text:SetPoint("CENTER", 0, 1)
     strip.Add.Text:SetText("+")
     strip.Add.Text:SetTextColor(1, 0.82, 0)
-    strip.Add:SetScript("OnClick", function(self) OpenAddEntryMenu(self, panel) end)
+    strip.Add:RegisterForClicks("LeftButtonUp")
+    strip.Add:SetScript("OnClick", function(self)
+        if not AddCursorEntry(panel) then OpenAddEntryMenu(self, panel) end
+    end)
     strip.Add:RegisterForDrag("LeftButton")
     strip.Add:SetScript("OnReceiveDrag", function() AddCursorEntry(panel) end)
     Canvas.AttachTooltip(strip.Add, "Add Entry",
