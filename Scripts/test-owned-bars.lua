@@ -5,6 +5,7 @@ local function frame()
         shown = false,
         Show = function(self) self.shown = true end,
         Hide = function(self) self.shown = false end,
+        IsShown = function(self) return self.shown end,
         SetWidth = function(self, width) self.width = width end,
     }
 end
@@ -83,6 +84,12 @@ profile.SecondaryPowerBar.Visible = false
 apply(RENDER_READABLE)
 Check(powerBar.shown and not secondaryPowerBar.shown,
     "visibility changes apply without another world event")
+
+powerBar:Hide()
+secondaryPowerBar:Hide()
+apply(RENDER_READABLE)
+Check(powerBar.shown and not secondaryPowerBar.shown,
+    "owned bar visibility is reapplied after an external hide")
 
 for _, formID in ipairs({ 31, 32, 33, 34, 35 }) do
     Check(BCDM:ResolvePrimaryDisplayPowerType(8, "DRUID", 1, formID) == 8,

@@ -219,6 +219,14 @@ local function GetTrinketAuraSpellIDs(slotID, itemSpellID)
     return spellIDs, hasOnUseEntry, hasCatalogEntry
 end
 
+local function InvalidateTrinketCatalogCache()
+    for slotID in pairs(trinketCatalogCache) do trinketCatalogCache[slotID] = nil end
+end
+
+function BCDM:InvalidateTrinketCatalogCache()
+    InvalidateTrinketCatalogCache()
+end
+
 BCDM._GetTrinketAuraSpellIDs = GetTrinketAuraSpellIDs
 
 local function PlayerMatchesFilters(entrySettings)
@@ -530,9 +538,11 @@ function BCDM:RefreshTrinketCooldowns()
 
     local visible, visibilityChanged = {}, false
     local previewing = BCDM.TrinketSettingsPreview == true
-    for slotID, entry in pairs(equippedTrinkets) do
+    local settings = BCDM.db.profile.CooldownManager.Trinket
+    for _, slotID in ipairs(BCDM:GetTrinketSlotOrder(settings)) do
+        local entry = equippedTrinkets[slotID]
         local icon = slotIcons[slotID]
-        if icon then
+        if entry and icon then
             entry.state = GetTrinketCooldownState(slotID)
             RefreshIconCooldown(icon, entry.state, entry.entrySettings)
             local shouldDisplay = previewing or BCDM:ShouldDisplayCustomTrackerEntry(
@@ -548,7 +558,6 @@ function BCDM:RefreshTrinketCooldowns()
     if visibilityChanged then
         LayoutTrinketBar(visible, false)
     elseif BCDM.TrinketBarContainer then
-        local settings = BCDM.db.profile.CooldownManager.Trinket
         BCDM.TrinketBarContainer:SetShown(settings.Enabled == true and #visible > 0
             and (previewing or BCDM:ShouldShowOwnedFrame(settings)))
     end
@@ -568,10 +577,12 @@ trinketEquipmentEvents:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 trinketEquipmentEvents:RegisterEvent("PLAYER_LOGIN")
 trinketEquipmentEvents:RegisterEvent("PLAYER_ENTERING_WORLD")
 trinketEquipmentEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+trinketEquipmentEvents:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 trinketEquipmentEvents:RegisterEvent("ITEM_DATA_LOAD_RESULT")
 trinketEquipmentEvents:RegisterEvent("BAG_UPDATE_COOLDOWN")
 trinketEquipmentEvents:RegisterEvent("COOLDOWN_VIEWER_DATA_LOADED")
 trinketEquipmentEvents:RegisterEvent("COOLDOWN_VIEWER_TABLE_HOTFIXED")
+trinketEquipmentEvents:RegisterEvent("COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED")
 local refreshAfterCombat = false
 local refreshQueued = false
 local function RefreshEquippedTrinkets()
@@ -598,12 +609,16 @@ trinketEquipmentEvents:SetScript("OnEvent", function(_, event, arg1, arg2)
     if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         C_Timer.After(1, RefreshEquippedTrinkets)
     elseif event == "PLAYER_EQUIPMENT_CHANGED" and (arg1 == 13 or arg1 == 14) then
+        InvalidateTrinketCatalogCache()
         QueueEquippedTrinketRefresh()
+    elseif event == "PLAYER_SPECIALIZATION_CHANGED" and arg1 == "player" then
+        InvalidateTrinketCatalogCache()
     elseif event == "ITEM_DATA_LOAD_RESULT" and pendingItemData[arg1] then
         pendingItemData[arg1] = nil
         if arg2 == true then QueueEquippedTrinketRefresh() end
-    elseif event == "COOLDOWN_VIEWER_DATA_LOADED" or event == "COOLDOWN_VIEWER_TABLE_HOTFIXED" then
-        for slotID in pairs(trinketCatalogCache) do trinketCatalogCache[slotID] = nil end
+    elseif event == "COOLDOWN_VIEWER_DATA_LOADED" or event == "COOLDOWN_VIEWER_TABLE_HOTFIXED"
+        or event == "COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED" then
+        InvalidateTrinketCatalogCache()
         QueueEquippedTrinketRefresh()
     elseif event == "PLAYER_REGEN_ENABLED" then
         BCDM:PreparePendingCustomTrackerAuraDisplays()

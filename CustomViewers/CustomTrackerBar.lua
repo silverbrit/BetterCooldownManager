@@ -283,6 +283,7 @@ local function ReleaseUnusedIcons(barID, used)
                 BCDM:HideCustomTrackerAuraDisplay(icon)
             else
                 icon.Entry, icon.EntryStyle, icon.Adapter, icon.LastState = nil, nil, nil, nil
+                icon.CooldownAvailable = nil
                 icons[entryID] = nil
                 Runtime.IconPool[#Runtime.IconPool + 1] = icon
             end
@@ -319,7 +320,7 @@ end
 
 local function UpdateIconState(icon, state)
     if not state then return end
-    if icon.LastState then
+    if icon.CooldownAvailable == true and icon.LastState then
         if state.active == nil then state.active = icon.LastState.active end
         if state.ready == nil then state.ready = icon.LastState.ready end
     end
@@ -337,6 +338,14 @@ local function UpdateIconState(icon, state)
     if BCDM:ShouldGlowCustomTrackerEntry(style, state) then BCDM:StartCustomGlow(icon)
     else BCDM:StopCustomGlow(icon) end
 end
+
+local function GetTrackerState(icon, adapter, entry)
+    if not icon or icon.CooldownAvailable ~= true then return {} end
+    local okState, state = pcall(adapter.GetState, entry.Source, entry)
+    return okState and type(state) == "table" and state or {}
+end
+
+BCDM._GetCustomTrackerState = GetTrackerState
 
 local function ResolveAnchor(barID, bar)
     local layout = bar.Layout or { "CENTER", "NONE", "CENTER", 0, 0 }
@@ -421,8 +430,7 @@ local function RefreshBarState(barID, bar)
         local entry = bar.Entries and bar.Entries[entryID]
         local adapter = entry and entry.Source and SourceAdapters[entry.Source.Type]
         if icon and entry and adapter then
-            local okState, state = pcall(adapter.GetState, entry.Source, entry)
-            state = okState and state or {}
+            local state = GetTrackerState(icon, adapter, entry)
             local previousShown = icon:IsShown()
             local style = icon.EntryStyle or BCDM:GetCustomTrackerEntrySettings(bar, entry)
             UpdateIconState(icon, state)
@@ -460,7 +468,7 @@ local function RefreshBar(barID, bar)
                 local style = settings
                 local existing = Runtime.Icons[barID] and Runtime.Icons[barID][entryID]
                 local state = cooldownAvailable and (adapter.GetState(entry.Source, entry) or {}) or {}
-                if existing and existing.LastState then
+                if cooldownAvailable and existing and existing.LastState then
                     if state.active == nil then state.active = existing.LastState.active end
                     if state.ready == nil then state.ready = existing.LastState.ready end
                 end
@@ -473,6 +481,7 @@ local function RefreshBar(barID, bar)
                 -- update Ready/Active visibility without rereading metadata or
                 -- rebuilding the bar.
                 local icon = AcquireIcon(barID, entryID, container)
+                icon.CooldownAvailable = cooldownAvailable == true
                 local width, height = BCDM:GetIconDimensions(bar)
                 ConfigureIcon(icon, bar, entry, adapter, width, height)
                 UpdateIconState(icon, state)

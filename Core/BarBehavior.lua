@@ -174,6 +174,12 @@ function BCDM:IsResourceRenderable(state)
     return state == self.RENDER_READABLE or state == self.RENDER_WIDGET
 end
 
+local function IsOwnedFrameShown(frame)
+    if not frame or type(frame.IsShown) ~= "function" then return nil end
+    local ok, shown = pcall(frame.IsShown, frame)
+    return ok and shown == true or false
+end
+
 function BCDM:ResolvePrimaryDisplayPowerType(powerType, class, specialization, formID)
     if class ~= "DRUID" then return powerType end
     formID = formID or 0
@@ -225,6 +231,9 @@ function BCDM:ApplyPowerBarOwnership(resourceState)
     local primaryVisible = powerBar ~= nil and powerSettings.Enabled == true
         and not ownsPrimary and primaryPolicyVisible
 
+    local primaryShown = IsOwnedFrameShown(powerBar)
+    local secondaryShown = IsOwnedFrameShown(secondaryPowerBar)
+
     local previous = self._PowerBarOwnership
     local ownershipChanged = not previous
         or previous.powerBar ~= powerBar or previous.secondaryPowerBar ~= secondaryPowerBar
@@ -233,6 +242,8 @@ function BCDM:ApplyPowerBarOwnership(resourceState)
         or previous.secondaryVisible ~= secondaryVisible
         or previous.primaryPolicyVisible ~= primaryPolicyVisible
         or previous.secondaryPolicyVisible ~= secondaryPolicyVisible
+        or (primaryShown ~= nil and primaryShown ~= primaryVisible)
+        or (secondaryShown ~= nil and secondaryShown ~= secondaryVisible)
     self._PowerBarOwnership = {
         powerBar = powerBar,
         secondaryPowerBar = secondaryPowerBar,

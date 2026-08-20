@@ -171,6 +171,21 @@ local unavailable = BCDM._GetCustomTrackerSourceAvailability(
     { IsAvailable = function() return false end })
 Check(not unavailable, "unavailable non-aura sources remain filtered")
 C_Spell, C_SpellBook = savedSpellAPI, savedSpellBook
+local trackerStateCalls = 0
+local trackerStateAdapter = {
+    GetState = function()
+        trackerStateCalls = trackerStateCalls + 1
+        return { ready = true }
+    end,
+}
+local trackerStateIcon = { CooldownAvailable = false }
+local trackerState = BCDM._GetCustomTrackerState(trackerStateIcon, trackerStateAdapter, { Source = {} })
+Check(trackerStateCalls == 0 and trackerState.ready == nil,
+    "aura-only tracker state refreshes do not read cooldown state")
+trackerStateIcon.CooldownAvailable = true
+trackerState = BCDM._GetCustomTrackerState(trackerStateIcon, trackerStateAdapter, { Source = {} })
+Check(trackerStateCalls == 1 and trackerState.ready == true,
+    "learned tracker state refreshes read cooldown state")
 Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
 Check(BCDM:FormatResourceText(25, 100, "PERCENT") == "25%", "resource text supports percentages")
 local secretValue = {}
