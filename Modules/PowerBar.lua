@@ -93,14 +93,7 @@ local function UpdatePowerValues()
 end
 
 local function OnPowerBarEvent(self, event)
-    if BCDM.QueuePowerBarValueRefresh and BCDM.RefreshSecondaryPowerValues then
-        BCDM:QueuePowerBarValueRefresh(false)
-        return
-    end
-    UpdatePowerValues()
-    if not BCDM._UpdatingPowerBars and BCDM.ApplyPowerBarOwnership then
-        BCDM:ApplyPowerBarOwnership(BCDM._SecondaryResourceState)
-    end
+    BCDM:QueuePowerBarValueRefresh(false)
 end
 
 BCDM._PowerBarOnEvent = OnPowerBarEvent
@@ -109,11 +102,9 @@ local powerRefreshScheduled = false
 local powerRefreshTicks = false
 
 local function ApplyPowerBarValueRefresh(refreshTicks)
-    if BCDM.RefreshSecondaryPowerValues then
-        BCDM:RefreshSecondaryPowerValues(refreshTicks)
-    end
+    BCDM:RefreshSecondaryPowerValues(refreshTicks)
     UpdatePowerValues()
-    if not BCDM._UpdatingPowerBars and BCDM.ApplyPowerBarOwnership then
+    if not BCDM._UpdatingPowerBars then
         BCDM:ApplyPowerBarOwnership(BCDM._SecondaryResourceState)
     end
 end
@@ -161,11 +152,7 @@ updatePowerBarHeightEventFrame:SetScript("OnEvent", function(self, event, ...)
         local unit = ...
         if unit and unit ~= "player" then return end
     end
-    if BCDM.QueueRuntimeRefresh then
-        BCDM:QueueRuntimeRefresh("structure")
-    elseif BCDM.UpdatePowerBars then
-        BCDM:UpdatePowerBars()
-    end
+    BCDM:QueueRuntimeRefresh("structure")
 end)
 
 function BCDM:CreatePowerBar()
@@ -234,9 +221,7 @@ function BCDM:CreatePowerBar()
         PowerBar:SetScript("OnEvent", nil)
         PowerBar:UnregisterAllEvents()
     end
-    if BCDM.ApplyPowerBarOwnership then
-        BCDM:ApplyPowerBarOwnership(BCDM._SecondaryResourceState or BCDM.RENDER_UNAVAILABLE)
-    end
+    BCDM:ApplyPowerBarOwnership(BCDM._SecondaryResourceState or BCDM.RENDER_UNAVAILABLE)
 end
 
 function BCDM:UpdatePowerBarAppearance()
@@ -296,13 +281,6 @@ function BCDM:UpdatePowerBarAppearance()
     if powerBarDB.Text.Enabled then powerBar.Text:Show() else powerBar.Text:Hide() end
 end
 
-function BCDM:UpdatePowerBar()
-    if self.UpdatePowerBars and not self._UpdatingPowerBars then
-        return self:UpdatePowerBars()
-    end
-    return self:UpdatePowerBarAppearance()
-end
-
 function BCDM:UpdatePowerBarWidth()
-    if self.QueuePowerBarWidthUpdates then self:QueuePowerBarWidthUpdates() end
+    self:QueuePowerBarWidthUpdates()
 end

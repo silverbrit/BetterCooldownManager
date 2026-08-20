@@ -45,11 +45,7 @@ local function MergeRenderStates(...)
 end
 
 local function ApplyChildBarDirection(bar, direction)
-    if BCDM.ApplyStatusBarDirection then
-        BCDM:ApplyStatusBarDirection(bar, direction)
-    elseif bar and bar.SetReverseFill then
-        bar:SetReverseFill(direction == "LEFT")
-    end
+    BCDM:ApplyStatusBarDirection(bar, direction)
 end
 
 local function StopRuneDriver()
@@ -375,7 +371,7 @@ local function UpdateRuneDisplay(descriptor)
 
     if not hasUsableData then
         HideBars(runeBars)
-        if BCDM.ClearTicks then BCDM:ClearTicks() end
+        BCDM:ClearTicks()
         tickLayoutKey = false
         tickLayoutResource = nil
         return RENDER_UNAVAILABLE
@@ -718,7 +714,7 @@ RESOURCE_HANDLERS.RUNES = function(descriptor, bar, settings)
     return 0, 6, state, ""
 end
 RESOURCE_HANDLERS.STAGGER = function(descriptor, bar, settings)
-    if BCDM.ClearTicks then BCDM:ClearTicks() end
+    BCDM:ClearTicks()
     tickLayoutKey = nil
     tickLayoutResource = nil
     local current, currentState = ReadAPI(UnitStagger, "player")
@@ -756,16 +752,12 @@ local function HideAllResourceDisplays()
     HideInactiveResourceDisplays(nil)
     tickLayoutKey = nil
     tickLayoutResource = nil
-    if BCDM.ClearTicks and BCDM.SecondaryPowerBar then BCDM:ClearTicks() end
+    BCDM:ClearTicks()
 end
 
 local function FinishResourceUpdate(bar, state, deferOwnership)
-    if (deferOwnership or BCDM._UpdatingPowerBars) and BCDM.ApplyPowerBarOwnership then return end
-    if BCDM.ApplyPowerBarOwnership then
-        BCDM:ApplyPowerBarOwnership(state)
-    elseif bar then
-        if state == RENDER_UNAVAILABLE then bar:Hide() else bar:Show() end
-    end
+    if deferOwnership or BCDM._UpdatingPowerBars then return end
+    BCDM:ApplyPowerBarOwnership(state)
 end
 
 local function UpdatePowerValues(deferOwnership)
@@ -884,8 +876,8 @@ end
 local function RefreshSecondaryPowerValues(refreshTicks)
     local previousOwner = BCDM._SecondaryOwnsPrimaryPosition == true
     local state = refreshTicks and CreateTicksBasedOnPowerType(true) or UpdatePowerValues(true)
-    if BCDM.ApplyPowerBarOwnership and not BCDM._UpdatingPowerBars then
-        if BCDM.UpdatePowerBars and SecondaryOwnsPrimary(state) ~= previousOwner then
+    if not BCDM._UpdatingPowerBars then
+        if SecondaryOwnsPrimary(state) ~= previousOwner then
             BCDM:UpdatePowerBars()
         else
             BCDM:ApplyPowerBarOwnership(state)
@@ -965,7 +957,7 @@ function BCDM:QueuePowerBarWidthUpdates()
 end
 
 local function UpdateBarWidth()
-    if BCDM.QueuePowerBarWidthUpdates then BCDM:QueuePowerBarWidthUpdates() end
+    BCDM:QueuePowerBarWidthUpdates()
 end
 
 local function SetHooks()
@@ -974,15 +966,14 @@ local function SetHooks()
 end
 
 local function OnSecondaryPowerBarSizeChanged()
-    local deferOwnership = BCDM._UpdatingPowerBars or BCDM.ApplyPowerBarOwnership ~= nil
-    local state = CreateTicksBasedOnPowerType(deferOwnership)
+    local state = CreateTicksBasedOnPowerType(true)
     local descriptor = BCDM:GetCurrentSecondaryResource()
     if descriptor and descriptor.kind == "COMBO_POINTS" and #comboPoints > 0 then
         LayoutComboPoints()
     elseif descriptor and descriptor.kind == "ESSENCE" and #essenceTicks > 0 then
         LayoutEssenceTicks()
     end
-    if BCDM.ApplyPowerBarOwnership and not BCDM._UpdatingPowerBars then
+    if not BCDM._UpdatingPowerBars then
         BCDM:ApplyPowerBarOwnership(state)
     end
 end
@@ -1028,51 +1019,36 @@ local function OnSecondaryPowerBarEvent(self, event, ...)
     if event == "PLAYER_SPECIALIZATION_CHANGED" then
         local unit = ...
         if unit and unit ~= "player" then return end
-        if BCDM.QueueRuntimeRefresh then BCDM:QueueRuntimeRefresh("structure")
-        elseif BCDM.UpdatePowerBars then BCDM:UpdatePowerBars()
-        else BCDM:UpdateSecondaryPowerBar() end
+        BCDM:QueueRuntimeRefresh("structure")
         return
     elseif event == "PLAYER_ENTERING_WORLD" or event == "UPDATE_SHAPESHIFT_FORM"
         or event == "PLAYER_TALENT_UPDATE" then
-        if BCDM.QueueRuntimeRefresh then BCDM:QueueRuntimeRefresh("structure")
-        elseif BCDM.UpdatePowerBars then BCDM:UpdatePowerBars()
-        else BCDM:UpdateSecondaryPowerBar() end
+        BCDM:QueueRuntimeRefresh("structure")
         return
     end
 
     if event == "RUNE_POWER_UPDATE" or event == "RUNE_TYPE_UPDATE" then
         local descriptor = BCDM:GetCurrentSecondaryResource()
         if not descriptor and self then SetResourceEventRegistration(self, false) end
-        if BCDM.QueuePowerBarValueRefresh then
-            BCDM:QueuePowerBarValueRefresh(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
-        else
-            RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
-        end
+        BCDM:QueuePowerBarValueRefresh(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
         return
     end
 
     if IsResourceEvent(event) and not BCDM:GetCurrentSecondaryResource() then
         if self then SetResourceEventRegistration(self, false) end
-        if BCDM.QueuePowerBarValueRefresh then BCDM:QueuePowerBarValueRefresh(false)
-        else RefreshSecondaryPowerValues(false) end
+        BCDM:QueuePowerBarValueRefresh(false)
         return
     end
 
     if event == "UNIT_AURA" then
-        if BCDM.QueuePowerBarValueRefresh then
-            BCDM:QueuePowerBarValueRefresh(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
-        else
-            RefreshSecondaryPowerValues(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
-        end
+        BCDM:QueuePowerBarValueRefresh(not BCDM.db.profile.SecondaryPowerBar.HideTicks)
         return
     elseif event == "UNIT_MAXPOWER" then
-        if BCDM.QueuePowerBarValueRefresh then BCDM:QueuePowerBarValueRefresh(true)
-        else RefreshSecondaryPowerValues(true) end
+        BCDM:QueuePowerBarValueRefresh(true)
         return
     end
 
-    if BCDM.QueuePowerBarValueRefresh then BCDM:QueuePowerBarValueRefresh(false)
-    else RefreshSecondaryPowerValues(false) end
+    BCDM:QueuePowerBarValueRefresh(false)
 end
 
 BCDM._SecondaryPowerBarOnEvent = OnSecondaryPowerBarEvent
@@ -1166,12 +1142,7 @@ function BCDM:CreateSecondaryPowerBar()
     else
         UnregisterSecondaryPowerBarEvents(secondaryPowerBar)
     end
-    if BCDM.UpdatePowerBars then
-        BCDM:UpdatePowerBars()
-    else
-        local renderState = CreateTicksBasedOnPowerType()
-        if renderState ~= RENDER_UNAVAILABLE then secondaryPowerBar:Show() else secondaryPowerBar:Hide() end
-    end
+    BCDM:UpdatePowerBars()
 end
 
 function BCDM:UpdateSecondaryPowerBarAppearance()
@@ -1238,10 +1209,7 @@ function BCDM:UpdateSecondaryPowerBarAppearance()
     RegisterSecondaryPowerBarEvents(secondaryPowerBar)
     local renderState = CreateTicksBasedOnPowerType(true)
     local descriptor = BCDM:GetCurrentSecondaryResource()
-    local secondaryPolicyVisible = true
-    if BCDM.ShouldShowOwnedFrame then
-        secondaryPolicyVisible = BCDM:ShouldShowOwnedFrame(secondaryPowerBarDB)
-    end
+    local secondaryPolicyVisible = BCDM:ShouldShowOwnedFrame(secondaryPowerBarDB)
     local ownsPrimary = BCDM:ShouldSecondaryOwnPrimaryPosition(
         descriptor, secondaryPowerBarDB, renderState, secondaryPolicyVisible)
     BCDM._SecondaryResourceState = renderState
@@ -1268,13 +1236,6 @@ function BCDM:UpdatePowerBars()
     self:QueuePowerBarWidthUpdates()
 end
 
-function BCDM:UpdateSecondaryPowerBar()
-    if self.UpdatePowerBars and not self._UpdatingPowerBars then
-        return self:UpdatePowerBars()
-    end
-    return self:UpdateSecondaryPowerBarAppearance()
-end
-
 function BCDM:UpdateSecondaryPowerBarWidth()
-    if self.QueuePowerBarWidthUpdates then self:QueuePowerBarWidthUpdates() end
+    self:QueuePowerBarWidthUpdates()
 end

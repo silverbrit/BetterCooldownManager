@@ -161,8 +161,16 @@ function BCDM:ApplyStatusBarDirection(bar, direction) bar:SetReverseFill(directi
 function BCDM:ClearTicks() clearTickCount = clearTickCount + 1 end
 function BCDM:CreateTicks(count) tickCount = count end
 function BCDM:FormatResourceText() return "formatted" end
+function BCDM:ApplyPowerBarOwnership(state)
+    if state == self.RENDER_UNAVAILABLE then self.SecondaryPowerBar:Hide()
+    else self.SecondaryPowerBar:Show() end
+end
 
 assert(loadfile(root .. "/Modules/SecondaryPowerBar.lua"))("BetterCooldownManager", BCDM)
+BCDM.QueueRuntimeRefresh = function() end
+BCDM.QueuePowerBarValueRefresh = function(_, refreshTicks)
+    BCDM:RefreshSecondaryPowerValues(refreshTicks)
+end
 
 local readers = BCDM._SecondaryResourceReaders
 local value, readable, widget

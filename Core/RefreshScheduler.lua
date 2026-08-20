@@ -9,7 +9,6 @@ local Schedule
 
 local function EnsureRetryFrame()
     if retryFrame then return end
-    if not CreateFrame then return end
     retryFrame = CreateFrame("Frame")
     retryFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     retryFrame:SetScript("OnEvent", function() Schedule() end)
@@ -17,7 +16,7 @@ end
 
 local function RunPending()
     scheduled = false
-    if (pendingFull or pendingStructure) and InCombatLockdown and InCombatLockdown() then
+    if (pendingFull or pendingStructure) and InCombatLockdown() then
         EnsureRetryFrame()
         return
     end
@@ -26,26 +25,22 @@ local function RunPending()
         BCDM:UpdateBCDM()
     elseif pendingStructure then
         pendingStructure, pendingState = false, false
-        if BCDM.RefreshCustomTrackers then BCDM:RefreshCustomTrackers() end
-        if BCDM.UpdateTrinketBar then BCDM:UpdateTrinketBar() end
-        if BCDM.UpdatePowerBars then BCDM:UpdatePowerBars() end
-        if BCDM.UpdateCastBar then BCDM:UpdateCastBar() end
-        if BCDM.QueueCooldownViewerLayoutApply then BCDM:QueueCooldownViewerLayoutApply() end
-        if BCDM.QueueCooldownViewerStyleRefresh then BCDM:QueueCooldownViewerStyleRefresh() end
+        BCDM:RefreshCustomTrackers()
+        BCDM:UpdateTrinketBar()
+        BCDM:UpdatePowerBars()
+        BCDM:UpdateCastBar()
+        BCDM:QueueCooldownViewerLayoutApply()
+        BCDM:QueueCooldownViewerStyleRefresh()
     elseif pendingState then
         pendingState = false
-        if BCDM.RefreshCustomTrackerStates then BCDM:RefreshCustomTrackerStates() end
-        if BCDM.RefreshTrinketCooldowns then BCDM:RefreshTrinketCooldowns() end
-        if BCDM.RefreshPowerBarValues then
-            BCDM:RefreshPowerBarValues()
-        elseif BCDM.UpdatePowerBars then
-            BCDM:UpdatePowerBars()
-        end
+        BCDM:RefreshCustomTrackerStates()
+        BCDM:RefreshTrinketCooldowns()
+        BCDM:RefreshPowerBarValues()
     end
 end
 
 Schedule = function()
-    if scheduled or not C_Timer or type(C_Timer.After) ~= "function" then return end
+    if scheduled then return end
     scheduled = true
     C_Timer.After(0, RunPending)
 end

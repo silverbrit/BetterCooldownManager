@@ -141,6 +141,9 @@ powerModule.ResolvePrimaryDisplayPowerType = function(_, powerType, class, speci
     return BCDM:ResolvePrimaryDisplayPowerType(powerType, class, specialization, formID)
 end
 powerModule.ApplyPowerBarOwnership = function() end
+powerModule.RefreshSecondaryPowerValues = function() end
+local savedPowerTimer = C_Timer
+C_Timer = { After = function(_, callback) callback() end }
 UnitClass = function() return "", "MAGE" end
 UnitPowerType = function() return currentType end
 UnitPower = function() return currentPower end
@@ -165,6 +168,7 @@ powerModule._PowerBarOnEvent(nil, "UNIT_POWER_UPDATE")
 Check(formattedPowerText and formattedPowerText[1] == "%d" and formattedPowerText[2] == secretPower,
     "restricted power values use the FontString widget formatter instead of clearing text")
 powerModule.IsSecretValue = plainSecretCheck
+C_Timer = savedPowerTimer
 
 CreateFrame = savedCreateFrame
 for name, value in pairs(savedPowerGlobals) do _G[name] = value end

@@ -112,38 +112,13 @@ local function AnchorValues()
     return values
 end
 
-local function AccessBar(field, panel, fallback)
+local function AccessPath(path, panel, fallback)
     return function()
-        local bar = SelectedBar()
-        local value = bar and bar[field]
-        if value == nil then return fallback end
-        return value
+        local value = U.Get(SelectedBar, path)
+        return value == nil and fallback or value
     end, function(value)
-        local bar = SelectedBar()
-        if not bar then return end
-        bar[field] = value
-        Changed(panel)
-    end
-end
-
-local function AccessBarPath(path, panel, fallback)
-    return function()
-        local value = SelectedBar()
-        for index = 1, #path do
-            if type(value) ~= "table" then return fallback end
-            value = value[path[index]]
-        end
-        if value == nil then return fallback end
-        return value
-    end, function(value)
-        local target = SelectedBar()
-        if not target then return end
-        for index = 1, #path - 1 do
-            local key = path[index]
-            if type(target[key]) ~= "table" then target[key] = {} end
-            target = target[key]
-        end
-        target[path[#path]] = value
+        if not SelectedBar() then return end
+        U.Set(SelectedBar, path, value)
         Changed(panel)
     end
 end
@@ -184,7 +159,7 @@ local function CreateManagement(panel, controls)
         panel:Refresh()
     end, BarValues, { forceSingleColumn = true, minWidth = 360 })
 
-    local getEnabled, setEnabled = AccessBar("Enabled", panel, false)
+    local getEnabled, setEnabled = AccessPath({ "Enabled" }, panel, false)
     U.Checkbox(controls, section, "Enable Bar", getEnabled, setEnabled, {
         disabled = function() return SelectedBar() == nil end,
     })
@@ -270,13 +245,13 @@ local function AddLayoutControls(panel, controls)
     U.Slider(controls, section, "X Offset", get, set, { min = -3000, max = 3000, step = 0.1, disabled = Disabled })
     get, set = AccessLayout(5, panel, 0)
     U.Slider(controls, section, "Y Offset", get, set, { min = -3000, max = 3000, step = 0.1, disabled = Disabled })
-    get, set = AccessBar("GrowthDirection", panel, "RIGHT")
+    get, set = AccessPath({ "GrowthDirection" }, panel, "RIGHT")
     U.Dropdown(controls, section, "Growth Direction", get, set, function() return GROWTH end, { disabled = Disabled })
-    get, set = AccessBar("Spacing", panel, 1)
+    get, set = AccessPath({ "Spacing" }, panel, 1)
     U.Slider(controls, section, "Icon Spacing", get, set, { min = -1, max = 32, step = 0.1, disabled = Disabled })
-    get, set = AccessBar("Columns", panel, 0)
+    get, set = AccessPath({ "Columns" }, panel, 0)
     U.Slider(controls, section, "Wrap After", get, set, { min = 0, max = 24, step = 1, disabled = Disabled })
-    get, set = AccessBar("FrameStrata", panel, "LOW")
+    get, set = AccessPath({ "FrameStrata" }, panel, "LOW")
     U.Dropdown(controls, section, "Frame Strata", get, set, function() return STRATA end, { disabled = Disabled })
 end
 
@@ -308,15 +283,15 @@ local function AddIconSettings(panel, controls)
         Changed(panel)
     end, { disabled = Disabled })
 
-    local get, set = AccessBar("IconSize", panel, 38)
+    local get, set = AccessPath({ "IconSize" }, panel, 38)
     U.Slider(controls, section, "Icon Size", get, set, {
         min = 16, max = 128, step = 0.1, disabled = AspectUnlocked,
     })
-    get, set = AccessBar("IconWidth", panel, 38)
+    get, set = AccessPath({ "IconWidth" }, panel, 38)
     U.Slider(controls, section, "Icon Width", get, set, {
         min = 16, max = 128, step = 0.1, disabled = AspectLocked,
     })
-    get, set = AccessBar("IconHeight", panel, 38)
+    get, set = AccessPath({ "IconHeight" }, panel, 38)
     U.Slider(controls, section, "Icon Height", get, set, {
         min = 16, max = 128, step = 0.1, disabled = AspectLocked,
     })
@@ -327,17 +302,17 @@ local function AddTextSettings(panel, controls)
     local function Disabled() return SelectedBar() == nil end
     U.Text(controls, section, "Controls charge, stack, and item-count text on this tracker bar.")
 
-    local get, set = AccessBarPath({ "Text", "Layout", 1 }, panel, "BOTTOMRIGHT")
+    local get, set = AccessPath({ "Text", "Layout", 1 }, panel, "BOTTOMRIGHT")
     U.Dropdown(controls, section, "Anchor From", get, set, function() return ANCHOR_POINTS end, { disabled = Disabled })
-    get, set = AccessBarPath({ "Text", "Layout", 2 }, panel, "BOTTOMRIGHT")
+    get, set = AccessPath({ "Text", "Layout", 2 }, panel, "BOTTOMRIGHT")
     U.Dropdown(controls, section, "Anchor To", get, set, function() return ANCHOR_POINTS end, { disabled = Disabled })
-    get, set = AccessBarPath({ "Text", "Layout", 3 }, panel, 0)
+    get, set = AccessPath({ "Text", "Layout", 3 }, panel, 0)
     U.Slider(controls, section, "X Offset", get, set, { min = -500, max = 500, step = 0.1, disabled = Disabled })
-    get, set = AccessBarPath({ "Text", "Layout", 4 }, panel, 0)
+    get, set = AccessPath({ "Text", "Layout", 4 }, panel, 0)
     U.Slider(controls, section, "Y Offset", get, set, { min = -500, max = 500, step = 0.1, disabled = Disabled })
-    get, set = AccessBarPath({ "Text", "FontSize" }, panel, 12)
+    get, set = AccessPath({ "Text", "FontSize" }, panel, 12)
     U.Slider(controls, section, "Font Size", get, set, { min = 6, max = 72, step = 1, disabled = Disabled })
-    get, set = AccessBarPath({ "Text", "Colour" }, panel, { 1, 1, 1 })
+    get, set = AccessPath({ "Text", "Colour" }, panel, { 1, 1, 1 })
     U.Color(controls, section, "Font Colour", get, set, { disabled = Disabled })
 end
 
@@ -1030,13 +1005,13 @@ local function CreateEntries(panel, controls)
     local sharedSection = U.Section(controls, "Shared Entry Settings", true)
     U.Text(controls, sharedSection, "Applied to every entry unless that entry enables its own override.")
     local function NoBar() return SelectedBar() == nil end
-    local getShared, setShared = AccessBarPath({ "EntrySettings", "DisplayMode" }, panel, "ALWAYS")
+    local getShared, setShared = AccessPath({ "EntrySettings", "DisplayMode" }, panel, "ALWAYS")
     U.Dropdown(controls, sharedSection, "Display Mode", getShared, setShared, function() return DISPLAY_MODES end,
         { disabled = NoBar })
-    getShared, setShared = AccessBarPath({ "EntrySettings", "VisualMode" }, panel, "FULL")
+    getShared, setShared = AccessPath({ "EntrySettings", "VisualMode" }, panel, "FULL")
     U.Dropdown(controls, sharedSection, "Appearance", getShared, setShared, function() return VISUAL_MODES end,
         { disabled = NoBar })
-    getShared, setShared = AccessBarPath({ "EntrySettings", "Alpha" }, panel, 0.45)
+    getShared, setShared = AccessPath({ "EntrySettings", "Alpha" }, panel, 0.45)
     U.Slider(controls, sharedSection, "Opacity", getShared, setShared, {
         min = 0.05, max = 1, step = 0.05,
         hidden = function()
@@ -1045,12 +1020,12 @@ local function CreateEntries(panel, controls)
         end,
         formatter = function(value) return string.format("%.0f%%", (tonumber(value) or 0) * 100) end,
     })
-    getShared, setShared = AccessBarPath({ "EntrySettings", "Glow" }, panel, "NONE")
+    getShared, setShared = AccessPath({ "EntrySettings", "Glow" }, panel, "NONE")
     U.Dropdown(controls, sharedSection, "Glow", getShared, setShared, function() return GLOW_MODES end,
         { disabled = NoBar })
-    getShared, setShared = AccessBarPath({ "EntrySettings", "TextEnabled" }, panel, true)
+    getShared, setShared = AccessPath({ "EntrySettings", "TextEnabled" }, panel, true)
     U.Checkbox(controls, sharedSection, "Show Text", getShared, setShared, { disabled = NoBar })
-    getShared, setShared = AccessBarPath({ "EntrySettings", "Tooltip" }, panel, true)
+    getShared, setShared = AccessPath({ "EntrySettings", "Tooltip" }, panel, true)
     U.Checkbox(controls, sharedSection, "Show Tooltip", getShared, setShared, { disabled = NoBar })
 
     local sharedFilters = Canvas.CreateBaseRow(sharedSection.Content, 28)

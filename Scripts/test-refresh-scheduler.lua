@@ -9,6 +9,10 @@ local savedMethods = {
     RefreshCustomTrackerStates = BCDM.RefreshCustomTrackerStates,
     RefreshTrinketCooldowns = BCDM.RefreshTrinketCooldowns,
     RefreshPowerBarValues = BCDM.RefreshPowerBarValues,
+    UpdatePowerBars = BCDM.UpdatePowerBars,
+    UpdateCastBar = BCDM.UpdateCastBar,
+    QueueCooldownViewerLayoutApply = BCDM.QueueCooldownViewerLayoutApply,
+    QueueCooldownViewerStyleRefresh = BCDM.QueueCooldownViewerStyleRefresh,
 }
 local callbacks = {}
 local calls = {}
@@ -19,6 +23,10 @@ BCDM.UpdateTrinketBar = function() calls.structure = (calls.structure or 0) + 1 
 BCDM.RefreshCustomTrackerStates = function() calls.state = (calls.state or 0) + 1 end
 BCDM.RefreshTrinketCooldowns = function() calls.state = (calls.state or 0) + 1 end
 BCDM.RefreshPowerBarValues = function() calls.state = (calls.state or 0) + 1 end
+BCDM.UpdatePowerBars = function() calls.structure = (calls.structure or 0) + 1 end
+BCDM.UpdateCastBar = function() calls.structure = (calls.structure or 0) + 1 end
+BCDM.QueueCooldownViewerLayoutApply = function() calls.structure = (calls.structure or 0) + 1 end
+BCDM.QueueCooldownViewerStyleRefresh = function() calls.structure = (calls.structure or 0) + 1 end
 
 assert(loadfile(root .. "/Core/RefreshScheduler.lua"))("BetterCooldownManager", BCDM)
 BCDM:QueueRuntimeRefresh("state")
@@ -42,5 +50,9 @@ BCDM.UpdateTrinketBar = savedMethods.UpdateTrinketBar
 BCDM.RefreshCustomTrackerStates = savedMethods.RefreshCustomTrackerStates
 BCDM.RefreshTrinketCooldowns = savedMethods.RefreshTrinketCooldowns
 BCDM.RefreshPowerBarValues = savedMethods.RefreshPowerBarValues
+BCDM.UpdatePowerBars = savedMethods.UpdatePowerBars
+BCDM.UpdateCastBar = savedMethods.UpdateCastBar
+BCDM.QueueCooldownViewerLayoutApply = savedMethods.QueueCooldownViewerLayoutApply
+BCDM.QueueCooldownViewerStyleRefresh = savedMethods.QueueCooldownViewerStyleRefresh
 C_Timer = savedTimer
 return true
