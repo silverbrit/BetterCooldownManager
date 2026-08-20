@@ -181,6 +181,20 @@ local unavailable = BCDM._GetCustomTrackerSourceAvailability(
     { IsAvailable = function() return false end })
 Check(not unavailable, "unavailable non-aura sources remain filtered")
 C_Spell, C_SpellBook = savedSpellAPI, savedSpellBook
+local savedItemAPI = C_Item
+local itemCount = 2
+C_Item = {
+    DoesItemExistByID = function(itemID) return itemID == 500 end,
+    GetItemCount = function(itemID) return itemID == 500 and itemCount or 0 end,
+}
+local itemEligible, itemCooldownAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "item", ID = 500 } }, BCDM.CustomTrackerSourceAdapters.item)
+Check(itemEligible and itemCooldownAvailable, "item trackers remain eligible while copies are available")
+itemCount = 0
+itemEligible, itemCooldownAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "item", ID = 500 } }, BCDM.CustomTrackerSourceAdapters.item)
+Check(not itemEligible and not itemCooldownAvailable, "item trackers hide when no copies remain")
+C_Item = savedItemAPI
 local trackerStateCalls = 0
 local trackerStateAdapter = {
     GetState = function()

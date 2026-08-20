@@ -55,6 +55,12 @@ local function ReadNumber(value)
     return value
 end
 
+local function GetItemCount(itemID)
+    if not (C_Item and C_Item.GetItemCount) then return end
+    local ok, count = pcall(C_Item.GetItemCount, itemID)
+    return ok and ReadNumber(count) or nil
+end
+
 local function ReadField(object, key)
     if object == nil then return end
     local ok, value = pcall(function() return object[key] end)
@@ -144,10 +150,16 @@ SourceAdapters.item = {
         return name or ("Item " .. tostring(source.ID)), icon
     end,
     IsAvailable = function(source)
-        return C_Item and (not C_Item.DoesItemExistByID or C_Item.DoesItemExistByID(source.ID) == true)
+        if not (C_Item and C_Item.GetItemCount) then return false end
+        if C_Item.DoesItemExistByID then
+            local ok, exists = pcall(C_Item.DoesItemExistByID, source.ID)
+            if not ok or exists ~= true then return false end
+        end
+        local count = GetItemCount(source.ID)
+        return count ~= nil and count > 0
     end,
     GetState = function(source)
-        local count = C_Item.GetItemCount(source.ID)
+        local count = GetItemCount(source.ID)
         local startTime, duration = C_Item.GetItemCooldown(source.ID)
         startTime, duration = ReadNumber(startTime), ReadNumber(duration)
         local state = { count = ReadNumber(count), active = nil, ready = nil }
@@ -644,8 +656,11 @@ function BCDM:SetupCustomTrackers()
                 BCDM:RefreshCustomTrackerAuraUnit("target")
             elseif event == "PLAYER_REGEN_ENABLED" then
                 BCDM:PreparePendingCustomTrackerAuraDisplays()
+            elseif event == "ITEM_COUNT_CHANGED" then
+                -- Item count changes can remove a source from the bar.
+                BCDM:QueueCustomTrackerRefresh()
             elseif event == "SPELL_UPDATE_COOLDOWN" or event == "SPELL_UPDATE_CHARGES"
-                or event == "BAG_UPDATE_COOLDOWN" or event == "ITEM_COUNT_CHANGED" then
+                or event == "BAG_UPDATE_COOLDOWN" then
                 BCDM:QueueCustomTrackerStateRefresh()
             else
                 BCDM:QueueCustomTrackerRefresh()
