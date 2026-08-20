@@ -8,7 +8,7 @@
 
 ## Features
 - Clean, Pixel Border Skinning. Borders can be adjusted.
-- Minimap button for opening the Better Cooldown Manager settings; the settings module loads on demand.
+- Minimap button for opening the Better Cooldown Manager settings.
 - Custom Cooldown Text, Tweaks & Glows.
 - Custom Power & Secondary Power Colours.
 - Power Bar, Secondary Power Bar & Cast Bar with Anchoring & Auto Adjustment for Width.

@@ -34,6 +34,7 @@ function BetterCooldownManager:OnInitialize()
     BCDM.db.RegisterCallback(BCDM, "OnProfileChanged", HandleProfileLayoutChanged)
     BCDM.db.RegisterCallback(BCDM, "OnProfileCopied", HandleProfileLayoutChanged)
     BCDM.db.RegisterCallback(BCDM, "OnProfileReset", HandleProfileReset)
+    BCDM:RegisterSettings()
 end
 
 function BetterCooldownManager:OnEnable()

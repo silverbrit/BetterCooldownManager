@@ -37,6 +37,19 @@ Libraries/LibCustomGlow-1.0/LibCustomGlow-1.0.lua
 Libraries/LibDualSpec-1.0/LibDualSpec-1.0.lua
 Libraries/LibEditModeOverride/LibEditModeOverride.lua
 
+# Load Locales
+Locales/enUS.lua
+Locales/deDE.lua
+Locales/esES.lua
+Locales/esMX.lua
+Locales/frFR.lua
+Locales/itIT.lua
+Locales/koKR.lua
+Locales/ptBR.lua
+Locales/ruRU.lua
+Locales/zhCN.lua
+Locales/zhTW.lua
+
 # Load Modules
 Modules/Init.xml
 
@@ -45,3 +58,6 @@ CustomViewers/Init.xml
 
 # Load Core
 Core/Init.xml
+
+# Load Options
+Options/Init.xml

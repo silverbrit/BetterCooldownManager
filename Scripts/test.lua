@@ -34,17 +34,7 @@ for _, event in ipairs({
 }) do
     Check(refreshEvents[event], "custom trackers refresh on " .. event)
 end
-local tocFile = assert(io.open(root .. "/BetterCooldownManager.toc", "r"))
-local tocSource = tocFile:read("*a")
-tocFile:close()
-local optionsTocFile = assert(io.open(root .. "/BetterCooldownManager_Options/BetterCooldownManager_Options.toc", "r"))
-local optionsTocSource = optionsTocFile:read("*a")
-optionsTocFile:close()
-Check(not tocSource:find("Options/Init.xml", 1, true)
-    and optionsTocSource:find("## LoadOnDemand: 1", 1, true)
-    and optionsTocSource:find("Options/Init.xml", 1, true),
-    "settings code is deferred to the load-on-demand options addon")
-local changelogFile = assert(io.open(root .. "/BetterCooldownManager_Options/Options/Changelog.lua", "r"))
+local changelogFile = assert(io.open(root .. "/Options/Changelog.lua", "r"))
 local changelogSource = changelogFile:read("*a")
 changelogFile:close()
 local releaseCount = 0

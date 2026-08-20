@@ -30,27 +30,6 @@ if BCDM.LSM then BCDM.LSM:Register("statusbar", "Better Blizzard", [[Interface\A
 
 function BCDM:PrettyPrint(MSG) print(BCDM.ADDON_NAME .. ":|r " .. MSG) end
 
-local OPTIONS_ADDON = "BetterCooldownManager_Options"
-
-function BCDM:LoadOptions()
-    if not C_AddOns or type(C_AddOns.IsAddOnLoaded) ~= "function" then return false end
-    if C_AddOns.IsAddOnLoaded(OPTIONS_ADDON) then return true end
-    if type(C_AddOns.LoadAddOn) ~= "function" then return false end
-    local ok = pcall(C_AddOns.LoadAddOn, OPTIONS_ADDON)
-    return ok and C_AddOns.IsAddOnLoaded(OPTIONS_ADDON) == true
-end
-
-function BCDM:OpenOptions()
-    if not self:LoadOptions() or type(self.CreateGUI) ~= "function" then return false end
-    self:CreateGUI()
-    return true
-end
-
-function BCDMG:OpenBCDMGUI() return BCDM:OpenOptions() end
-function BCDMG:CloseBCDMGUI()
-    if type(BCDM.CloseSettings) == "function" then return BCDM:CloseSettings() end
-end
-
 function BCDM:ResolveLSM()
     local LSM = BCDM.LSM
     local General = BCDM.db.profile.General
@@ -66,7 +45,7 @@ local function SetupSlashCommands()
     SLASH_BCDM1 = "/bcdm"
     SLASH_BCDM2 = "/bettercooldownmanager"
     SLASH_BCDM3 = "/bcm"
-    SlashCmdList["BCDM"] = function() BCDM:OpenOptions() end
+    SlashCmdList["BCDM"] = function() BCDM:CreateGUI() end
     SLASH_BCDMRELOAD1 = "/rl"
     SlashCmdList["BCDMRELOAD"] = function() C_UI.Reload() end
 end

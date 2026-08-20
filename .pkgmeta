@@ -32,7 +32,7 @@ externals:
 
 ignore:
     - README.md
-    - BetterCooldownManager_Options/Options/README.md
+    - Options/README.md
     - .git/
     - .github/
     - .vscode/

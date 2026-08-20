@@ -30,10 +30,7 @@ local function CreateDataObject(dataBroker)
         type = "launcher",
         icon = ICON_TEXTURE,
         OnClick = function(_, button)
-            if button == "LeftButton" then
-                if BCDM.OpenOptions then BCDM:OpenOptions()
-                elseif BCDM.ToggleSettings then BCDM:ToggleSettings() end
-            end
+            if button == "LeftButton" and BCDM.ToggleSettings then BCDM:ToggleSettings() end
         end,
         OnTooltipShow = function(tooltip)
             tooltip:AddLine(BCDM.ADDON_NAME or DATA_OBJECT_NAME)

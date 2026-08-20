@@ -1,7 +1,5 @@
 # Options
 
-This package is loaded on demand by BetterCooldownManager when its settings are opened.
-
 Better Cooldown Manager hosts its LibSharedCanvas panels in a draggable, resizable addon-owned window and also registers them with Blizzard's AddOns Settings.
 
 - `Settings.lua` keeps addon-wide controls, including minimap-button visibility, shared visibility, and shared bar appearance on the root page,
@@ -14,7 +12,6 @@ Better Cooldown Manager hosts its LibSharedCanvas panels in a draggable, resizab
 - `Utils.lua` adapts BCDM state and callbacks to `LibSharedCanvas-1.0` rows.
 - `Changelog.lua` contains the generated runtime copy of the current `CHANGELOG.md` release notes.
 - `Window.lua` hosts those LibSharedCanvas panels in BCDM's draggable and resizable settings window, including the sidebar Changelog page and persisted opacity control.
-- The options addon is load-on-demand; opening `/bcdm` or the minimap launcher loads it before creating the settings panels.
 - Essential and Utility share the same configurable parent-anchor model. Essential, Utility, and Tracked Buff pages continue to open Blizzard's native Cooldown Manager automatically on the matching Spells or Buffs tab. Viewer anchor changes save through LibEditModeOverride and securely update only the native Cooldown Viewer systems without opening Edit Mode, replacing Edit Mode manager state, or refreshing CompactUnitFrames, so both windows remain usable; addon-owned and late-loading ElvUI parents are persisted through `UIParent`, and changes are still deferred during combat, Edit Mode, or a pending native-panel open.
 
 Reusable panel layout, collapsible sections, standard controls, tooltips, and profile layouts belong to the external
