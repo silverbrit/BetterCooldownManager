@@ -52,11 +52,14 @@ function BCDM:SetupEventManager()
         if event == "PLAYER_SPECIALIZATION_CHANGED" then
             local unit = ...
             if unit ~= "player" then return end
-            BCDM:UpdateBCDM()
+            BCDM:InvalidateSecondaryResource()
+            BCDM:QueueRuntimeRefresh("structure")
             BCDM:QueueCooldownViewerLayoutApply()
-            if BCDM.RefreshSettings then BCDM:RefreshSettings() end
+            BCDM:RefreshSettings()
+        elseif event == "PLAYER_ENTERING_WORLD" then
+            BCDM:QueueRuntimeRefresh("full")
         else
-            BCDM:UpdateBCDM()
+            BCDM:QueueRuntimeRefresh("structure")
         end
     end)
 end

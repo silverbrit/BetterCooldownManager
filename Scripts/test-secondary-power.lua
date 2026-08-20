@@ -161,8 +161,16 @@ function BCDM:ApplyStatusBarDirection(bar, direction) bar:SetReverseFill(directi
 function BCDM:ClearTicks() clearTickCount = clearTickCount + 1 end
 function BCDM:CreateTicks(count) tickCount = count end
 function BCDM:FormatResourceText() return "formatted" end
+function BCDM:ApplyPowerBarOwnership(state)
+    if state == self.RENDER_UNAVAILABLE then self.SecondaryPowerBar:Hide()
+    else self.SecondaryPowerBar:Show() end
+end
 
 assert(loadfile(root .. "/Modules/SecondaryPowerBar.lua"))("BetterCooldownManager", BCDM)
+BCDM.QueueRuntimeRefresh = function() end
+BCDM.QueuePowerBarValueRefresh = function(_, refreshTicks)
+    BCDM:RefreshSecondaryPowerValues(refreshTicks)
+end
 
 local readers = BCDM._SecondaryResourceReaders
 local value, readable, widget
@@ -311,7 +319,7 @@ BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_MAXPOWER", "player")
 Check(#createdFrames >= 6, "turning DK HideTicks off recreates rune bars")
 local runeBarsReversed = true
 for _, frame in ipairs(createdFrames) do
-    if frame.reverseFill ~= true then runeBarsReversed = false end
+    if frame.value ~= nil and frame.reverseFill ~= true then runeBarsReversed = false end
 end
 Check(runeBarsReversed, "left fill applies to visible rune StatusBars")
 runeDataAvailable = false

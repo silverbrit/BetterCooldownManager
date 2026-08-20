@@ -42,3 +42,21 @@ ignore:
     - AGENTS.md
     - .pkgmeta
     - install-deps.sh
+    - Libraries/LibDeflate/.clang-format
+    - Libraries/LibDeflate/.gitignore
+    - Libraries/LibDeflate/.lua-format
+    - Libraries/LibDeflate/.luacov
+    - Libraries/LibDeflate/.luacheckrc
+    - Libraries/LibDeflate/.pkgmeta
+    - Libraries/LibDeflate/.prettierignore
+    - Libraries/LibDeflate/.prettierrc.json
+    - Libraries/LibDeflate/CONTRIBUTING.md
+    - Libraries/LibDeflate/LibDeflate.toc
+    - Libraries/LibDeflate/README.md
+    - Libraries/LibDeflate/changelog.md
+    - Libraries/LibDeflate/docs/
+    - Libraries/LibDeflate/dev_docs/
+    - Libraries/LibDeflate/examples/
+    - Libraries/LibDeflate/rockspecs/
+    - Libraries/LibDeflate/tests/
+    - Libraries/LibDeflate/tools/

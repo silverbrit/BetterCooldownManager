@@ -43,6 +43,37 @@ Check(table.concat(spellIDs, ",") == "50,100,200,300,400,500",
     "trinket aura candidates include every readable 12.1 spell field")
 Check(hasOnUse and hasCatalog, "matching equip-slot catalog records preserve their category state")
 
+local passiveIDs = BCDM._GetTrinketAuraSpellIDs(13, nil)
+Check(table.concat(passiveIDs, ",") == "100,200,300,400,500",
+    "passive trinket catalog entries can be cached without an item spell")
+records[10].spellID = 600
+local oldPassiveIDs = BCDM._GetTrinketAuraSpellIDs(13, nil)
+Check(table.concat(oldPassiveIDs, ",") == "100,200,300,400,500",
+    "passive trinket cache remains stable until catalog invalidation")
+BCDM:InvalidateTrinketCatalogCache()
+local refreshedPassiveIDs = BCDM._GetTrinketAuraSpellIDs(13, nil)
+Check(table.concat(refreshedPassiveIDs, ",") == "600,200,300,400,100,500",
+    "trinket catalog invalidation refreshes passive replacements")
+Check(eventFrame.events["PLAYER_SPECIALIZATION_CHANGED"]
+    and eventFrame.events["COOLDOWN_VIEWER_SPELL_OVERRIDE_UPDATED"],
+    "trinket catalog listens for specialization and override changes")
+records[10].spellID = 700
+eventFrame.OnEvent(nil, "PLAYER_SPECIALIZATION_CHANGED", "player")
+local specializationIDs = BCDM._GetTrinketAuraSpellIDs(13, nil)
+Check(table.concat(specializationIDs, ",") == "700,200,300,400,100,500",
+    "specialization changes invalidate trinket catalog entries")
+local oldFetchEquippedTrinkets = BCDM.FetchEquippedTrinkets
+local oldInCombatLockdown = InCombatLockdown
+BCDM.FetchEquippedTrinkets = function() end
+InCombatLockdown = function() return false end
+records[10].spellID = 800
+eventFrame.OnEvent(nil, "PLAYER_EQUIPMENT_CHANGED", 13)
+local equipmentIDs = BCDM._GetTrinketAuraSpellIDs(13, nil)
+Check(table.concat(equipmentIDs, ",") == "800,200,300,400,100,500",
+    "equipment changes invalidate trinket catalog entries")
+BCDM.FetchEquippedTrinkets = oldFetchEquippedTrinkets
+InCombatLockdown = oldInCombatLockdown
+
 assert(loadfile(root .. "/CustomViewers/AuraSourceDisplay.lua"))("BetterCooldownManager", BCDM)
 CustomAuraContainerSlotDefaultOptions = {}
 InCombatLockdown = function() return false end

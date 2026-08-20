@@ -161,16 +161,55 @@ local savedSpellAPI, savedSpellBookAPI = C_Spell, C_SpellBook
 C_Spell = { GetSpellInfo = function(spellID)
     return spellID == 900 and { name = "Bone Shield", iconID = 123 } or nil
 end }
-C_SpellBook = { IsSpellInSpellBook = function() return false end }
+C_SpellBook = {
+    IsSpellInSpellBook = function() return false end,
+    IsSpellKnown = function(spellID) return spellID == 900 end,
+}
 local auraEligible, cooldownAvailable, auraAvailable = BCDM._GetCustomTrackerSourceAvailability(
     { Source = { Type = "spell", ID = 900 } }, BCDM.CustomTrackerSourceAdapters.spell)
 Check(auraEligible and not cooldownAvailable and auraAvailable,
-    "valid aura spell IDs remain eligible without spellbook cooldown state")
+    "known aura spell IDs remain eligible without spellbook cooldown state")
+local savedIsSpellKnown = C_SpellBook.IsSpellKnown
+C_SpellBook.IsSpellKnown = function() return false end
+local unknownEligible, unknownCooldownAvailable, unknownAuraAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "spell", ID = 900 } }, BCDM.CustomTrackerSourceAdapters.spell)
+Check(not unknownEligible and not unknownCooldownAvailable and not unknownAuraAvailable,
+    "unknown spell IDs are filtered even when metadata is valid")
+C_SpellBook.IsSpellKnown = savedIsSpellKnown
 local unavailable = BCDM._GetCustomTrackerSourceAvailability(
     { Source = { Type = "spell", ID = 901 } },
     { IsAvailable = function() return false end })
 Check(not unavailable, "unavailable non-aura sources remain filtered")
 C_Spell, C_SpellBook = savedSpellAPI, savedSpellBook
+local savedItemAPI = C_Item
+local itemCount = 2
+C_Item = {
+    DoesItemExistByID = function(itemID) return itemID == 500 end,
+    GetItemCount = function(itemID) return itemID == 500 and itemCount or 0 end,
+}
+local itemEligible, itemCooldownAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "item", ID = 500 } }, BCDM.CustomTrackerSourceAdapters.item)
+Check(itemEligible and itemCooldownAvailable, "item trackers remain eligible while copies are available")
+itemCount = 0
+itemEligible, itemCooldownAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "item", ID = 500 } }, BCDM.CustomTrackerSourceAdapters.item)
+Check(not itemEligible and not itemCooldownAvailable, "item trackers hide when no copies remain")
+C_Item = savedItemAPI
+local trackerStateCalls = 0
+local trackerStateAdapter = {
+    GetState = function()
+        trackerStateCalls = trackerStateCalls + 1
+        return { ready = true }
+    end,
+}
+local trackerStateIcon = { CooldownAvailable = false }
+local trackerState = BCDM._GetCustomTrackerState(trackerStateIcon, trackerStateAdapter, { Source = {} })
+Check(trackerStateCalls == 0 and trackerState.ready == nil,
+    "aura-only tracker state refreshes do not read cooldown state")
+trackerStateIcon.CooldownAvailable = true
+trackerState = BCDM._GetCustomTrackerState(trackerStateIcon, trackerStateAdapter, { Source = {} })
+Check(trackerStateCalls == 1 and trackerState.ready == true,
+    "learned tracker state refreshes read cooldown state")
 Check(BCDM:FormatResourceText(25, 100, "CURRENT_MAX") == "25 / 100", "resource text supports current and maximum")
 Check(BCDM:FormatResourceText(25, 100, "PERCENT") == "25%", "resource text supports percentages")
 local secretValue = {}
@@ -439,6 +478,8 @@ Check(store.BarOrder[#store.BarOrder] == recycledID, "new bars append without re
 Check(assert(loadfile(root .. "/Scripts/test-glows.lua"))(root), "custom glow lifecycle tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-cooldown-runtime.lua"))(root),
     "Cooldown Manager runtime safety tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-refresh-scheduler.lua"))(root, BCDM, Check),
+    "runtime refresh scheduler tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-owned-bars.lua"))(root, BCDM, Check),
     "owned bar visibility, anchoring, and width tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-secondary-power.lua"))(root),

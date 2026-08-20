@@ -5,6 +5,7 @@ local function frame()
         shown = false,
         Show = function(self) self.shown = true end,
         Hide = function(self) self.shown = false end,
+        IsShown = function(self) return self.shown end,
         SetWidth = function(self, width) self.width = width end,
     }
 end
@@ -84,6 +85,12 @@ apply(RENDER_READABLE)
 Check(powerBar.shown and not secondaryPowerBar.shown,
     "visibility changes apply without another world event")
 
+powerBar:Hide()
+secondaryPowerBar:Hide()
+apply(RENDER_READABLE)
+Check(powerBar.shown and not secondaryPowerBar.shown,
+    "owned bar visibility is reapplied after an external hide")
+
 for _, formID in ipairs({ 31, 32, 33, 34, 35 }) do
     Check(BCDM:ResolvePrimaryDisplayPowerType(8, "DRUID", 1, formID) == 8,
         "Balance Moonkin forms retain their display power")
@@ -141,6 +148,9 @@ powerModule.ResolvePrimaryDisplayPowerType = function(_, powerType, class, speci
     return BCDM:ResolvePrimaryDisplayPowerType(powerType, class, specialization, formID)
 end
 powerModule.ApplyPowerBarOwnership = function() end
+powerModule.RefreshSecondaryPowerValues = function() end
+local savedPowerTimer = C_Timer
+C_Timer = { After = function(_, callback) callback() end }
 UnitClass = function() return "", "MAGE" end
 UnitPowerType = function() return currentType end
 UnitPower = function() return currentPower end
@@ -165,6 +175,7 @@ powerModule._PowerBarOnEvent(nil, "UNIT_POWER_UPDATE")
 Check(formattedPowerText and formattedPowerText[1] == "%d" and formattedPowerText[2] == secretPower,
     "restricted power values use the FontString widget formatter instead of clearing text")
 powerModule.IsSecretValue = plainSecretCheck
+C_Timer = savedPowerTimer
 
 CreateFrame = savedCreateFrame
 for name, value in pairs(savedPowerGlobals) do _G[name] = value end

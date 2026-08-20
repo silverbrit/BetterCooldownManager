@@ -219,33 +219,33 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
     end)
 
     local function UsingShared() return Slot().OverrideBarSettings ~= true end
-    local function SlotField(field, fallback)
+    local function Field(readTarget, writeTarget, field, fallback)
         return function()
-            local value = ResolvedSettings()[field]
+            local value = readTarget()[field]
             return value == nil and fallback or value
         end, function(value)
-            Slot()[field] = value
+            writeTarget()[field] = value
             Changed(panel, callback)
         end
     end
-    local get, set = SlotField("DisplayMode", "ALWAYS")
+    local get, set = Field(ResolvedSettings, Slot, "DisplayMode", "ALWAYS")
     U.Dropdown(controls, behavior, "Display Mode", get, set, function() return DISPLAY_MODES end,
         { hidden = UsingShared })
-    get, set = SlotField("VisualMode", "FULL")
+    get, set = Field(ResolvedSettings, Slot, "VisualMode", "FULL")
     U.Dropdown(controls, behavior, "Appearance", get, set, function() return VISUAL_MODES end,
         { hidden = UsingShared })
-    get, set = SlotField("Alpha", 0.45)
+    get, set = Field(ResolvedSettings, Slot, "Alpha", 0.45)
     U.Slider(controls, behavior, "Opacity", get, set, {
         min = 0.05, max = 1, step = 0.05,
         hidden = function() return UsingShared() or Slot().VisualMode ~= "LOW_ALPHA" end,
         formatter = function(value) return string.format("%.0f%%", (tonumber(value) or 0) * 100) end,
     })
-    get, set = SlotField("Glow", "NONE")
+    get, set = Field(ResolvedSettings, Slot, "Glow", "NONE")
     U.Dropdown(controls, behavior, "Glow", get, set, function() return GLOW_MODES end,
         { hidden = UsingShared })
-    get, set = SlotField("TextEnabled", true)
+    get, set = Field(ResolvedSettings, Slot, "TextEnabled", true)
     U.Checkbox(controls, behavior, "Show Text", get, set, { hidden = UsingShared })
-    get, set = SlotField("Tooltip", true)
+    get, set = Field(ResolvedSettings, Slot, "Tooltip", true)
     U.Checkbox(controls, behavior, "Show Tooltip", get, set, { hidden = UsingShared })
 
     local filters = Canvas.CreateBaseRow(behavior.Content, 28)
@@ -270,30 +270,21 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
         settings.EntrySettings = type(settings.EntrySettings) == "table" and settings.EntrySettings or {}
         return settings.EntrySettings
     end
-    local function SharedField(field, fallback)
-        return function()
-            local value = SharedTarget()[field]
-            return value == nil and fallback or value
-        end, function(value)
-            SharedTarget()[field] = value
-            Changed(panel, callback)
-        end
-    end
-    get, set = SharedField("DisplayMode", "ALWAYS")
+    get, set = Field(SharedTarget, SharedTarget, "DisplayMode", "ALWAYS")
     U.Dropdown(controls, shared, "Display Mode", get, set, function() return DISPLAY_MODES end)
-    get, set = SharedField("VisualMode", "FULL")
+    get, set = Field(SharedTarget, SharedTarget, "VisualMode", "FULL")
     U.Dropdown(controls, shared, "Appearance", get, set, function() return VISUAL_MODES end)
-    get, set = SharedField("Alpha", 0.45)
+    get, set = Field(SharedTarget, SharedTarget, "Alpha", 0.45)
     U.Slider(controls, shared, "Opacity", get, set, {
         min = 0.05, max = 1, step = 0.05,
         hidden = function() return SharedTarget().VisualMode ~= "LOW_ALPHA" end,
         formatter = function(value) return string.format("%.0f%%", (tonumber(value) or 0) * 100) end,
     })
-    get, set = SharedField("Glow", "NONE")
+    get, set = Field(SharedTarget, SharedTarget, "Glow", "NONE")
     U.Dropdown(controls, shared, "Glow", get, set, function() return GLOW_MODES end)
-    get, set = SharedField("TextEnabled", true)
+    get, set = Field(SharedTarget, SharedTarget, "TextEnabled", true)
     U.Checkbox(controls, shared, "Show Text", get, set)
-    get, set = SharedField("Tooltip", true)
+    get, set = Field(SharedTarget, SharedTarget, "Tooltip", true)
     U.Checkbox(controls, shared, "Show Tooltip", get, set)
 
     local sharedFilters = Canvas.CreateBaseRow(shared.Content, 28)

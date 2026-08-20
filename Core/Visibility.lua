@@ -1,6 +1,7 @@
 local _, BCDM = ...
 
 local registrations = setmetatable({}, { __mode = "k" })
+local visibilityState
 
 function BCDM:NewVisibilityPolicy()
     return {
@@ -37,8 +38,9 @@ local function CurrentInstance()
 end
 
 local function CurrentState()
+    if visibilityState then return visibilityState end
     local gliding = C_PlayerInfo and C_PlayerInfo.GetGlidingInfo and C_PlayerInfo.GetGlidingInfo()
-    return {
+    visibilityState = {
         Combat = InCombatLockdown() == true,
         Instance = CurrentInstance(),
         Mounted = IsMounted() == true or gliding == true,
@@ -46,6 +48,7 @@ local function CurrentState()
         Vehicle = UnitInVehicle("player") == true,
         Resting = IsResting() == true,
     }
+    return visibilityState
 end
 
 function BCDM:GetOwnedFrameVisibilityPolicy(config)
@@ -111,6 +114,7 @@ function BCDM:SetupVisibilityEvents()
             and unit ~= "player" then
             return
         end
+        visibilityState = nil
         BCDM:RefreshOwnedFrameVisibility()
     end)
     self.VisibilityEventFrame = frame

@@ -45,7 +45,8 @@ svn export https://repos.curseforge.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0 "$
 svn export https://repos.curseforge.com/wow/libstub/trunk "${staged_libraries}/LibStub"
 svn export https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0 "${staged_libraries}/LibSharedMedia-3.0"
 
-git clone --depth 1 https://github.com/SafeteeWoW/LibDeflate.git "${staged_libraries}/LibDeflate"
+git clone --depth 1 --filter=blob:none --sparse https://github.com/SafeteeWoW/LibDeflate.git "${staged_libraries}/LibDeflate"
+git -C "${staged_libraries}/LibDeflate" sparse-checkout set --no-cone LibDeflate.lua
 git clone --depth 1 https://github.com/tekkub/libdatabroker-1-1.git "${staged_libraries}/LibDataBroker-1.1"
 git clone --depth 1 --branch master https://github.com/Stanzilla/LibCustomGlow.git "${staged_libraries}/LibCustomGlow-1.0"
 git clone --depth 1 --branch master https://github.com/AdiAddons/LibDualSpec-1.0.git "${staged_libraries}/LibDualSpec-1.0"
