@@ -22,7 +22,7 @@ Keep tracker migrations idempotent. Convert every profile, preserve appearance a
 
 Coalesce bursts of events into one refresh. Use one shared timer scheduler for fixed-duration entries. Do not create one ticker or `OnUpdate` script per icon.
 
-Keep source-specific reads behind adapters. Spell and item sources resolve native cooldown state, equipment sources use inventory-slot cooldowns, and timer sources store session-only completion times from successful player casts.
+Keep source-specific reads behind adapters. Spell sources use current-player spell knowledge for AuraContainer-only fallback and native spellbook availability for cooldown state; item sources resolve native cooldown state, equipment sources use inventory-slot cooldowns, and timer sources store session-only completion times from successful player casts.
 
 Spell aura presentation is separate from cooldown-state policy. AuraContainers own active aura visibility and duration widgets; BCM keeps the normal cooldown beneath them and never converts secret aura visibility into Lua state.
 

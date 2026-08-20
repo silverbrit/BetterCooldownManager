@@ -161,11 +161,21 @@ local savedSpellAPI, savedSpellBookAPI = C_Spell, C_SpellBook
 C_Spell = { GetSpellInfo = function(spellID)
     return spellID == 900 and { name = "Bone Shield", iconID = 123 } or nil
 end }
-C_SpellBook = { IsSpellInSpellBook = function() return false end }
+C_SpellBook = {
+    IsSpellInSpellBook = function() return false end,
+    IsSpellKnown = function(spellID) return spellID == 900 end,
+}
 local auraEligible, cooldownAvailable, auraAvailable = BCDM._GetCustomTrackerSourceAvailability(
     { Source = { Type = "spell", ID = 900 } }, BCDM.CustomTrackerSourceAdapters.spell)
 Check(auraEligible and not cooldownAvailable and auraAvailable,
-    "valid aura spell IDs remain eligible without spellbook cooldown state")
+    "known aura spell IDs remain eligible without spellbook cooldown state")
+local savedIsSpellKnown = C_SpellBook.IsSpellKnown
+C_SpellBook.IsSpellKnown = function() return false end
+local unknownEligible, unknownCooldownAvailable, unknownAuraAvailable = BCDM._GetCustomTrackerSourceAvailability(
+    { Source = { Type = "spell", ID = 900 } }, BCDM.CustomTrackerSourceAdapters.spell)
+Check(not unknownEligible and not unknownCooldownAvailable and not unknownAuraAvailable,
+    "unknown spell IDs are filtered even when metadata is valid")
+C_SpellBook.IsSpellKnown = savedIsSpellKnown
 local unavailable = BCDM._GetCustomTrackerSourceAvailability(
     { Source = { Type = "spell", ID = 901 } },
     { IsAvailable = function() return false end })

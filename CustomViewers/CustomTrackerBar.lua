@@ -84,6 +84,12 @@ local function GetSpellInfo(source)
     return ok and info or nil
 end
 
+local function IsSpellKnown(source)
+    if not (C_SpellBook and C_SpellBook.IsSpellKnown) then return false end
+    local ok, known = pcall(C_SpellBook.IsSpellKnown, source.ID)
+    return ok and known == true
+end
+
 SourceAdapters.spell = {
     GetMetadata = function(source)
         local info = GetSpellInfo(source)
@@ -96,7 +102,9 @@ SourceAdapters.spell = {
         return ok and available == true
     end,
     IsAuraAvailable = function(source)
-        return GetSpellInfo(source) ~= nil
+        -- GetSpellInfo provides metadata for every valid ID. Aura-only entries
+        -- still need to belong to the current player before they can render.
+        return GetSpellInfo(source) ~= nil and IsSpellKnown(source)
     end,
     GetState = function(source)
         local charges = C_Spell.GetSpellCharges(source.ID)
