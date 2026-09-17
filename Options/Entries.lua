@@ -348,7 +348,8 @@ end
 local function EntryItemCount(entry)
     local source = type(entry) == "table" and entry.Source
     if not (type(source) == "table" and source.Type == "item" and C_Item and C_Item.GetItemCount) then return "" end
-    local ok, count = pcall(C_Item.GetItemCount, source.ID)
+    local includeUses = source.ID == 5512 or source.ID == 224464
+    local ok, count = pcall(C_Item.GetItemCount, source.ID, false, includeUses)
     if not ok or type(count) ~= "number" or BCDM:IsSecretValue(count) or count <= 0 then return "" end
     return tostring(count)
 end

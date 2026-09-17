@@ -100,8 +100,9 @@ local function EnsureViewerLayoutEventFrame()
         local addonName = ...
         if event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
             BCDM:QueueCooldownViewerLayoutApply()
-        elseif event == "ADDON_LOADED" and addonName == "ElvUI" then
-            -- ElvUI creates the supported ElvUF_* anchors after BCM may have
+        elseif event == "ADDON_LOADED"
+            and (addonName == "ElvUI" or addonName == "EllesmereUIUnitFrames") then
+            -- External unit-frame addons can create their anchors after BCM
             -- already queued a layout with an unavailable relative frame.
             BCDM:RetryPendingCooldownViewerLayoutApply()
         end
@@ -161,7 +162,8 @@ local function GetPersistentViewerAnchor(layout)
 
     local anchorParent = BCDM:ResolveAnchorParent(anchorName)
     local requiresStableAnchor = type(anchorName) == "string"
-        and (anchorName:match("^BCDM_") or anchorName:match("^ElvUF_"))
+        and (anchorName:match("^BCDM_") or anchorName:match("^ElvUF_")
+            or anchorName:match("^EllesmereUIUnitFrames_"))
     if not requiresStableAnchor then
         return anchorParent, relativePoint, xOffset, yOffset
     end
@@ -1456,6 +1458,11 @@ local function InstallCooldownViewerHook(object, method, callback)
     return ok
 end
 
+local function QueueCooldownViewerDependentBarWidths()
+    if BCDM.QueuePowerBarWidthUpdates then BCDM:QueuePowerBarWidthUpdates() end
+    if BCDM.UpdateCastBarWidth then BCDM:UpdateCastBarWidth() end
+end
+
 local function SetHooks()
     if hooksSet then return end
     local hooksOK = true
@@ -1483,6 +1490,9 @@ local function SetHooks()
                 if not viewerLayoutApplying then BCDM:QueueCooldownViewerLayoutApply() end
                 BCDM:QueueCooldownViewerStyleRefresh()
             end, BCDM)
+            EventRegistry:RegisterCallback("CooldownViewerSettings.OnDataChanged", function()
+                QueueCooldownViewerDependentBarWidths()
+            end, BCDM)
             cooldownViewerEventHooksSet = true
         else
             hooksOK = false
@@ -1491,6 +1501,7 @@ local function SetHooks()
     hooksOK = InstallCooldownViewerHook(CooldownViewerSettings, "RefreshLayout", function()
         BCDM:QueueCooldownViewerStyleRefresh()
         QueueCenteredTrackedBuffs()
+        QueueCooldownViewerDependentBarWidths()
     end) and hooksOK
     for _, viewerName in ipairs(BCDM.CooldownManagerViewers) do
         local viewer = _G[viewerName]
@@ -1499,6 +1510,7 @@ local function SetHooks()
             if type(viewer.RefreshData) == "function" then
                 hooksOK = InstallCooldownViewerHook(viewer, "RefreshData", function()
                     BCDM:QueueCooldownViewerStyleRefresh()
+                    QueueCooldownViewerDependentBarWidths()
                     if hookedViewerName == "BuffIconCooldownViewer" then
                         QueueCenteredTrackedBuffs()
                         QueueSettingsHighlightRefresh()
@@ -1508,6 +1520,7 @@ local function SetHooks()
             if type(viewer.RefreshLayout) == "function" then
                 hooksOK = InstallCooldownViewerHook(viewer, "RefreshLayout", function()
                     BCDM:QueueCooldownViewerStyleRefresh()
+                    QueueCooldownViewerDependentBarWidths()
                     if hookedViewerName == "BuffIconCooldownViewer" then
                         centeredTrackedBuffNativeLayout = false
                         HookCenteredTrackedBuffFrames()
@@ -1753,8 +1766,7 @@ function BCDM:UpdateCooldownViewer(viewerType)
         QueueCenteredTrackedBuffs()
     end
 
-    if BCDM.QueuePowerBarWidthUpdates then BCDM:QueuePowerBarWidthUpdates() end
-    BCDM:UpdateCastBarWidth()
+    QueueCooldownViewerDependentBarWidths()
 end
 
 function BCDM:UpdateCooldownViewers()

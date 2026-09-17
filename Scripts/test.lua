@@ -106,12 +106,21 @@ Check(defaults.profile.CooldownManager.Trinket.IconSize == 32
     and defaults.profile.CooldownManager.Trinket.Layout[3] == "CENTER",
     "trinkets default to 32px icons centered on Blizzard UIParent")
 local savedIsElvUIActive = BCDM.IsElvUIActive
+local savedIsEllesmereUIActive = BCDM.IsEllesmereUIActive
 BCDM.IsElvUIActive = function() return true end
 local elvTrinketLayout = BCDM:GetDefaultTrinketLayout()
+BCDM.IsElvUIActive = function() return false end
+BCDM.IsEllesmereUIActive = function() return true end
+local ellesmereTrinketLayout = BCDM:GetDefaultTrinketLayout()
 BCDM.IsElvUIActive = savedIsElvUIActive
+BCDM.IsEllesmereUIActive = savedIsEllesmereUIActive
 Check(elvTrinketLayout[1] == "TOPRIGHT" and elvTrinketLayout[2] == "ElvUF_Player"
     and elvTrinketLayout[3] == "BOTTOMRIGHT",
     "ElvUI trinkets keep the player-frame bottom-right default")
+Check(ellesmereTrinketLayout[1] == "TOPRIGHT"
+    and ellesmereTrinketLayout[2] == "EllesmereUIUnitFrames_Player"
+    and ellesmereTrinketLayout[3] == "BOTTOMRIGHT",
+    "EllesmereUI trinkets keep the player-frame bottom-right default")
 local legacyTrinketProfile = {
     CooldownManager = { Trinket = { Layout = { "TOPRIGHT", "ElvUF_Player", "BOTTOMRIGHT", 0, 0 } } },
 }
@@ -183,9 +192,17 @@ Check(not unavailable, "unavailable non-aura sources remain filtered")
 C_Spell, C_SpellBook = savedSpellAPI, savedSpellBook
 local savedItemAPI = C_Item
 local itemCount = 2
+local healthstoneIncludeUses
 C_Item = {
     DoesItemExistByID = function(itemID) return itemID == 500 end,
-    GetItemCount = function(itemID) return itemID == 500 and itemCount or 0 end,
+    GetItemCount = function(itemID, _, includeUses)
+        if itemID == 5512 then
+            healthstoneIncludeUses = includeUses
+            return includeUses and 3 or 1
+        end
+        return itemID == 500 and itemCount or 0
+    end,
+    GetItemCooldown = function() return 0, 0 end,
 }
 local itemEligible, itemCooldownAvailable = BCDM._GetCustomTrackerSourceAvailability(
     { Source = { Type = "item", ID = 500 } }, BCDM.CustomTrackerSourceAdapters.item)
@@ -194,6 +211,10 @@ itemCount = 0
 itemEligible, itemCooldownAvailable = BCDM._GetCustomTrackerSourceAvailability(
     { Source = { Type = "item", ID = 500 } }, BCDM.CustomTrackerSourceAdapters.item)
 Check(not itemEligible and not itemCooldownAvailable, "item trackers hide when no copies remain")
+local healthstoneState = BCDM.CustomTrackerSourceAdapters.item.GetState({ ID = 5512 })
+Check(healthstoneState.count == 3 and healthstoneState.showCount == true
+    and healthstoneIncludeUses == true,
+    "Healthstone item trackers display Blizzard's charge count")
 C_Item = savedItemAPI
 local trackerStateCalls = 0
 local trackerStateAdapter = {
@@ -269,9 +290,17 @@ Check(elvAnchors[1].PlayerFrame == nil and elvAnchors[1].TargetFrame == nil,
     "ElvUI anchor lists omit Blizzard unit frames")
 Check(elvAnchors[1].ElvUF_Player == "ElvUI Player" and elvAnchors[1].ElvUF_Target == "ElvUI Target",
     "ElvUI unit-frame anchors are added dynamically")
+local ellesmereAnchors = BCDM:BuildAnchorParents(anchorSource, false, {}, true, {
+    EllesmereUIUnitFrames_Player = "EllesmereUI Player",
+    EllesmereUIUnitFrames_Target = "EllesmereUI Target",
+})
+Check(ellesmereAnchors[1].PlayerFrame == nil and ellesmereAnchors[1].TargetFrame == nil
+    and ellesmereAnchors[1].EllesmereUIUnitFrames_Player == "EllesmereUI Player"
+    and ellesmereAnchors[1].EllesmereUIUnitFrames_Target == "EllesmereUI Target",
+    "EllesmereUI anchor lists omit Blizzard unit frames and add EUI frames")
 local blizzardAnchors = BCDM:BuildAnchorParents(anchorSource, false, {})
 Check(blizzardAnchors[1].PlayerFrame == "Player" and blizzardAnchors[1].ElvUF_Player == nil,
-    "Blizzard unit-frame anchors remain without ElvUI")
+    "Blizzard unit-frame anchors remain without an external unit-frame addon")
 
 local implicitLegacyDefaults = { CastBar = {}, PowerBar = {}, SecondaryPowerBar = {} }
 BCDM:NormalizeBarColourProfile(implicitLegacyDefaults)

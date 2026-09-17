@@ -24,6 +24,8 @@ Coalesce bursts of events into one refresh. Use one shared timer scheduler for f
 
 Keep source-specific reads behind adapters. Spell sources use current-player spell knowledge for AuraContainer-only fallback and native spellbook availability for cooldown state; item sources require a readable positive inventory count and resolve native cooldown state, equipment sources use inventory-slot cooldowns, and timer sources store session-only completion times from successful player casts.
 
+When Blizzard Cooldown Viewer data or layout changes, queue width-dependent BCM bars after the native refresh completes. Power and Cast Bars that match a native viewer's width cannot rely only on BCM setting updates or Edit Mode transitions.
+
 Spell aura presentation is separate from cooldown-state policy. AuraContainers own active aura visibility and duration widgets; BCM keeps the normal cooldown beneath them and never converts secret aura visibility into Lua state.
 
 ## Visibility and anchoring

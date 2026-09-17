@@ -216,22 +216,23 @@ local function TryMethod(object, method, ...)
 end
 
 local function CreateCastTimeBinding(fontString)
+    -- SecondsFormatter always appends a unit; cast text should stay numeric.
     if not (C_DurationUtil and type(C_DurationUtil.CreateDurationTextBinding) == "function") then return end
-    if not (C_StringUtil and type(C_StringUtil.CreateSecondsFormatter) == "function") then return end
+    if not (C_StringUtil and type(C_StringUtil.CreateNumericRuleFormatter) == "function") then return end
+
+    local rounding = Enum and Enum.NumericRuleFormatRounding
+        and Enum.NumericRuleFormatRounding.Down
+    if rounding == nil then return end
 
     local ok, binding = pcall(C_DurationUtil.CreateDurationTextBinding)
     if not ok or not binding then return end
-    local formatterOK, formatter = pcall(C_StringUtil.CreateSecondsFormatter)
-    if not formatterOK or not formatter then return end
-
-    TryMethod(formatter, "SetDesiredUnitCount", 1)
-    local secondsInterval = Enum and Enum.SecondsFormatterInterval and Enum.SecondsFormatterInterval.Seconds
-    if secondsInterval ~= nil then TryMethod(formatter, "SetMinInterval", secondsInterval) end
-    local noAbbreviation = Enum and Enum.SecondsFormatterAbbreviation and Enum.SecondsFormatterAbbreviation.None
-    if noAbbreviation ~= nil then TryMethod(formatter, "SetDefaultAbbreviation", noAbbreviation) end
-    local truncate = Enum and Enum.SecondsFormatterRounding and Enum.SecondsFormatterRounding.Truncate
-    if truncate ~= nil then TryMethod(formatter, "SetRounding", truncate) end
-    TryMethod(formatter, "SetMillisecondsThreshold", 5)
+    local formatterOK, formatter = pcall(C_StringUtil.CreateNumericRuleFormatter)
+    if not formatterOK or not formatter or type(formatter.SetBreakpoints) ~= "function" then return end
+    if not pcall(formatter.SetBreakpoints, formatter, {
+        { threshold = 0, format = "%d", step = 1, rounding = rounding },
+    }) then
+        return
+    end
 
     local formatterSet = pcall(binding.SetFormatter, binding, formatter)
     local fontStringSet = pcall(binding.SetFontString, binding, fontString)
@@ -440,6 +441,12 @@ local function UpdateCastBarValues(self, event, unit, payload2, payload3, payloa
 end
 
 local function SetNativePlayerCastBarShown(shown)
+    local eui = _G.EllesmereUI
+    if eui and type(eui.SetPlayerCastBarSuppressed) == "function"
+        and pcall(eui.SetPlayerCastBarSuppressed, "BetterCooldownManager", not shown) then
+        return
+    end
+
     local nativeCastBar = _G.PlayerCastingBarFrame
     if nativeCastBar and type(nativeCastBar.SetAndUpdateShowCastbar) == "function" then
         nativeCastBar:SetAndUpdateShowCastbar(shown)

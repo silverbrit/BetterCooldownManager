@@ -57,7 +57,8 @@ end
 
 local function GetItemCount(itemID)
     if not (C_Item and C_Item.GetItemCount) then return end
-    local ok, count = pcall(C_Item.GetItemCount, itemID)
+    local includeUses = itemID == 5512 or itemID == 224464
+    local ok, count = pcall(C_Item.GetItemCount, itemID, false, includeUses)
     return ok and ReadNumber(count) or nil
 end
 
@@ -118,7 +119,7 @@ SourceAdapters.spell = {
         local state = { count = nil, active = nil, ready = nil, durationObject = nil }
         local maxCharges = ReadNumber(ReadField(charges, "maxCharges"))
         if maxCharges and maxCharges > 1 then
-            state.count = ReadNumber(ReadField(charges, "currentCharges"))
+            state.count, state.showCount = ReadNumber(ReadField(charges, "currentCharges")), true
             state.ready = state.count and state.count > 0 or nil
             state.active = state.count and state.count <= 0 or nil
             state.durationObject = C_Spell.GetSpellChargeDuration and C_Spell.GetSpellChargeDuration(source.ID)
@@ -162,7 +163,8 @@ SourceAdapters.item = {
         local count = GetItemCount(source.ID)
         local startTime, duration = C_Item.GetItemCooldown(source.ID)
         startTime, duration = ReadNumber(startTime), ReadNumber(duration)
-        local state = { count = ReadNumber(count), active = nil, ready = nil }
+        local state = { count = ReadNumber(count), active = nil, ready = nil,
+            showCount = source.ID == 5512 or source.ID == 224464 }
         if startTime and duration then
             state.active = startTime > 0 and duration > 0
             state.ready = not state.active
@@ -351,7 +353,9 @@ local function UpdateIconState(icon, state)
         ClearCooldown(icon.Cooldown)
     end
     local style = icon.EntryStyle or icon.Entry
-    icon.Count:SetText(style.TextEnabled ~= false and state.count and state.count > 1 and tostring(state.count) or "")
+    local showCount = state.count and state.count > 0
+        and (state.showCount or state.count > 1)
+    icon.Count:SetText(style.TextEnabled ~= false and showCount and tostring(state.count) or "")
     local visualMode = style.VisualMode or "FULL"
     icon:SetAlpha(visualMode == "LOW_ALPHA" and (tonumber(style.Alpha) or 0.45) or 1)
     SetDesaturated(icon.Icon, visualMode == "DESATURATE")

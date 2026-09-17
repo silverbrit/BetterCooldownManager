@@ -5,32 +5,50 @@ local ELVUI_ANCHORS = {
     ElvUF_Target = "|cff1784d1ElvUI|r: Target Frame",
 }
 
+local ELLESMEREUI_ANCHORS = {
+    EllesmereUIUnitFrames_Player = "|cff0cd29fEllesmereUI|r: Player Frame",
+    EllesmereUIUnitFrames_Target = "|cff0cd29fEllesmereUI|r: Target Frame",
+}
+
+local UNIT_FRAME_KEYS = { PlayerFrame = true, TargetFrame = true }
+local ELVUI_ANCHOR_KEYS = { "ElvUF_Player", "ElvUF_Target" }
+local ELLESMEREUI_ANCHOR_KEYS = {
+    "EllesmereUIUnitFrames_Player", "EllesmereUIUnitFrames_Target",
+}
+
 local ANCHOR_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true,
     LEFT = true, CENTER = true, RIGHT = true,
     BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true,
 }
 
-function BCDM:BuildAnchorParents(source, elvUIActive, elvUIAnchors)
+local function AddAnchorSet(labels, order, active, anchors, keys)
+    if not active then return end
+    for _, key in ipairs(keys) do
+        if labels[key] == nil and anchors[key] ~= nil then
+            labels[key] = anchors[key]
+            order[#order + 1] = key
+        end
+    end
+end
+
+function BCDM:BuildAnchorParents(source, elvUIActive, elvUIAnchors, ellesmereUIActive, ellesmereUIAnchors)
     if type(source) ~= "table" then return { {}, {} } end
     local labels, order = {}, {}
+    local replaceBlizzardUnitFrames = elvUIActive or ellesmereUIActive
     for _, key in ipairs(source[2] or {}) do
-        if not (elvUIActive and (key == "PlayerFrame" or key == "TargetFrame")) then
+        if not (replaceBlizzardUnitFrames and UNIT_FRAME_KEYS[key]) then
             labels[key] = source[1] and source[1][key]
             order[#order + 1] = key
         end
     end
     for key, label in pairs(source[1] or {}) do
-        if labels[key] == nil and not (elvUIActive and (key == "PlayerFrame" or key == "TargetFrame")) then
+        if labels[key] == nil and not (replaceBlizzardUnitFrames and UNIT_FRAME_KEYS[key]) then
             labels[key] = label
         end
     end
-    if elvUIActive then
-        for _, key in ipairs({ "ElvUF_Player", "ElvUF_Target" }) do
-            labels[key] = elvUIAnchors[key]
-            order[#order + 1] = key
-        end
-    end
+    AddAnchorSet(labels, order, elvUIActive, elvUIAnchors or {}, ELVUI_ANCHOR_KEYS)
+    AddAnchorSet(labels, order, ellesmereUIActive, ellesmereUIAnchors or {}, ELLESMEREUI_ANCHOR_KEYS)
     return { labels, order }
 end
 
@@ -38,15 +56,24 @@ function BCDM:IsElvUIActive()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI") == true
 end
 
+function BCDM:IsEllesmereUIActive()
+    return C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("EllesmereUIUnitFrames") == true
+end
+
 function BCDM:GetDefaultTrinketLayout()
     if self:IsElvUIActive() then
         return { "TOPRIGHT", "ElvUF_Player", "BOTTOMRIGHT", 0, 0 }
+    elseif self:IsEllesmereUIActive() then
+        return { "TOPRIGHT", "EllesmereUIUnitFrames_Player", "BOTTOMRIGHT", 0, 0 }
     end
     return { "CENTER", "NONE", "CENTER", 0, 0 }
 end
 
 function BCDM:GetAnchorParents(anchorType)
-    return self:BuildAnchorParents(self.AnchorParents[anchorType], self:IsElvUIActive(), ELVUI_ANCHORS)
+    local elvUIActive = self:IsElvUIActive()
+    return self:BuildAnchorParents(self.AnchorParents[anchorType], elvUIActive, ELVUI_ANCHORS,
+        self:IsEllesmereUIActive(), ELLESMEREUI_ANCHORS)
 end
 
 local function IsSecret(self, value)

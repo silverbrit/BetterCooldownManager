@@ -161,22 +161,16 @@ C_DurationUtil = {
     end,
 }
 C_StringUtil = {
-    CreateSecondsFormatter = function()
+    CreateNumericRuleFormatter = function()
         local formatter = {}
-        function formatter:SetDesiredUnitCount() end
-        function formatter:SetMinInterval() end
-        function formatter:SetDefaultAbbreviation() end
-        function formatter:SetRounding() end
-        function formatter:SetMillisecondsThreshold() end
+        function formatter:SetBreakpoints(breakpoints) self.breakpoints = breakpoints end
         return formatter
     end,
 }
 Enum = {
     StatusBarInterpolation = { Immediate = "immediate" },
     StatusBarTimerDirection = { ElapsedTime = "elapsed", RemainingTime = "remaining" },
-    SecondsFormatterInterval = { Seconds = 0 },
-    SecondsFormatterAbbreviation = { None = 0 },
-    SecondsFormatterRounding = { Truncate = 1 },
+    NumericRuleFormatRounding = { Down = 2 },
 }
 RAID_CLASS_COLORS = { MAGE = { r = 0.4, g = 0.6, b = 1 } }
 STANDARD_TEXT_FONT = "standard-font"
@@ -264,6 +258,9 @@ local secretTextOK = pcall(function() returnedSecretText = displayCastText(secre
 Check(secretTextOK and returnedSecretText == secretText, "secret cast text passes through without inspection")
 
 Check(nativeCastBar.shown == false, "enabling BCM hides the native cast bar through Blizzard's API")
+Check(bar.CastTimeBinding and bar.CastTimeBinding.formatter
+    and bar.CastTimeBinding.formatter.breakpoints[1].format == "%d",
+    "cast-time text uses a bare numeric formatter without a seconds label")
 Check(bar.SpellNameText.font[1] == STANDARD_TEXT_FONT and bar.CastTimeText.font[1] == STANDARD_TEXT_FONT,
     "cast text falls back to the standard font when media font is unavailable")
 Check(bar.SpellNameText.justifyH == "LEFT" and bar.SpellNameText.wordWrap == false
@@ -474,5 +471,24 @@ bar.widthWrites = 0
 BCDM:UpdateCastBarWidth()
 RunTimers()
 Check(bar.width == UIParent.width, "CastBar width resolution falls back to UIParent for cycles")
+
+local savedEllesmereUI = _G.EllesmereUI
+local suppressionCalls = {}
+_G.EllesmereUI = {
+    SetPlayerCastBarSuppressed = function(owner, suppressed)
+        suppressionCalls[#suppressionCalls + 1] = { owner, suppressed }
+        nativeCastBar:SetAndUpdateShowCastbar(not suppressed)
+    end,
+}
+BCDM.db.profile.CastBar.Enabled = false
+BCDM:UpdateCastBar()
+BCDM.db.profile.CastBar.Enabled = true
+BCDM:UpdateCastBar()
+Check(suppressionCalls[1] and suppressionCalls[1][1] == "BetterCooldownManager"
+    and suppressionCalls[1][2] == false and suppressionCalls[2]
+    and suppressionCalls[2][1] == "BetterCooldownManager" and suppressionCalls[2][2] == true
+    and nativeCastBar.shown == false,
+    "BCM cooperates with EUI while suppressing the native cast bar")
+_G.EllesmereUI = savedEllesmereUI
 
 return failures == 0

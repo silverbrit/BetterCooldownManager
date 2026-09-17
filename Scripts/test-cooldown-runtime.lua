@@ -339,7 +339,9 @@ function BCDM:ApplyIconTexCoord() end
 function BCDM:AddBorder(frame) frame.bcdmStyleCount = (frame.bcdmStyleCount or 0) + 1 end
 function BCDM:UpdatePowerBarWidth() end
 function BCDM:UpdateSecondaryPowerBarWidth() end
-function BCDM:UpdateCastBarWidth() end
+local dependentWidthQueues, castWidthQueues = 0, 0
+function BCDM:QueuePowerBarWidthUpdates() dependentWidthQueues = dependentWidthQueues + 1 end
+function BCDM:UpdateCastBarWidth() castWidthQueues = castWidthQueues + 1 end
 
 assert(loadfile(root .. "/Modules/CooldownManager.lua"))("BetterCooldownManager", BCDM)
 Check(BCDM_PowerBar ~= nil and BCDM_SecondaryPowerBar ~= nil and BCDM_CastBar ~= nil,
@@ -439,6 +441,25 @@ Check(persistedUtilityAnchor[4] == 506 and persistedUtilityAnchor[5] == 307,
 Check(layoutCalls.save == savesBeforeLateAnchor + 1,
     "a late external anchor load retries the pending viewer layout")
 
+BCDM.db.profile.CooldownManager.Utility.Layout = {
+    "TOP", "EllesmereUIUnitFrames_Player", "BOTTOM", 8, 9,
+}
+local savesBeforeLateEllesmereAnchor = layoutCalls.save
+BCDM:QueueCooldownViewerLayoutApply()
+RunTimers()
+Check(layoutCalls.save == savesBeforeLateEllesmereAnchor,
+    "viewer layout persistence waits for a late-loading EllesmereUI anchor")
+EllesmereUIUnitFrames_Player = NewFrame(UIParent)
+function EllesmereUIUnitFrames_Player:GetRect() return 600, 350, 180, 70 end
+viewerLayoutEventFrame.scripts.OnEvent(viewerLayoutEventFrame, "ADDON_LOADED", "EllesmereUIUnitFrames")
+RunTimers()
+local persistedEllesmereAnchor = layoutCalls.anchors[UtilityCooldownViewer]
+Check(persistedEllesmereAnchor[2] == UIParent and persistedEllesmereAnchor[3] == "BOTTOMLEFT"
+    and persistedEllesmereAnchor[4] == 698 and persistedEllesmereAnchor[5] == 359,
+    "EllesmereUI anchors preserve the viewer's visual position relative to UIParent")
+Check(layoutCalls.save == savesBeforeLateEllesmereAnchor + 1,
+    "a late EllesmereUI anchor load retries the pending viewer layout")
+
 combat = true
 local savesBeforeCombat = layoutCalls.save
 BCDM:QueueCooldownViewerLayoutApply()
@@ -469,6 +490,12 @@ local unhookedOwner = createdFrames[#createdFrames - 1]
 Check(first.point[2] == viewer and not unhookedOwner:IsShown(),
     "tracked-buff centering stays disabled until every pool hook is installed")
 failHookMethod = nil
+local dependentWidthQueuesBeforeDataChange = dependentWidthQueues
+local castWidthQueuesBeforeDataChange = castWidthQueues
+EventRegistry:TriggerEvent("CooldownViewerSettings.OnDataChanged")
+Check(dependentWidthQueues > dependentWidthQueuesBeforeDataChange
+    and castWidthQueues > castWidthQueuesBeforeDataChange,
+    "native Cooldown Viewer data changes requeue dependent Power and Cast Bar widths")
 viewer.layoutFramesGoingRight = false
 viewer.layoutFramesGoingUp = true
 viewer.childXPadding = 999
