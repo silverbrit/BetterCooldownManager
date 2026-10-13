@@ -1,6 +1,9 @@
 local _, BCDM = ...
 BCDMG = BCDMG or {}
 
+-- Forever uses the modern UI family, so WOW_PROJECT_ID alone cannot distinguish it.
+BCDM.IS_WOW_FOREVER = select(4, GetBuildInfo()) == 16001
+
 BCDM.IS_DEATHKNIGHT = select(2, UnitClass("player")) == "DEATHKNIGHT"
 BCDM.IS_MONK = select(2, UnitClass("player")) == "MONK"
 
@@ -189,6 +192,9 @@ function BCDM:Init()
     SetupSlashCommands()
     BCDM:ResolveLSM()
     if not C_AddOns.IsAddOnLoaded("Blizzard_CooldownViewer") then C_AddOns.LoadAddOn("Blizzard_CooldownViewer") end
+    if BCDM.IS_WOW_FOREVER and not C_AddOns.IsAddOnLoaded("Blizzard_SwingTimer") then
+        pcall(C_AddOns.LoadAddOn, "Blizzard_SwingTimer")
+    end
 end
 
 function BCDM:CopyTable(value, seen)
@@ -205,6 +211,7 @@ end
 
 function BCDM:UpdateBCDM()
     BCDM:ResolveLSM()
+    BCDM:SkinSwingTimers()
     BCDM:UpdateCooldownViewer("Essential")
     BCDM:UpdateCooldownViewer("Utility")
     BCDM:UpdateCooldownViewer("Buffs")

@@ -519,7 +519,8 @@ local function CleanupReleasedGlow(frame)
     -- Cooldown Viewer pool reset hides the row but does not clear the alert manager.
     local manager = ActionButtonSpellAlertManager
     if not nativeCleared and manager and type(manager.HideAlert) == "function" then
-        local ok = pcall(manager.HideAlert, manager, frame)
+        -- HideAlert mutates Blizzard's shared activeAlerts table.
+        local ok = pcall(securecallfunction, manager.HideAlert, manager, frame)
         nativeCleared = ok and not HasNativeAlert(frame)
     end
 

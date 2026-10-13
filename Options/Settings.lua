@@ -241,8 +241,9 @@ local function OpenBlizzardCooldownManager(displayMode)
         if CooldownViewerSettings and type(CooldownViewerSettings.ShowUIPanel) == "function"
             and type(securecallfunction) == "function" then
             opened = pcall(securecallfunction, CooldownViewerSettings.ShowUIPanel, CooldownViewerSettings)
-        elseif CooldownViewerSettings and type(ShowUIPanel) == "function" then
-            opened = pcall(ShowUIPanel, CooldownViewerSettings)
+        elseif CooldownViewerSettings and type(ShowUIPanel) == "function"
+            and type(securecallfunction) == "function" then
+            opened = pcall(securecallfunction, ShowUIPanel, CooldownViewerSettings)
         end
         if opened and CooldownViewerSettings and CooldownViewerSettings.IsShown then
             local okShown, isShown = pcall(CooldownViewerSettings.IsShown, CooldownViewerSettings)
@@ -252,13 +253,14 @@ local function OpenBlizzardCooldownManager(displayMode)
         if not opened or not shown then
             BCDM:PrettyPrint("Blizzard's Cooldown Manager is not available.")
         elseif displayMode and type(CooldownViewerSettings.SetDisplayMode) == "function" then
-            pcall(CooldownViewerSettings.SetDisplayMode, CooldownViewerSettings, displayMode)
+            -- Switching tabs refreshes shared native cooldown data, not just visuals.
+            pcall(securecallfunction, CooldownViewerSettings.SetDisplayMode, CooldownViewerSettings, displayMode)
         end
     end
 
     if SettingsPanel and SettingsPanel:IsShown() then
-        if type(HideUIPanel) == "function" then HideUIPanel(SettingsPanel)
-        else SettingsPanel:Hide() end
+        if type(HideUIPanel) == "function" then pcall(securecallfunction, HideUIPanel, SettingsPanel)
+        else pcall(securecallfunction, SettingsPanel.Hide, SettingsPanel) end
     end
 
     if C_Timer and type(C_Timer.After) == "function" then C_Timer.After(0, OpenNativeSettings)
@@ -678,8 +680,10 @@ local function AddPrimaryPowerColours(panel, controls)
         [8] = "Astral Power", [11] = "Maelstrom", [13] = "Insanity", [17] = "Fury", [18] = "Pain",
     }
     for _, powerType in ipairs({ 0, 1, 2, 3, 6, 8, 11, 13, 17, 18 }) do
-        PathColor(controls, section, names[powerType], ProfileRoot,
-            { "General", "Colours", "PrimaryPower", powerType }, RefreshAll, false)
+        if BCDM:IsPowerColourSupported(powerType, false) then
+            PathColor(controls, section, names[powerType], ProfileRoot,
+                { "General", "Colours", "PrimaryPower", powerType }, RefreshAll, false)
+        end
     end
     U.Buttons(controls, section, {
         { text = L("Reset Power Bar Colours"), width = 210, click = function()
@@ -704,18 +708,22 @@ local function AddSecondaryPowerColours(panel, controls, disabled)
         { "CHARGED_COMBO_POINTS", "Charged Combo Points" }, { "ESSENCE_RECHARGE", "Essence on Cooldown" },
     }
     for _, entry in ipairs(names) do
-        PathColor(controls, section, entry[2], ProfileRoot,
-            { "General", "Colours", "SecondaryPower", entry[1] }, RefreshAll, true, { disabled = disabled })
+        if BCDM:IsPowerColourSupported(entry[1], true) then
+            PathColor(controls, section, entry[2], ProfileRoot,
+                { "General", "Colours", "SecondaryPower", entry[1] }, RefreshAll, true, { disabled = disabled })
+        end
     end
-    for _, runeType in ipairs({ "FROST", "UNHOLY", "BLOOD" }) do
-        local label = runeType:sub(1, 1) .. runeType:sub(2):lower()
-        PathColor(controls, section, label .. " Rune", ProfileRoot,
-            { "General", "Colours", "SecondaryPower", "RUNES", runeType }, RefreshAll, true, { disabled = disabled })
-    end
-    for _, state in ipairs({ "LIGHT", "MODERATE", "HEAVY" }) do
-        local label = state:sub(1, 1) .. state:sub(2):lower()
-        PathColor(controls, section, label .. " Stagger", ProfileRoot,
-            { "General", "Colours", "SecondaryPower", "STAGGER_COLOURS", state }, RefreshAll, true, { disabled = disabled })
+    if not BCDM.IS_WOW_FOREVER then
+        for _, runeType in ipairs({ "FROST", "UNHOLY", "BLOOD" }) do
+            local label = runeType:sub(1, 1) .. runeType:sub(2):lower()
+            PathColor(controls, section, label .. " Rune", ProfileRoot,
+                { "General", "Colours", "SecondaryPower", "RUNES", runeType }, RefreshAll, true, { disabled = disabled })
+        end
+        for _, state in ipairs({ "LIGHT", "MODERATE", "HEAVY" }) do
+            local label = state:sub(1, 1) .. state:sub(2):lower()
+            PathColor(controls, section, label .. " Stagger", ProfileRoot,
+                { "General", "Colours", "SecondaryPower", "STAGGER_COLOURS", state }, RefreshAll, true, { disabled = disabled })
+        end
     end
     U.Buttons(controls, section, {
         { text = L("Reset Resource Colours"), width = 210, click = function()
@@ -808,6 +816,10 @@ local function CreateBarPanel(barType)
         PathCheckbox(controls, behavior, "Show Spark", ProfileRoot,
             { barType, "ShowSpark" }, update, { disabled = EnabledDisabled })
     end
+    if barType == "PowerBar" then
+        PathCheckbox(controls, behavior, "Show Mana Cost Prediction", ProfileRoot,
+            { barType, "ShowManaCostPrediction" }, update, { disabled = EnabledDisabled })
+    end
     PathDropdown(controls, behavior, "Fill Direction", ProfileRoot,
         { barType, "FillDirection" }, update, function()
             return { { text = L("Right"), value = "RIGHT" }, { text = L("Left"), value = "LEFT" } }
@@ -823,11 +835,13 @@ local function CreateBarPanel(barType)
             PathCheckbox(controls, behavior, "Stagger Damage Per Second", ProfileRoot,
                 { barType, "Text", "ShowStaggerDPS" }, update, { disabled = EnabledDisabled })
         end
-        PathCheckbox(controls, behavior, "Swap To Power Bar Position", ProfileRoot,
-            { barType, "SwapToPowerBarPosition" }, update, {
-                disabled = function() return EnabledDisabled() or not BCDM:CanSwapSecondaryResourceToPrimary() end,
-                description = L("Automatically uses the primary power bar position when appropriate."),
-            })
+        if not BCDM.IS_WOW_FOREVER then
+            PathCheckbox(controls, behavior, "Swap To Power Bar Position", ProfileRoot,
+                { barType, "SwapToPowerBarPosition" }, update, {
+                    disabled = function() return EnabledDisabled() or not BCDM:CanSwapSecondaryResourceToPrimary() end,
+                    description = L("Automatically uses the primary power bar position when appropriate."),
+                })
+        end
     end
     PathColor(controls, behavior, "Background Colour", ProfileRoot,
         { barType, "BackgroundColour" }, update, true, { disabled = EnabledDisabled })
@@ -840,11 +854,13 @@ local function CreateBarPanel(barType)
             { "CastBar", "NonInterruptibleColour" }, update, true, { disabled = function()
                 return EnabledDisabled() or BCDM.db.profile.CastBar.ColourMode ~= "INTERRUPTIBILITY"
             end })
-        PathColor(controls, behavior, "Empower Pip Colour", ProfileRoot,
-            { "CastBar", "EmpowerPips", "Colour" }, update, true, { disabled = EnabledDisabled })
-        PathSlider(controls, behavior, "Empower Pip Width", ProfileRoot,
-            { "CastBar", "EmpowerPips", "Width" }, update,
-            { min = 1, max = 8, step = 1, disabled = EnabledDisabled })
+        if not BCDM.IS_WOW_FOREVER then
+            PathColor(controls, behavior, "Empower Pip Colour", ProfileRoot,
+                { "CastBar", "EmpowerPips", "Colour" }, update, true, { disabled = EnabledDisabled })
+            PathSlider(controls, behavior, "Empower Pip Width", ProfileRoot,
+                { "CastBar", "EmpowerPips", "Width" }, update,
+                { min = 1, max = 8, step = 1, disabled = EnabledDisabled })
+        end
         U.Buttons(controls, behavior, {
             { text = "Normal Test", width = 130, disabled = EnabledDisabled, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "NORMAL" BCDM:CreateTestCastBar()
@@ -854,9 +870,9 @@ local function CreateBarPanel(barType)
             end, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "NON_INTERRUPTIBLE" BCDM:CreateTestCastBar()
             end },
-            { text = "Empowered Test", width = 130, disabled = EnabledDisabled, click = function()
+            not BCDM.IS_WOW_FOREVER and { text = "Empowered Test", width = 130, disabled = EnabledDisabled, click = function()
                 BCDM.CAST_BAR_TEST_STATE = "EMPOWERED" BCDM:CreateTestCastBar()
-            end },
+            end } or nil,
         })
     end
 
@@ -887,7 +903,7 @@ local function CreateBarPanel(barType)
     if barType == "PowerBar" then
         PathSlider(controls, layout, "Height (No Secondary Bar)", ProfileRoot,
             { barType, "HeightWithoutSecondary" }, update, { min = 5, max = 500, step = 0.1, disabled = EnabledDisabled })
-    elseif barType == "SecondaryPowerBar" then
+    elseif barType == "SecondaryPowerBar" and not BCDM.IS_WOW_FOREVER then
         PathSlider(controls, layout, "Height (No Primary Bar)", ProfileRoot,
             { barType, "HeightWithoutPrimary" }, update, { min = 5, max = 500, step = 0.1, disabled = function()
                 return EnabledDisabled() or BCDM.db.profile.SecondaryPowerBar.SwapToPowerBarPosition ~= true

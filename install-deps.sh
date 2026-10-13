@@ -52,10 +52,13 @@ git clone --depth 1 --branch master https://github.com/Stanzilla/LibCustomGlow.g
 git clone --depth 1 --branch master https://github.com/AdiAddons/LibDualSpec-1.0.git "${staged_libraries}/LibDualSpec-1.0"
 git clone --depth 1 --branch main https://github.com/plusmouse/LibEditModeOverride.git "${staged_libraries}/LibEditModeOverride"
 
-# Keep a local PTR FrameXML snapshot for API and implementation verification.
-staged_wow_ui_source="${staging_dir}/wow-ui-source"
-git clone --depth 1 --filter=blob:none --branch ptr https://github.com/Gethe/wow-ui-source.git "${staged_wow_ui_source}"
-find "${staged_wow_ui_source}" -mindepth 1 -maxdepth 1 ! -name Interface -exec rm -rf {} +
+# Keep Retail PTR and Forever FrameXML snapshots for API verification.
+for branch in ptr forever; do
+  snapshot="wow-ui-source"
+  if [[ "${branch}" == forever ]]; then snapshot="wow-ui-source-forever"; fi
+  git clone --depth 1 --filter=blob:none --branch "${branch}" https://github.com/Gethe/wow-ui-source.git "${staging_dir}/${snapshot}"
+  find "${staging_dir}/${snapshot}" -mindepth 1 -maxdepth 1 ! -name Interface -exec rm -rf {} +
+done
 
 # Vendored dependencies should not retain nested repository metadata.
 find "${staged_libraries}" -type d -name .git -prune -exec rm -rf {} +
@@ -64,7 +67,9 @@ rm -rf "${libraries_dir}"
 mv "${staged_libraries}" "${libraries_dir}"
 
 mkdir -p "${local_libraries_dir}"
-rm -rf "${local_libraries_dir}/wow-ui-source"
-mv "${staged_wow_ui_source}" "${local_libraries_dir}/wow-ui-source"
+for snapshot in wow-ui-source wow-ui-source-forever; do
+  rm -rf "${local_libraries_dir}/${snapshot}"
+  mv "${staging_dir}/${snapshot}" "${local_libraries_dir}/${snapshot}"
+done
 
 echo "BetterCooldownManager dependencies updated successfully."

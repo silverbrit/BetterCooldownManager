@@ -229,7 +229,7 @@ local function CreateCastTimeBinding(fontString)
     local formatterOK, formatter = pcall(C_StringUtil.CreateNumericRuleFormatter)
     if not formatterOK or not formatter or type(formatter.SetBreakpoints) ~= "function" then return end
     if not pcall(formatter.SetBreakpoints, formatter, {
-        { threshold = 0, format = "%d", step = 1, rounding = rounding },
+        { threshold = 0, format = "%.1f", step = 0.1, rounding = rounding },
     }) then
         return
     end

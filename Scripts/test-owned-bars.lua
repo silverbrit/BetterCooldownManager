@@ -104,7 +104,7 @@ local savedCreateFrame = CreateFrame
 local savedPowerGlobals = {
     UnitClass = UnitClass, UnitPowerType = UnitPowerType, UnitPower = UnitPower,
     UnitPowerMax = UnitPowerMax, UnitPowerPercent = UnitPowerPercent,
-    GetSpecialization = GetSpecialization, GetShapeshiftFormID = GetShapeshiftFormID,
+    GetShapeshiftFormID = GetShapeshiftFormID,
     CurveConstants = CurveConstants, RAID_CLASS_COLORS = RAID_CLASS_COLORS,
 }
 local eventFrame = {}
@@ -156,7 +156,8 @@ UnitPowerType = function() return currentType end
 UnitPower = function() return currentPower end
 UnitPowerMax = function() return currentMax end
 UnitPowerPercent = function() return 50 end
-GetSpecialization = function() return 1 end
+local savedSpecializationInfo = C_SpecializationInfo
+C_SpecializationInfo = { GetSpecialization = function() return 1 end }
 GetShapeshiftFormID = function() return 0 end
 CurveConstants = { ScaleTo100 = 100 }
 RAID_CLASS_COLORS = {}
@@ -178,6 +179,7 @@ powerModule.IsSecretValue = plainSecretCheck
 C_Timer = savedPowerTimer
 
 CreateFrame = savedCreateFrame
+C_SpecializationInfo = savedSpecializationInfo
 for name, value in pairs(savedPowerGlobals) do _G[name] = value end
 
 local savedUIParent = UIParent

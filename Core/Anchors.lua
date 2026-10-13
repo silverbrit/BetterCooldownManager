@@ -16,6 +16,15 @@ local ELLESMEREUI_ANCHOR_KEYS = {
     "EllesmereUIUnitFrames_Player", "EllesmereUIUnitFrames_Target",
 }
 
+local FOREVER_SWING_TIMER_ANCHORS = {
+    SwingTimerMainHandFrame = "|cFF00AEF7Blizzard|r: Swing Timer - Main Hand",
+    SwingTimerOffHandFrame = "|cFF00AEF7Blizzard|r: Swing Timer - Off Hand",
+    SwingTimerRangedFrame = "|cFF00AEF7Blizzard|r: Swing Timer - Ranged",
+}
+local FOREVER_SWING_TIMER_ANCHOR_KEYS = {
+    "SwingTimerMainHandFrame", "SwingTimerOffHandFrame", "SwingTimerRangedFrame",
+}
+
 local ANCHOR_POINTS = {
     TOPLEFT = true, TOP = true, TOPRIGHT = true,
     LEFT = true, CENTER = true, RIGHT = true,
@@ -72,8 +81,13 @@ end
 
 function BCDM:GetAnchorParents(anchorType)
     local elvUIActive = self:IsElvUIActive()
-    return self:BuildAnchorParents(self.AnchorParents[anchorType], elvUIActive, ELVUI_ANCHORS,
+    local anchors = self:BuildAnchorParents(self.AnchorParents[anchorType], elvUIActive, ELVUI_ANCHORS,
         self:IsEllesmereUIActive(), ELLESMEREUI_ANCHORS)
+    if self.IS_WOW_FOREVER then
+        AddAnchorSet(anchors[1], anchors[2], true, FOREVER_SWING_TIMER_ANCHORS,
+            FOREVER_SWING_TIMER_ANCHOR_KEYS)
+    end
+    return anchors
 end
 
 local function IsSecret(self, value)

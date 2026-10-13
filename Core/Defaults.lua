@@ -239,6 +239,7 @@ local Defaults = {
             Width = 200,
             Height = 13,
             HeightWithoutSecondary = 20,
+            ShowManaCostPrediction = true,
             MatchWidthOfAnchor = true,
             ColourMode = "POWER_TYPE",
             ShowSpark = false,

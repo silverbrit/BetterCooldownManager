@@ -36,7 +36,7 @@ local function WindowSettings()
 end
 
 -- Changelog.lua provides the generated runtime copy because WoW cannot read Markdown files.
-local CHANGELOG_TEXT = BCDM.ChangelogText or "# Changelog\n\n## 33 (August 18 2026)"
+local CHANGELOG_TEXT = BCDM.ChangelogText or "# Changelog\n\n## 34 (October 13 2026)"
 
 local function ClampWindowOpacity(value)
     value = tonumber(value) or DEFAULT_WINDOW_OPACITY

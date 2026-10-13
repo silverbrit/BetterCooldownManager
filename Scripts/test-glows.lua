@@ -11,6 +11,17 @@ local function Check(condition, message)
     io.stderr:write("FAIL: " .. message .. "\n")
 end
 
+local savedSecureCall = securecallfunction
+local secureDepth = 0
+securecallfunction = function(callback, ...)
+    secureDepth = secureDepth + 1
+    local results = { pcall(callback, ...) }
+    secureDepth = secureDepth - 1
+    if not results[1] then error(results[2]) end
+    return unpack(results, 2)
+end
+local expectSecureCleanup = false
+
 local calls = { start = {}, stop = {} }
 local function Record(bucket, glowType, frame)
     calls[bucket][glowType] = (calls[bucket][glowType] or 0) + 1
@@ -123,6 +134,9 @@ function manager:ShowAlert(frame)
     frame.SpellActivationAlert:Show()
 end
 function manager:HideAlert(frame)
+    if expectSecureCleanup then
+        Check(secureDepth > 0, "BCM pool cleanup does not taint native alert-manager state")
+    end
     self.hideCalls = self.hideCalls + 1
     self.activeAlerts[frame] = nil
     frame.SpellActivationAlert:Hide()
@@ -322,7 +336,9 @@ Check(target.SpellActivationAlert.alpha == 0.4 and secondTarget.SpellActivationA
 
 manager:ShowAlert(target)
 Check(target.SpellActivationAlert.alpha == 0, "the pooled row has an active custom glow before release")
+expectSecureCleanup = true
 viewer.itemFramePool:ReleaseAll()
+expectSecureCleanup = false
 Check(not manager:HasAlert(target), "pool release clears Blizzard alert state")
 Check(target.SpellActivationAlert.alpha == 0.4, "pool release restores native alert alpha")
 local startsBeforeInactiveRefresh = calls.start.Pixel or 0
@@ -383,4 +399,5 @@ Check(calls.start.Button == 2 and calls.buttonColor
     "ButtonGlow applies the configured custom colour when enabled")
 BCDM:StopCustomGlow(target)
 
+securecallfunction = savedSecureCall
 return failures == 0

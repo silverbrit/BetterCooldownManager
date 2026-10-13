@@ -39,10 +39,14 @@ local changelogSource = changelogFile:read("*a")
 changelogFile:close()
 local releaseCount = 0
 for _ in changelogSource:gmatch("\n## %d+ %([^%)]+%)") do releaseCount = releaseCount + 1 end
-Check(releaseCount == 1 and changelogSource:find("## 33 (August 18 2026)", 1, true)
-    and changelogSource:find("- Thanks to Unhalted", 1, true)
+assert(loadfile(root .. "/Options/Changelog.lua"))("BetterCooldownManager", BCDM)
+local markdownFile = assert(io.open(root .. "/CHANGELOG.md", "r"))
+local markdown = markdownFile:read("*a")
+markdownFile:close()
+Check(releaseCount == 1 and changelogSource:find("## 34 (October 13 2026)", 1, true)
+    and markdown:sub(1, #BCDM.ChangelogText) == BCDM.ChangelogText
     and not changelogSource:find("### Development", 1, true),
-    "runtime changelog contains only the current dated release and note")
+    "runtime changelog matches only the current dated Markdown release")
 
 local defaults = BCDM:GetDefaultDB()
 Check(defaults.global.SettingsWindow.ShowSelectedElementHighlight == true
@@ -202,7 +206,7 @@ C_Item = {
         end
         return itemID == 500 and itemCount or 0
     end,
-    GetItemCooldown = function() return 0, 0 end,
+    GetItemCooldown = function() return 0, 0, true end,
 }
 local itemEligible, itemCooldownAvailable = BCDM._GetCustomTrackerSourceAvailability(
     { Source = { Type = "item", ID = 500 } }, BCDM.CustomTrackerSourceAdapters.item)
@@ -215,6 +219,42 @@ local healthstoneState = BCDM.CustomTrackerSourceAdapters.item.GetState({ ID = 5
 Check(healthstoneState.count == 3 and healthstoneState.showCount == true
     and healthstoneIncludeUses == true,
     "Healthstone item trackers display Blizzard's charge count")
+local savedDurationUtil = C_DurationUtil
+C_DurationUtil = { CreateDuration = function()
+    return { SetTimeFromStart = function(self, startTime, duration)
+        self.startTime, self.duration = startTime, duration
+    end }
+end }
+for _, itemID in ipairs({ 5512, 224464, 500 }) do
+    for _, enabled in ipairs({ false, 0 }) do
+        for startTime = 100, 102 do
+            C_Item.GetItemCooldown = function() return startTime, 1, enabled end
+            local state = BCDM.CustomTrackerSourceAdapters.item.GetState({ ID = itemID })
+            Check(state.active == true and state.ready == false and state.clearCooldown == true
+                and state.durationObject == nil,
+                "disabled item timers stay unavailable without restarting a flashing countdown")
+        end
+    end
+    C_Item.GetItemCooldown = function() return 103, 60, true end
+    local state = BCDM.CustomTrackerSourceAdapters.item.GetState({ ID = itemID })
+    Check(state.active == true and state.ready == false and not state.clearCooldown
+        and state.durationObject.startTime == 103 and state.durationObject.duration == 60,
+        "enabled item timers resume their real countdown")
+    C_Item.GetItemCooldown = function() return 0, 0, true end
+    state = BCDM.CustomTrackerSourceAdapters.item.GetState({ ID = itemID })
+    Check(state.active == false and state.ready == true and state.durationObject == nil,
+        "completed item timers become ready")
+end
+local savedItemIsSecretValue = BCDM.IsSecretValue
+local secretEnabled = {}
+BCDM.IsSecretValue = function(_, value) return value == secretEnabled end
+C_Item.GetItemCooldown = function() return 100, 1, secretEnabled end
+local unreadableItemState = BCDM.CustomTrackerSourceAdapters.item.GetState({ ID = 5512 })
+Check(unreadableItemState.active == nil and unreadableItemState.ready == nil
+    and unreadableItemState.clearCooldown == nil and unreadableItemState.durationObject == nil,
+    "unreadable item timer flags leave the previous cooldown visual intact")
+BCDM.IsSecretValue = savedItemIsSecretValue
+C_DurationUtil = savedDurationUtil
 C_Item = savedItemAPI
 local trackerStateCalls = 0
 local trackerStateAdapter = {
@@ -515,8 +555,14 @@ Check(assert(loadfile(root .. "/Scripts/test-secondary-power.lua"))(root),
     "secondary-resource secret-value tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-trinket-candidates.lua"))(root),
     "trinket candidate tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-item-auras.lua"))(root),
+    "item buff duration overlay tests pass")
 Check(assert(loadfile(root .. "/Scripts/test-cast-bar.lua"))(root),
     "cast bar lifecycle and secret-safety tests pass")
+
+Check(assert(loadfile(root .. "/Scripts/test-forever.lua"))(root), "Retail/Forever compatibility tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-swing-timers.lua"))(root), "swing timer skin tests pass")
+Check(assert(loadfile(root .. "/Scripts/test-power-prediction.lua"))(root), "mana prediction tests pass")
 
 if failures > 0 then os.exit(1) end
 print("Custom tracker model tests passed")

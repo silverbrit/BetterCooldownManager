@@ -99,6 +99,7 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
         strip.DragSlot, strip.DragTarget = nil, nil
         strip:SetScript("OnUpdate", nil)
         strip.Marker:Hide()
+        if target then target = BCDM:GetTrinketDisplaySlotIndex(Settings(), target) end
         if target and BCDM:ReorderTrinketSlot(Settings(), slotID, target) then
             Changed(panel, callback)
         else
@@ -142,7 +143,7 @@ function BCDM:AddTrinketEntrySettings(panel, controls, behavior, callback)
     function strip:Refresh()
         local order = BCDM:GetTrinketSlotOrder(Settings())
         for index, button in ipairs(self.Buttons) do
-            button.SlotID = order[index]
+            button.SlotID = order[BCDM:GetTrinketDisplaySlotIndex(Settings(), index)]
             local _, icon = ItemMetadata(button.SlotID)
             local slot = BCDM:GetTrinketSlotRecord(Settings(), button.SlotID)
             local entrySettings = BCDM:GetTrinketSlotSettings(Settings(), button.SlotID)

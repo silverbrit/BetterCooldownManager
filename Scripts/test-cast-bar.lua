@@ -259,8 +259,9 @@ Check(secretTextOK and returnedSecretText == secretText, "secret cast text passe
 
 Check(nativeCastBar.shown == false, "enabling BCM hides the native cast bar through Blizzard's API")
 Check(bar.CastTimeBinding and bar.CastTimeBinding.formatter
-    and bar.CastTimeBinding.formatter.breakpoints[1].format == "%d",
-    "cast-time text uses a bare numeric formatter without a seconds label")
+    and bar.CastTimeBinding.formatter.breakpoints[1].format == "%.1f"
+    and bar.CastTimeBinding.formatter.breakpoints[1].step == 0.1,
+    "cast-time text shows tenths of a second without a seconds label")
 Check(bar.SpellNameText.font[1] == STANDARD_TEXT_FONT and bar.CastTimeText.font[1] == STANDARD_TEXT_FONT,
     "cast text falls back to the standard font when media font is unavailable")
 Check(bar.SpellNameText.justifyH == "LEFT" and bar.SpellNameText.wordWrap == false

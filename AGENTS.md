@@ -20,7 +20,7 @@ Use `.libraries/wow-ui-source/Interface/AddOns` for Blizzard implementation rese
 
 ## Runtime guardrails
 
-- Target Retail WoW 12.1 (`120100`) and Lua 5.1.
+- Target Retail WoW 12.1.5 only (`120105`) and Lua 5.1.
 - Verify API names and signatures. Do not invent enum values, widget methods, or Blizzard frame fields.
 - Treat cooldown, aura, tooltip, and Blizzard-frame values as potentially secret or inaccessible.
 - Do not add `UnitAura`-driven custom tracker logic or mutate Blizzard Cooldown Viewer row ownership.

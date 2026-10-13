@@ -6,15 +6,23 @@
 [![Donate](https://img.shields.io/badge/Donate-1E88E5?style=for-the-badge&logo=streamlabs&logoColor=white)](https://streamelements.com/unhaltedgb/tip)
 [![KoFi](https://img.shields.io/badge/KoFi-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://ko-fi.com/unhalted)
 
+## Supported clients
+
+This package targets Retail 12.1.5 (`120105`) only. The retained WoW Forever 1.60.1 (`16001`) integration shares the modern Cooldown Viewer, Edit Mode, and AuraContainer code, but is not advertised by this TOC. Its client-specific paths expose nine playable classes, mana/rage/energy colours, and target-based rogue/cat combo points, hide Retail-only resource and empowered-cast options, and preserve saved Retail settings.
+
+`install-deps.sh` refreshes the Retail PTR UI source in `.libraries/wow-ui-source` and Forever's `forever` branch in `.libraries/wow-ui-source-forever`. Run `lua5.1 Scripts/test.lua` for pure-Lua checks; combat, secret-value handling, and Edit Mode still require live testing on both clients.
+
 ## Features
 - Clean, Pixel Border Skinning. Borders can be adjusted.
 - Minimap button for opening the Better Cooldown Manager settings.
 - Custom Cooldown Text, Tweaks & Glows.
 - Custom Power & Secondary Power Colours.
 - Power Bar, Secondary Power Bar & Cast Bar with Anchoring & Auto Adjustment for Width.
+- Power text can show Current / Maximum; optional mana-cost prediction darkens the pending spend while casting, using native widgets for secret values.
 - Custom Tracker Bars: Add any known spell, item, equipment slot, or cast timer.
 - Custom Trinket Bar: Automatically creates trackers for equipped trinkets.
 - API for AddOns to add their own anchors to Utility, Tracked Buffs, Custom Trackers, and Trinket Bars.
+- WoW Forever exposes Blizzard's Main Hand, Off Hand, and Ranged swing timers as anchor parents, styled with BCM's shared textures, font, border size, and class-coloured fill. Position, size, visibility, and timing remain controlled by Blizzard/Edit Mode.
 
 ## Libraries
 - [Ace3](https://www.curseforge.com/wow/addons/ace3): Provides the addon lifecycle, profiles, localization, and serialization.

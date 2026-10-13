@@ -26,6 +26,16 @@ function BCDM:GetTrinketSlotOrder(settings)
     return order
 end
 
+-- Translate between saved order and the selector's left-to-right (top-to-bottom)
+-- order. The runtime's centered TOP/BOTTOM layout always runs left-to-right.
+function BCDM:GetTrinketDisplaySlotIndex(settings, index)
+    local growth = settings.GrowthDirection or "RIGHT"
+    local point = settings.Layout and settings.Layout[1]
+    local reversed = growth == "UP"
+        or (growth == "LEFT" and point ~= "TOP" and point ~= "BOTTOM")
+    return reversed and (3 - index) or index
+end
+
 function BCDM:ReorderTrinketSlot(settings, slotID, targetIndex)
     local order = self:GetTrinketSlotOrder(settings)
     targetIndex = tonumber(targetIndex)
@@ -231,9 +241,9 @@ BCDM._GetTrinketAuraSpellIDs = GetTrinketAuraSpellIDs
 
 local function PlayerMatchesFilters(entrySettings)
     local classToken = select(2, UnitClass("player"))
-    local specIndex = GetSpecialization()
+    local specIndex = C_SpecializationInfo.GetSpecialization()
     local specID, specName
-    if specIndex then specID, specName = GetSpecializationInfo(specIndex) end
+    if specIndex then specID, specName = C_SpecializationInfo.GetSpecializationInfo(specIndex) end
     return BCDM:EntryMatchesSpecialization(entrySettings, specID, classToken, specName)
 end
 

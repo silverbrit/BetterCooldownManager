@@ -161,11 +161,16 @@ SourceAdapters.item = {
     end,
     GetState = function(source)
         local count = GetItemCount(source.ID)
-        local startTime, duration = C_Item.GetItemCooldown(source.ID)
+        local startTime, duration, enabled = C_Item.GetItemCooldown(source.ID)
         startTime, duration = ReadNumber(startTime), ReadNumber(duration)
         local state = { count = ReadNumber(count), active = nil, ready = nil,
             showCount = source.ID == 5512 or source.ID == 224464 }
-        if startTime and duration then
+        if BCDM:IsSecretValue(enabled) or enabled == nil then return state end
+        -- A used Healthstone can be unavailable before its timer starts.
+        -- Blizzard clears disabled timers; animating them repeatedly flashes.
+        if enabled == false or enabled == 0 then
+            state.active, state.ready, state.clearCooldown = true, false, true
+        elseif startTime and duration then
             state.active = startTime > 0 and duration > 0
             state.ready = not state.active
             if state.active and C_DurationUtil and C_DurationUtil.CreateDuration then
@@ -258,9 +263,9 @@ BCDM._GetCustomTrackerSourceAvailability = GetSourceAvailability
 
 local function PlayerMatchesFilters(entry)
     local classToken = select(2, UnitClass("player"))
-    local specIndex = GetSpecialization()
+    local specIndex = C_SpecializationInfo.GetSpecialization()
     local specID, specName
-    if specIndex then specID, specName = GetSpecializationInfo(specIndex) end
+    if specIndex then specID, specName = C_SpecializationInfo.GetSpecializationInfo(specIndex) end
     return BCDM:EntryMatchesSpecialization(entry, specID, classToken, specName)
 end
 
@@ -347,7 +352,9 @@ local function UpdateIconState(icon, state)
         if state.ready == nil then state.ready = icon.LastState.ready end
     end
     icon.LastState = state
-    if state.durationObject and icon.Cooldown.SetCooldownFromDurationObject then
+    if state.clearCooldown then
+        ClearCooldown(icon.Cooldown)
+    elseif state.durationObject and icon.Cooldown.SetCooldownFromDurationObject then
         icon.Cooldown:SetCooldownFromDurationObject(state.durationObject, true)
     elseif state.active == false then
         ClearCooldown(icon.Cooldown)

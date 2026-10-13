@@ -23,6 +23,7 @@ local function RunTimers()
     for _, callback in ipairs(queued) do callback() end
 end
 local createdFrames = {}
+local secureDepth = 0
 local failHookMethod
 local function RunFrameUpdates()
     for _, frame in ipairs(createdFrames) do
@@ -126,7 +127,9 @@ viewer.horizontal = true
 function viewer:IsHorizontal() return self.horizontal end
 function viewer:GetItemContainerFrame() return viewerItemContainer end
 function viewerItemContainer:GetLayoutChildren() return viewer.items end
-function viewerItemContainer:Layout() end
+function viewerItemContainer:Layout()
+    Check(secureDepth > 0, "native buff grid layout runs through securecallfunction")
+end
 function viewer:GetItemFrames() return self:GetItemContainerFrame():GetLayoutChildren() end
 function viewer:GetFrameStrata() return "MEDIUM" end
 function viewer:GetFrameLevel() return 5 end
@@ -160,7 +163,9 @@ function UtilityCooldownViewer:GetItemContainerFrame() return utilityItemContain
 function essentialItemContainer:GetLayoutChildren() return EssentialCooldownViewer.items or {} end
 function utilityItemContainer:GetLayoutChildren() return UtilityCooldownViewer.items or {} end
 function essentialItemContainer:Layout() return EssentialCooldownViewer:Layout() end
-function utilityItemContainer:Layout() end
+function utilityItemContainer:Layout()
+    Check(secureDepth > 0, "native utility grid layout runs through securecallfunction")
+end
 BuffIconCooldownViewer = viewer
 EssentialCooldownViewer.system, EssentialCooldownViewer.systemIndex = 7, 1
 UtilityCooldownViewer.system, UtilityCooldownViewer.systemIndex = 7, 2
@@ -232,7 +237,11 @@ EditModePresetLayoutManager = {
     GetCopyOfPresetLayouts = function() return { {}, {} } end,
 }
 securecallfunction = function(callback, ...)
-    return callback(...)
+    secureDepth = secureDepth + 1
+    local results = { pcall(callback, ...) }
+    secureDepth = secureDepth - 1
+    if not results[1] then error(results[2]) end
+    return unpack(results, 2)
 end
 function CopyTable(value, seen)
     if type(value) ~= "table" then return value end
@@ -530,6 +539,7 @@ function pandemicFrame:GetPoint(index)
     return self.pandemicPoints and unpack(self.pandemicPoints[index])
 end
 function viewer:AnchorPandemicStateFrame(frame, item)
+    Check(secureDepth > 0, "native Pandemic anchoring runs through securecallfunction")
     pandemicReanchors = pandemicReanchors + 1
     if failPandemicAnchor then error("Pandemic anchor failure") end
     pandemicWidth = item:GetWidth()
@@ -850,6 +860,7 @@ EssentialCooldownViewer.items = { essentialFirst, essentialSecond, essentialThir
 function EssentialCooldownViewer:GetItemFrames() return self:GetItemContainerFrame():GetLayoutChildren() end
 local essentialLayoutCalls = 0
 function EssentialCooldownViewer:Layout()
+    Check(secureDepth > 0, "native essential grid layout runs through securecallfunction")
     essentialLayoutCalls = essentialLayoutCalls + 1
     local x = 0
     for _, item in ipairs(self.items) do
@@ -1036,6 +1047,63 @@ local unreadable = NewItem(5, 30, 20, false)
 function unreadable:IsItem() error("secret item state") end
 Check(not BCDM:IsCustomizableCooldownViewerItem(unreadable),
     "unreadable Cooldown Viewer rows are not customizable")
+
+-- Exercise the actual private settings-opening callback without constructing widgets.
+do
+    local function Upvalue(callback, name)
+        for index = 1, math.huge do
+            local key, value = debug.getupvalue(callback, index)
+            if not key then error("missing upvalue: " .. name) end
+            if key == name then return value end
+        end
+    end
+    local nativeSettings, settingsPanel = NewFrame(nil), NewFrame(nil)
+    nativeSettings:Hide()
+    local opened, switched, notices = 0, 0, 0
+    function nativeSettings:ShowUIPanel()
+        Check(secureDepth > 0, "native settings opening runs securely")
+        opened = opened + 1
+        self:Show()
+    end
+    function nativeSettings:SetDisplayMode(mode)
+        Check(secureDepth > 0, "tab switching cannot taint shared native cooldown data")
+        switched = switched + 1
+        self.displayMode = mode
+    end
+    local optionsBCDM = {
+        SettingsUtils = { L = function(text) return text end },
+        SetCooldownViewerOpenPending = function(self, value) self.pending = value end,
+        PrettyPrint = function() notices = notices + 1 end,
+    }
+    local env = setmetatable({
+        CooldownViewerSettings = nativeSettings,
+        SettingsPanel = settingsPanel,
+        C_Timer = { After = function(_, callback) callback() end },
+        HideUIPanel = function(frame)
+            Check(secureDepth > 0, "closing Blizzard settings runs securely")
+            frame:Hide()
+        end,
+        ShowUIPanel = function(frame)
+            Check(secureDepth > 0, "fallback native panel opening runs securely")
+            opened = opened + 1
+            frame:Show()
+        end,
+    }, { __index = _G })
+    setfenv(assert(loadfile(root .. "/Options/Settings.lua")), env)("BetterCooldownManager", optionsBCDM)
+    local createViewerPanel = Upvalue(optionsBCDM.RegisterSettings, "CreateViewerPanel")
+    local openSettings = Upvalue(createViewerPanel, "OpenBlizzardCooldownManager")
+    openSettings("spells")
+    openSettings("auras")
+    Check(opened == 2 and switched == 2 and nativeSettings.displayMode == "auras"
+        and not optionsBCDM.pending, "both native tabs open and release the pending-layout gate")
+    nativeSettings.ShowUIPanel = nil
+    openSettings("spells")
+    Check(opened == 3 and switched == 3, "the global ShowUIPanel fallback still selects the native tab")
+    env.securecallfunction = false
+    openSettings("auras")
+    Check(opened == 3 and switched == 3 and notices == 1 and not optionsBCDM.pending,
+        "missing securecallfunction never falls back to tainting native settings")
+end
 
 local optionsFile = assert(io.open(root .. "/Options/Settings.lua", "r"))
 local optionsSource = optionsFile:read("*a")

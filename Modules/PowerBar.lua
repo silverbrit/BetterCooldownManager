@@ -46,11 +46,54 @@ local function SetSecretPowerText(fontString, powerCurrent, powerMax, powerType,
     return pcall(fontString.SetText, fontString, value1)
 end
 
+local function ReadableNumber(value)
+    return not BCDM:IsSecretValue(value) and type(value) == "number"
+end
+
+function BCDM:UpdatePowerCostPrediction()
+    local bar = self.PowerBar
+    if not bar or not bar.CostPrediction then return end
+    bar.CostPrediction:Hide()
+    local settings = self.db.profile.PowerBar
+    if not settings.Enabled or settings.ShowManaCostPrediction == false then return end
+    -- GetSpellPowerCost accepts secret spell IDs. Forward values to widgets;
+    -- the native fill texture supplies the current-mana endpoint without arithmetic.
+    local ok, updated = pcall(function()
+        local powerType = UnitPowerType("player")
+        if not ReadableNumber(powerType) or powerType ~= 0 then return end
+        local spellID = select(9, UnitCastingInfo("player"))
+        if not self:IsSecretValue(spellID) and not ReadableNumber(spellID) then return end
+        local costs = C_Spell.GetSpellPowerCost(spellID)
+        if self:IsSecretValue(costs) or type(costs) ~= "table" then return end
+        local maximum = UnitPowerMax("player", 0)
+        if not self:IsSecretValue(maximum) and (not ReadableNumber(maximum) or maximum <= 0) then return end
+        for _, cost in pairs(costs) do
+            if self:IsSecretValue(cost) then return end
+            if ReadableNumber(cost.type) and cost.type == 0 then
+                local amount = cost.cost
+                if not self:IsSecretValue(amount) and (not ReadableNumber(amount) or amount <= 0) then return end
+                local prediction = bar.CostPrediction
+                local edge = settings.FillDirection == "LEFT" and "LEFT" or "RIGHT"
+                local fill = bar.Status:GetStatusBarTexture()
+                prediction:ClearAllPoints()
+                prediction:SetPoint("TOP" .. edge, fill, "TOP" .. edge, 0, 0)
+                prediction:SetPoint("BOTTOM" .. edge, fill, "BOTTOM" .. edge, 0, 0)
+                prediction:SetWidth(bar.Status:GetWidth())
+                prediction:SetReverseFill(edge == "RIGHT")
+                prediction:SetMinMaxValues(0, maximum)
+                prediction:SetValue(amount)
+                return true
+            end
+        end
+    end)
+    if ok and updated then bar.CostPrediction:Show() end
+end
+
 local function UpdatePowerValues()
     local PowerBar = BCDM.PowerBar
     local _, class = UnitClass("player")
     local powerType = BCDM:ResolvePrimaryDisplayPowerType(
-        UnitPowerType("player"), class, GetSpecialization(), GetShapeshiftFormID and GetShapeshiftFormID() or 0)
+        UnitPowerType("player"), class, C_SpecializationInfo.GetSpecialization(), GetShapeshiftFormID and GetShapeshiftFormID() or 0)
     local powerCurrent = UnitPower("player", powerType)
     local powerMax = UnitPowerMax("player", powerType)
     if PowerBar and PowerBar.Status and powerType then
@@ -89,6 +132,7 @@ local function UpdatePowerValues()
         PowerBar.LastPowerCurrent = currentReadable and powerCurrent or nil
         PowerBar.LastPowerMaximum = maxReadable and powerMax or nil
     end
+    BCDM:UpdatePowerCostPrediction()
     return powerType
 end
 
@@ -137,6 +181,10 @@ local function RegisterPowerBarEvents(powerBar)
     powerBar:RegisterUnitEvent("UNIT_DISPLAYPOWER", "player")
     powerBar:RegisterEvent("PLAYER_ENTERING_WORLD")
     powerBar:RegisterEvent("UPDATE_SHAPESHIFT_COOLDOWN")
+    for _, event in ipairs({ "UNIT_SPELLCAST_START", "UNIT_SPELLCAST_STOP", "UNIT_SPELLCAST_FAILED",
+        "UNIT_SPELLCAST_INTERRUPTED", "UNIT_SPELLCAST_DELAYED", "UNIT_SPELLCAST_SUCCEEDED" }) do
+        powerBar:RegisterUnitEvent(event, "player")
+    end
 end
 
 local function SetHooks()
@@ -192,6 +240,14 @@ function BCDM:CreatePowerBar()
     PowerBar.Spark:SetSize(2, PowerBarDB.Height)
     BCDM:AnchorStatusBarSpark(PowerBar.Spark, PowerBar.Status, PowerBarDB.FillDirection)
     PowerBar.Spark:SetShown(PowerBarDB.ShowSpark == true)
+
+    PowerBar.Status:SetClipsChildren(true)
+    PowerBar.CostPrediction = CreateFrame("StatusBar", nil, PowerBar.Status)
+    PowerBar.CostPrediction:SetFrameLevel(PowerBar.Status:GetFrameLevel())
+    PowerBar.CostPrediction:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+    PowerBar.CostPrediction:SetStatusBarColor(0, 0, 0, 0.55)
+    PowerBar.CostPrediction:Hide()
+    PowerBar.Status:HookScript("OnSizeChanged", function() BCDM:UpdatePowerCostPrediction() end)
 
     PowerBar.Text = PowerBar.Status:CreateFontString(nil, "OVERLAY")
     PowerBar.Text:SetFont(BCDM.Media.Font, PowerBarDB.Text.FontSize, GeneralDB.Fonts.FontFlag)

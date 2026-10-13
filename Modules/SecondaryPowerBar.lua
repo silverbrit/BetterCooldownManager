@@ -422,7 +422,7 @@ local chargedPointLookup = {}
 
 local function GetChargedPowerPointLookup()
     wipe(chargedPointLookup)
-    if type(GetUnitChargedPowerPoints) ~= "function" then return chargedPointLookup end
+    if BCDM.IS_WOW_FOREVER or type(GetUnitChargedPowerPoints) ~= "function" then return chargedPointLookup end
     local ok, charged = pcall(GetUnitChargedPowerPoints, "player")
     if not ok or BCDM:IsSecretValue(charged) or type(charged) ~= "table" then return chargedPointLookup end
     local iterationOK = pcall(function()
@@ -575,6 +575,9 @@ local function GetSpellMaximum(spellId, fallback)
 end
 
 local function GetPowerValue(powerType, unmodified)
+    if BCDM.IS_WOW_FOREVER and powerType == Enum.PowerType.ComboPoints then
+        return ReadAPI(GetComboPoints, "player", "target")
+    end
     return ReadAPI(UnitPower, "player", powerType, unmodified == true)
 end
 
@@ -979,6 +982,7 @@ local function OnSecondaryPowerBarSizeChanged()
 end
 
 local RESOURCE_EVENTS = {
+    "PLAYER_TARGET_CHANGED",
     "UNIT_POWER_UPDATE",
     "UNIT_POWER_FREQUENT",
     "UNIT_POWER_POINT_CHARGE",
@@ -995,8 +999,12 @@ local function SetResourceEventRegistration(secondaryPowerBar, enabled)
     if enabled then
         secondaryPowerBar:RegisterUnitEvent("UNIT_POWER_UPDATE", "player")
         secondaryPowerBar:RegisterUnitEvent("UNIT_POWER_FREQUENT", "player")
-        secondaryPowerBar:RegisterUnitEvent("UNIT_POWER_POINT_CHARGE", "player")
         secondaryPowerBar:RegisterUnitEvent("UNIT_MAXPOWER", "player")
+        if BCDM.IS_WOW_FOREVER then
+            secondaryPowerBar:RegisterEvent("PLAYER_TARGET_CHANGED")
+            return
+        end
+        secondaryPowerBar:RegisterUnitEvent("UNIT_POWER_POINT_CHARGE", "player")
         secondaryPowerBar:RegisterUnitEvent("UNIT_HEALTH", "player")
         secondaryPowerBar:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
         secondaryPowerBar:RegisterUnitEvent("UNIT_ABSORB_AMOUNT_CHANGED", "player")

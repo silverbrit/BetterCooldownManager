@@ -181,7 +181,7 @@ local function IsOwnedFrameShown(frame)
 end
 
 function BCDM:ResolvePrimaryDisplayPowerType(powerType, class, specialization, formID)
-    if class ~= "DRUID" then return powerType end
+    if self.IS_WOW_FOREVER or class ~= "DRUID" then return powerType end
     formID = formID or 0
     local nonBalanceMoonkin = (specialization == 2 or specialization == 3 or specialization == 4)
         and formID >= 31 and formID <= 35

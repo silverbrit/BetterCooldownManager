@@ -97,8 +97,13 @@ local function CreateProfilesPanel()
         BCDM:UpdateBCDM()
         panel:Refresh()
     end, { disabled = function() return BCDM.db.global.UseGlobalProfile == true end })
-    for index = 1, GetNumSpecializations() do
-        local _, specName = GetSpecializationInfo(index)
+    for index = 1, BCDM.IS_WOW_FOREVER and 2 or GetNumSpecializations() do
+        local specName
+        if BCDM.IS_WOW_FOREVER then
+            specName = index == 1 and DUAL_SPEC_PRIMARY or DUAL_SPEC_SECONDARY
+        else
+            specName = select(2, C_SpecializationInfo.GetSpecializationInfo(index))
+        end
         U.Dropdown(controls, specSection, specName or ("Specialization " .. index), function()
             return BCDM.db:GetDualSpecProfile(index)
         end, function(value)

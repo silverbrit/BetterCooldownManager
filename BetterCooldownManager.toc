@@ -1,5 +1,5 @@
 ## Title: |cFF8080FFBetter|r Cooldown Manager
-## Interface: 120100
+## Interface: 120105
 ## Version: @project-version@
 ## Author: |cFF8080FFUnhalted|r
 ## Notes: |cFF8080FFBetter|r Cooldown Manager is an all-in-one AddOn that provides additional customization to the Cooldown Manager, developed by |cFF8080FFUnhalted|r

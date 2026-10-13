@@ -540,7 +540,7 @@ RefreshPandemicStateFrame = function(viewer, itemFrame, isRetry)
         state.exhausted = nil
         return
     end
-    local anchored = pcall(viewer.AnchorPandemicStateFrame, viewer, pandemicFrame, itemFrame)
+    local anchored = pcall(securecallfunction, viewer.AnchorPandemicStateFrame, viewer, pandemicFrame, itemFrame)
     if anchored and PandemicStateFrameHasNativeAnchors(pandemicFrame, itemFrame) then
         state.retries = 0
         state.exhausted = nil
@@ -608,8 +608,8 @@ local function StyleIcons(onlyViewerName)
                 if ok and itemContainer then container = itemContainer end
             end
             if type(container.Layout) == "function" then
-                -- Icon sizes are changed after Blizzard initially lays out the viewer.
-                pcall(container.Layout, container)
+                -- Layout caches native grid settings; pcall alone is not a taint boundary.
+                pcall(securecallfunction, container.Layout, container)
             end
         end
         end

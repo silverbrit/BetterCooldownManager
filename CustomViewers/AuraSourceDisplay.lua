@@ -53,6 +53,17 @@ local function ReadOverrideSpellID(source)
 end
 
 local function BuildCandidateFilter(source)
+    if source.Type == "item" then
+        local spellID
+        if C_Item and type(C_Item.GetItemSpell) == "function" then
+            local ok, _, itemSpellID = pcall(C_Item.GetItemSpell, source.ID)
+            if ok and not BCDM:IsSecretValue(itemSpellID) and type(itemSpellID) == "number" then
+                spellID = itemSpellID
+            end
+        end
+        -- Item IDs are not spell IDs. Match the item's use effect on the player.
+        source = { Type = "spell", ID = spellID }
+    end
     local spellIDs = BCDM:BuildCustomTrackerAuraCandidateIDs(source, ReadOverrideSpellID(source))
     local includeSpellIDs, signatureParts = {}, {}
     for index, spellID in ipairs(spellIDs) do
@@ -93,6 +104,10 @@ local function ApplyVisualStyleUnsafe(visual, icon, entry, bar)
     visual.cooldown:SetDrawSwipe(true)
     visual.cooldown:SetSwipeColor(0, 0, 0, 0.8)
     if visual.cooldown.SetSwipeTexture then visual.cooldown:SetSwipeTexture("Interface\\Buttons\\WHITE8X8") end
+    if entry.Source.Type == "item" then
+        visual.cooldown:SetHideCountdownNumbers(false)
+        visual.cooldown:GetCountdownFontString():SetTextColor(1, 1, 0, 1)
+    end
 
     visual.count:ClearAllPoints()
     visual.count:SetPoint(layout[1], visual.button, layout[2], layout[3], layout[4])
@@ -143,7 +158,8 @@ local function CreateDisplayState(icon, entry, bar, candidateFilters, signature)
     layer:SetFrameLevel((icon:GetFrameLevel() or 1) + 10)
 
     local state = { layer = layer, signature = signature, containers = {}, slots = {}, visuals = {}, enabled = true }
-    for _, definition in ipairs(DEFINITIONS) do
+    local definitions = entry.Source.Type == "item" and { DEFINITIONS[2] } or DEFINITIONS
+    for _, definition in ipairs(definitions) do
         local container = CreateFrame("AuraContainer", nil, layer, "CustomAuraContainerTemplate")
         container:SetAllPoints(layer)
         container:SetUnit(definition.unit)
@@ -200,7 +216,7 @@ end
 
 function BCDM:EnsureCustomTrackerAuraDisplay(icon, entry, bar)
     local source = type(entry) == "table" and entry.Source
-    if not (icon and type(source) == "table" and source.Type == "spell") then
+    if not (icon and type(source) == "table" and (source.Type == "spell" or source.Type == "item")) then
         self:HideCustomTrackerAuraDisplay(icon)
         return false
     end
@@ -272,6 +288,37 @@ local function ApplyTrinketCountStyleUnsafe(state, settings, entrySettings)
     local layout = text.Layout or { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }
     local colour = text.Colour or { 1, 1, 1 }
     local fonts = BCDM.db.profile.General.Fonts
+    local general = BCDM.db.profile.CooldownManager.General
+    local border = general.BorderSize or 0
+    local width, height = BCDM:GetIconDimensions(settings)
+    state.icon:ClearAllPoints()
+    state.icon:SetPoint("TOPLEFT", state.button, "TOPLEFT", border, -border)
+    state.icon:SetPoint("BOTTOMRIGHT", state.button, "BOTTOMRIGHT", -border, border)
+    BCDM:ApplyIconTexCoord(state.icon, width, height, (general.IconZoom or 0) * 0.5)
+    SetTextureDesaturated(state.icon, entrySettings and entrySettings.VisualMode == "DESATURATE")
+    state.cooldown:ClearAllPoints()
+    state.cooldown:SetPoint("TOPLEFT", state.button, "TOPLEFT", border, -border)
+    state.cooldown:SetPoint("BOTTOMRIGHT", state.button, "BOTTOMRIGHT", -border, border)
+    state.cooldown:SetDrawEdge(false)
+    state.cooldown:SetDrawBling(false)
+    state.cooldown:SetDrawSwipe(true)
+    state.cooldown:SetSwipeColor(0, 0, 0, 0.8)
+    state.cooldown:SetHideCountdownNumbers(false)
+    local cooldownText = general.CooldownText
+    local durationText = state.cooldown:GetCountdownFontString()
+    local scale = cooldownText.ScaleByIconSize and width / 36 or 1
+    durationText:SetFont(BCDM.Media.Font, cooldownText.FontSize * scale, fonts.FontFlag)
+    durationText:ClearAllPoints()
+    durationText:SetPoint(cooldownText.Layout[1], state.button, cooldownText.Layout[2],
+        cooldownText.Layout[3], cooldownText.Layout[4])
+    durationText:SetTextColor(1, 1, 0, 1)
+    if fonts.Shadow.Enabled then
+        durationText:SetShadowColor(unpack(fonts.Shadow.Colour))
+        durationText:SetShadowOffset(fonts.Shadow.OffsetX, fonts.Shadow.OffsetY)
+    else
+        durationText:SetShadowColor(0, 0, 0, 0)
+        durationText:SetShadowOffset(0, 0)
+    end
     state.count:ClearAllPoints()
     state.count:SetPoint(layout[1], state.button, layout[2], layout[3], layout[4])
     state.count:SetFont(BCDM.Media.Font, text.FontSize or 15, fonts.FontFlag)
@@ -315,12 +362,16 @@ local function CreateTrinketCountState(icon, candidateFilters, signature, settin
     local initialized
     local function InitializeFrame(auraButton)
         state.button = auraButton
+        state.icon = auraButton:CreateTexture(nil, "ARTWORK")
+        state.cooldown = CreateFrame("Cooldown", nil, auraButton, "CooldownFrameTemplate")
         state.count = auraButton:CreateFontString(nil, "OVERLAY")
         if not Call(auraButton, "SetAllPoints", container)
             or not Call(auraButton, "SetFrameLevel", (layer:GetFrameLevel() or 1) + 1)
             or not Call(auraButton, "SetMouseMotionEnabled", false) then return end
         if not ApplyTrinketCountStyle(state, settings, entrySettings, true) then return end
-        initialized = Call(auraButton, "SetApplicationCount", state.count, {})
+        initialized = Call(auraButton, "SetIcon", state.icon)
+            and Call(auraButton, "SetDurationCooldown", state.cooldown)
+            and Call(auraButton, "SetApplicationCount", state.count, {})
     end
     local ok, button = Call(container, "AddAuraSlot", "active", "HELPFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY", {
         candidateFilters = candidateFilters,

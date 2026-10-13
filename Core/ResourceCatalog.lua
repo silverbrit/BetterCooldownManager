@@ -53,7 +53,15 @@ function BCDM:ResolveSecondaryResource(context)
     local formID = context.formID or 0
     local showMana = context.showMana == true
     local power = context.powerTypes or (Enum and Enum.PowerType)
-    if not class or not specID or not power then return nil end
+    if not class or not power then return nil end
+    if self.IS_WOW_FOREVER then
+        -- Camelot excludes Retail class-resource bars; combo points belong to the target.
+        if class == "ROGUE" or (class == "DRUID" and formID == 1) then
+            return Descriptor(power.ComboPoints, "COMBO_POINTS", power.ComboPoints, nil)
+        end
+        return nil
+    end
+    if not specID then return nil end
 
     if class == "MONK" then
         if specID == SPECIALIZATION.BREWMASTER then
@@ -112,6 +120,13 @@ function BCDM:ResolveSecondaryResource(context)
     end
 end
 
+function BCDM:IsPowerColourSupported(powerType, secondary)
+    if not self.IS_WOW_FOREVER then return true end
+    if secondary then return powerType == Enum.PowerType.ComboPoints end
+    return powerType == Enum.PowerType.Mana or powerType == Enum.PowerType.Rage
+        or powerType == Enum.PowerType.Energy
+end
+
 local currentResourceCacheKey
 local currentResourceCache
 
@@ -121,8 +136,8 @@ function BCDM:InvalidateSecondaryResource()
 end
 
 function BCDM:GetCurrentSecondaryResource()
-    local specIndex = GetSpecialization()
-    local specID = specIndex and GetSpecializationInfo(specIndex)
+    local specIndex = C_SpecializationInfo.GetSpecialization()
+    local specID = specIndex and C_SpecializationInfo.GetSpecializationInfo(specIndex)
     local settings = self.db and self.db.profile and self.db.profile.SecondaryPowerBar
     local class = select(2, UnitClass("player"))
     local formID = GetShapeshiftFormID and GetShapeshiftFormID() or 0

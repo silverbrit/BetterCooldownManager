@@ -300,6 +300,31 @@ end
 Check(comboBarsReversed, "left fill applies to visible combo-point StatusBars")
 chargedPowerPoints = nil
 
+BCDM.IS_WOW_FOREVER = true
+local targetPoints = 4
+local oldGetComboPoints = GetComboPoints
+GetComboPoints = function(unit, target)
+    Check(unit == "player" and target == "target", "Forever queries player/target combo points")
+    return targetPoints
+end
+chargedPowerPoints = { 1, 3 }
+BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_FREQUENT", "player")
+Check(statusValue == 4, "Forever uses target combo points rather than UnitPower")
+Check(next(readers.GetChargedPowerPointLookup()) == nil, "Forever ignores Retail charged combo points")
+targetPoints = 0
+BCDM._SecondaryPowerBarOnEvent(nil, "PLAYER_TARGET_CHANGED")
+Check(statusValue == 0, "Forever target changes clear stale combo points")
+targetPoints = secretValue
+BCDM._SecondaryPowerBarOnEvent(nil, "UNIT_POWER_FREQUENT", "player")
+Check(statusValue == secretValue and textValue == "", "Forever secret combo points reach widgets without inspection")
+GetComboPoints = function() error("unavailable combo points") end
+barHidden = false
+BCDM._SecondaryPowerBarOnEvent(nil, "PLAYER_TARGET_CHANGED")
+Check(barHidden, "Forever unavailable combo points fail closed")
+GetComboPoints = oldGetComboPoints
+BCDM.IS_WOW_FOREVER = false
+chargedPowerPoints = nil
+
 currentDescriptor = { kind = "RUNES", powerType = Enum.PowerType.Runes, tickCount = 6 }
 powerValues[Enum.PowerType.Runes] = 6
 runeReadyStates = { true, true, true, false, false, false }

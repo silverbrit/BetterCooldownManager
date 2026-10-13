@@ -141,52 +141,26 @@ local function NormalizeStoreSpecFilters(store)
 end
 
 local function GetClassIdByToken(classToken)
-    if not classToken then return end
-    local count = (C_ClassInfo and C_ClassInfo.GetNumClasses and C_ClassInfo.GetNumClasses())
-        or (GetNumClasses and GetNumClasses()) or 0
-    for classID = 1, count do
-        local info = C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
-        local classFile = info and info.classFile
-        if not classFile and GetClassInfo then
-            local _, fallbackClassFile = GetClassInfo(classID)
-            classFile = fallbackClassFile
-        end
-        if classFile == classToken then return classID end
+    -- Class IDs are sparse on Forever (Druid is still 11, not the ninth class).
+    for _, classID in pairs(Constants.UICharacterClasses) do
+        local _, token = GetClassInfo(classID)
+        if token == classToken then return classID end
     end
 end
 
 function BCDM:GetOrderedClassTokens(targetClassToken)
-    local tokens, seen = {}, {}
+    local tokens = {}
     local target = targetClassToken and tostring(targetClassToken):upper()
-    local function Add(token)
-        token = token and tostring(token):upper()
-        if token and (not target or token == target) and not seen[token] then
-            tokens[#tokens + 1], seen[token] = token, true
-        end
+    -- Blizzard's client-specific list contains tokens, not IDs, and excludes unavailable classes.
+    for _, token in ipairs(CLASS_SORT_ORDER) do
+        if not target or token == target then tokens[#tokens + 1] = token end
     end
-    for _, classID in ipairs(CLASS_SORT_ORDER or {}) do
-        local info = C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
-        Add(info and info.classFile)
-    end
-    local count = (C_ClassInfo and C_ClassInfo.GetNumClasses and C_ClassInfo.GetNumClasses())
-        or (GetNumClasses and GetNumClasses()) or 0
-    for classID = 1, count do
-        local info = C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
-        local token = info and info.classFile
-        if not token and GetClassInfo then
-            local _, fallbackToken = GetClassInfo(classID)
-            token = fallbackToken
-        end
-        Add(token)
-    end
-    Add(target)
     table.sort(tokens, function(left, right)
         local leftID, rightID = GetClassIdByToken(left), GetClassIdByToken(right)
-        local leftInfo = leftID and C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(leftID)
-        local rightInfo = rightID and C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(rightID)
-        local leftName = leftInfo and leftInfo.className or (leftID and GetClassInfo and GetClassInfo(leftID)) or left
-        local rightName = rightInfo and rightInfo.className or (rightID and GetClassInfo and GetClassInfo(rightID)) or right
-        return leftName == rightName and left < right or tostring(leftName) < tostring(rightName)
+        local leftName = leftID and GetClassInfo(leftID) or left
+        local rightName = rightID and GetClassInfo(rightID) or right
+        if leftName == rightName then return left < right end
+        return leftName < rightName
     end)
     return tokens
 end
@@ -195,9 +169,8 @@ function BCDM:GetClassSpecCatalog(targetClassToken)
     local catalog = {}
     for _, classToken in ipairs(self:GetOrderedClassTokens(targetClassToken)) do
         local classID = GetClassIdByToken(classToken)
-        local info = classID and C_ClassInfo and C_ClassInfo.GetClassInfo and C_ClassInfo.GetClassInfo(classID)
         local classEntry = { classToken = classToken, classId = classID,
-            className = info and info.className or (classID and GetClassInfo and GetClassInfo(classID)), specs = {} }
+            className = classID and GetClassInfo(classID), specs = {} }
         local count = classID and C_SpecializationInfo and C_SpecializationInfo.GetNumSpecializationsForClassID
             and C_SpecializationInfo.GetNumSpecializationsForClassID(classID) or 0
         for index = 1, count do

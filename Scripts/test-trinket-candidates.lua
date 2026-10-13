@@ -38,6 +38,25 @@ local BCDM = {}
 function BCDM:IsSecretValue(value) return value == secretValue end
 assert(loadfile(root .. "/CustomViewers/TrinketBar.lua"))("BetterCooldownManager", BCDM)
 
+for _, point in ipairs({ "TOPLEFT", "TOP", "TOPRIGHT", "BOTTOMLEFT", "BOTTOM", "BOTTOMRIGHT", "LEFT", "RIGHT", "CENTER" }) do
+    for _, growth in ipairs({ "RIGHT", "LEFT", "UP", "DOWN" }) do
+        for _, order in ipairs({ { 13, 14 }, { 14, 13 } }) do
+            local settings = { Layout = { point }, GrowthDirection = growth, SlotOrder = { order[1], order[2] } }
+            local reversed = growth == "UP" or (growth == "LEFT" and point ~= "TOP" and point ~= "BOTTOM")
+            local firstIndex = BCDM:GetTrinketDisplaySlotIndex(settings, 1)
+            local secondIndex = BCDM:GetTrinketDisplaySlotIndex(settings, 2)
+            Check(firstIndex == (reversed and 2 or 1) and secondIndex == (reversed and 1 or 2),
+                "trinket selector follows the live layout for " .. point .. "/" .. growth)
+            local firstSlot = settings.SlotOrder[firstIndex]
+            Check(BCDM:ReorderTrinketSlot(settings, firstSlot, secondIndex)
+                and settings.SlotOrder[BCDM:GetTrinketDisplaySlotIndex(settings, 2)] == firstSlot,
+                "dragging the first displayed trinket to second updates saved order")
+            Check(not BCDM:ReorderTrinketSlot(settings, firstSlot, secondIndex),
+                "dropping a trinket at its displayed position preserves saved order")
+        end
+    end
+end
+
 local spellIDs, hasOnUse, hasCatalog = BCDM._GetTrinketAuraSpellIDs(13, 50)
 Check(table.concat(spellIDs, ",") == "50,100,200,300,400,500",
     "trinket aura candidates include every readable 12.1 spell field")
@@ -80,9 +99,13 @@ InCombatLockdown = function() return false end
 BCDM.Media = { Font = "font" }
 BCDM.db = { profile = { General = { Fonts = {
     FontFlag = "", Shadow = { Enabled = false },
-} } } }
+} }, CooldownManager = { General = { BorderSize = 1, CooldownText = {
+    FontSize = 18, ScaleByIconSize = true, Layout = { "CENTER", "CENTER", 0, 0 },
+} } } } }
+function BCDM:GetIconDimensions() return 40, 40 end
+function BCDM:ApplyIconTexCoord() end
 
-local boundCount
+local boundCount, boundCooldown, boundIcon
 local accessDenied = false
 local count = {}
 function count:ClearAllPoints()
@@ -90,14 +113,35 @@ function count:ClearAllPoints()
     self.anchored = false
 end
 function count:SetPoint() self.anchored = true end
-function count:SetFont() end
-function count:SetTextColor() end
+function count:SetFont(_, size) self.fontSize = size end
+function count:SetTextColor(...) self.colour = { ... } end
 function count:SetAlpha() end
 function count:SetShadowColor() end
 function count:SetShadowOffset() end
 
+local durationText = setmetatable({}, { __index = count })
+local auraTexture = setmetatable({}, { __index = count })
+function auraTexture:SetDesaturation(value) self.desaturation = value end
+local auraCooldown = setmetatable({}, { __index = count })
+function auraCooldown:SetDrawEdge() end
+function auraCooldown:SetDrawBling() end
+function auraCooldown:SetDrawSwipe() end
+function auraCooldown:SetSwipeColor() end
+function auraCooldown:SetHideCountdownNumbers(hidden) self.hideNumbers = hidden end
+function auraCooldown:GetCountdownFontString() return durationText end
+
 local auraButton = {}
 function auraButton:CreateFontString() return count end
+function auraButton:CreateTexture() return auraTexture end
+function auraButton:SetIcon(region)
+    assert(region.anchored, "aura icon must be anchored before binding")
+    boundIcon = region
+end
+function auraButton:SetDurationCooldown(region)
+    assert(region.anchored, "aura cooldown must be anchored before binding")
+    boundCooldown = region
+end
+function auraButton:IsShown() error("must not inspect secret aura visibility") end
 function auraButton:SetAllPoints() end
 function auraButton:SetFrameLevel() end
 function auraButton:SetMouseMotionEnabled() end
@@ -125,6 +169,7 @@ local function NewLayer()
     return layer
 end
 CreateFrame = function(frameType)
+    if frameType == "Cooldown" then return auraCooldown end
     return frameType == "AuraContainer" and container or NewLayer()
 end
 
@@ -134,6 +179,10 @@ local prepared = BCDM:EnsureTrinketAuraCountDisplay(icon, { 100 }, {
 }, { TextEnabled = true })
 Check(prepared and boundCount == count and count.anchored,
     "trinket aura counts are anchored before Blizzard validates their binding")
+Check(boundIcon == auraTexture and boundCooldown == auraCooldown and auraCooldown.hideNumbers == false,
+    "trinket buffs bind a native duration overlay above the unchanged item cooldown")
+Check(table.concat(durationText.colour, ",") == "1,1,0,1" and durationText.fontSize == 20,
+    "trinket buff duration is yellow and follows the shared cooldown font scaling")
 accessDenied = true
 Check(BCDM:EnsureTrinketAuraCountDisplay(icon, { 100 }, {
     Text = { Layout = { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 0 }, FontSize = 15, Colour = { 1, 1, 1 } },
